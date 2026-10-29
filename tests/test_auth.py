@@ -110,7 +110,12 @@ def test_revocable_agent_keys_separate_from_browser_auth(web, web_settings):
     assert response.status_code == 201, response.text
     key = response.json()
     assert len(key["key"]) >= 32
-    assert "key" not in web.get("/auth/api-keys").json()["items"][0]
+    listed = web.get("/auth/api-keys").json()["items"][0]
+    assert "key" not in listed and listed["vault_access"] is False
+    changed = web.patch(
+        "/auth/api-keys/" + key["id"], json={"vault_access": True}
+    ).json()
+    assert changed == {"id": key["id"], "vault_access": True}
     with sqlite3.connect(web_settings.data_dir / "auth.sqlite") as db:
         row = db.execute("SELECT hash FROM api_keys").fetchone()
         assert row[0] == digest(key["key"]) and row[0] != key["key"]

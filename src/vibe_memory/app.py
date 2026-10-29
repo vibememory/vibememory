@@ -8,12 +8,20 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 import anyio
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
-from .auth import COOKIE, SESSION_SECONDS, AuthStore, Credentials, KeyInput, Signup
+from .auth import (
+    COOKIE,
+    SESSION_SECONDS,
+    AuthStore,
+    Credentials,
+    KeyAccessUpdate,
+    KeyInput,
+    Signup,
+)
 from .config import Settings
 from .embeddings import Embedder
 from .files import FileStorage
@@ -26,9 +34,11 @@ from .models import (
     RelationInput,
     RelationUpdate,
     SearchInput,
+    VaultInput,
 )
 from .retrieval import retrieve
 from .store import Conflict, DuplicateRequestConflict, FileInUse, NotFound, Store
+from .vault import VaultIntegrityError, VaultNotFound, VaultStore
 from .web import mount_web
 
 log = logging.getLogger(__name__)
@@ -52,6 +62,10 @@ def create_app(settings=None, embedder=None):
 
     accounts = AuthStore(settings.data_dir / "auth.sqlite")
     files = FileStorage(settings.data_dir / "files", settings.upload_max_bytes)
+    vault = VaultStore(
+        settings.data_dir / "vault.sqlite",
+        settings.vault_key_file or settings.data_dir / "vault.key",
+    )
 
     @asynccontextmanager
     async def lifespan(app):
@@ -61,7 +75,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.6.0",
+        version="0.7.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -83,23 +97,36 @@ def create_app(settings=None, embedder=None):
         return user
 
     def owner(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(auth)):
+        request.state.vault_access = False
+        request.state.auth_kind = "none"
         if credentials and credentials.scheme.lower() == "bearer":
             supplied = hashlib.sha256(credentials.credentials.encode()).digest()
             for expected, user in key_hashes:
                 if hmac.compare_digest(expected, supplied):
+                    request.state.auth_kind = "legacy-key"
                     return user
-            dynamic_owner = accounts.user_for_key(credentials.credentials)
-            if dynamic_owner:
-                return dynamic_owner
+            principal = accounts.principal_for_key(credentials.credentials)
+            if principal:
+                request.state.vault_access = principal["vault_access"]
+                request.state.auth_kind = "agent-key"
+                request.state.key_id = principal["key_id"]
+                return principal["user_id"]
         elif not request.headers.get("Authorization"):
             session_user = accounts.user_for_session(request.cookies.get(COOKIE))
             if session_user:
                 if request.method not in {"GET", "HEAD", "OPTIONS"}:
                     check_origin(request)
+                request.state.vault_access = True
+                request.state.auth_kind = "browser-session"
                 return session_user["id"]
         raise HTTPException(
             401, "Invalid or missing API key", headers={"WWW-Authenticate": "Bearer"}
         )
+
+    def vault_user(request: Request, user=Depends(owner)):
+        if not request.state.vault_access:
+            raise HTTPException(403, "This agent connection does not have Vault access")
+        return user
 
     def store(request: Request):
         return request.app.state.store
@@ -128,7 +155,7 @@ def create_app(settings=None, embedder=None):
     @app.post("/auth/device/start", tags=["account"])
     def start_device(data: KeyInput, request: Request):
         accounts.throttle("device:" + (request.client.host if request.client else "unknown"), 20)
-        result = accounts.start_device(data.name)
+        result = accounts.start_device(data.name, data.vault_access)
         result["verification_uri_complete"] = (
             settings.public_origin.rstrip("/") + "/connect?code=" + result["user_code"]
         )
@@ -185,7 +212,11 @@ def create_app(settings=None, embedder=None):
 
     @app.post("/auth/api-keys", status_code=201, tags=["account"])
     def create_api_key(data: KeyInput, user=Depends(browser_user)):
-        return accounts.create_key(user["id"], data.name)
+        return accounts.create_key(user["id"], data.name, data.vault_access)
+
+    @app.patch("/auth/api-keys/{id}", tags=["account"])
+    def update_api_key(id: str, data: KeyAccessUpdate, user=Depends(browser_user)):
+        return accounts.set_key_vault_access(user["id"], id, data.vault_access)
 
     @app.delete("/auth/api-keys/{id}", status_code=204, tags=["account"])
     def revoke_api_key(id: str, user=Depends(browser_user)):
@@ -207,6 +238,41 @@ def create_app(settings=None, embedder=None):
             status_code=409,
             content={"detail": "File is referenced by a document; delete the document first"},
         )
+
+    @app.exception_handler(VaultNotFound)
+    async def vault_missing(request, error):
+        return JSONResponse(status_code=404, content={"detail": "Vault entry not found"})
+
+    @app.exception_handler(VaultIntegrityError)
+    async def vault_integrity(request, error):
+        log.error("Vault ciphertext authentication failed")
+        return JSONResponse(status_code=500, content={"detail": "Vault entry cannot be decrypted"})
+
+    @app.get("/v1/vault", tags=["vault"])
+    def vault_entries(user=Depends(vault_user)):
+        return {"items": vault.list(user)}
+
+    @app.get("/v1/vault/{name}", tags=["vault"])
+    def read_vault_entry(
+        name: str = Path(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$"),
+        user=Depends(vault_user),
+    ):
+        return vault.get(user, name)
+
+    @app.put("/v1/vault/{name}", tags=["vault"])
+    def set_vault_entry(
+        data: VaultInput,
+        name: str = Path(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$"),
+        user=Depends(browser_user),
+    ):
+        return vault.set(user["id"], name, data.value, data.description)
+
+    @app.delete("/v1/vault/{name}", status_code=204, tags=["vault"])
+    def delete_vault_entry(
+        name: str = Path(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$"),
+        user=Depends(browser_user),
+    ):
+        vault.delete(user["id"], name)
 
     @app.post(
         "/v1/files",
@@ -307,8 +373,12 @@ def create_app(settings=None, embedder=None):
         })
 
     @app.get("/v1/me", tags=["service"])
-    def me(user=Depends(owner)):
-        return {"user_id": user, "embedding_model": embedder.model_name}
+    def me(request: Request, user=Depends(owner)):
+        return {
+            "user_id": user,
+            "embedding_model": embedder.model_name,
+            "vault_access": bool(request.state.vault_access),
+        }
 
     def vectors_for(keywords):
         try:

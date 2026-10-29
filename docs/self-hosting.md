@@ -34,6 +34,7 @@ Open http://localhost:8080, create an account, and issue an agent key in the con
 | `MEMORY_UPLOAD_MAX_BYTES` | `104857600` | Raw upload size limit (100 MiB) |
 | `MEMORY_API_KEYS` | `{}` | Optional source-install legacy key-to-user mapping; not required for console-issued keys |
 | `MEMORY_DATA_DIR` | `/data` in Docker | Graph, auth DB, and uploads |
+| `MEMORY_VAULT_KEY_FILE` | `<data dir>/vault.key` | Persistent 32-byte Vault encryption-key file; generated with mode 0600 |
 | `MEMORY_EMBEDDING_CACHE` | `/data/models` in Docker | Persistent local model cache |
 | `MEMORY_EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Local keyword model |
 | `MEMORY_WEB_DIR` | bundled assets | Optional explicit directory containing index.html and console assets |
@@ -77,6 +78,8 @@ The `memory_data` named volume contains:
 
 - `graph`: Kuzu graph, keyword vectors, relation history, and feature requests.
 - `auth.sqlite` and SQLite WAL files: accounts, sessions, and hashed agent keys.
+- `vault.sqlite`: AES-256-GCM ciphertext, entry metadata, and access counters.
+- `vault.key`: the 32-byte Vault encryption key, created with mode 0600.
 - `files/`: uploaded originals.
 - `models/` and `cache/`: embedding model/download cache.
 
@@ -90,7 +93,7 @@ docker compose run --rm -T --no-deps --entrypoint python app -c \
 docker compose start app
 ```
 
-Keep the backup private; it contains personal records and authentication data. If the backup command fails, restart the app and resolve the failure rather than treating a partial archive as a backup.
+Keep the backup private; it contains personal records, authentication data, Vault ciphertext, and the key capable of decrypting it. If `MEMORY_VAULT_KEY_FILE` points outside `/data`, back up that key separately and restore the exact same key before starting the restored service. Losing the key makes Vault values unrecoverable; obtaining both the key and ciphertext reveals them. If the backup command fails, restart the app and resolve the failure rather than treating a partial archive as a backup.
 
 Restore into an **empty deployment's data volume**, with its app stopped:
 
@@ -157,7 +160,7 @@ and commit the generated web files with the source. CI rejects stale artifacts.
 
 ### Browser approval for agent authentication
 
-The agent runs `./bin/vibe-memory login --no-browser --url https://YOUR_HOST
+The agent runs `./bin/vibe-memory login --vault-access --no-browser --url https://YOUR_HOST
 --name "Agent name"` in a background tool process and presents the generated link
 and code to the user. The user signs in on the web, returns to the approval page,
 and explicitly approves. The waiting CLI receives and saves a one-time agent key;
@@ -166,6 +169,23 @@ open a browser automatically. The authorization request expires after 5 minutes.
 Only the CLI holds the private polling code; the browser URL contains a separate
 public confirmation code. Denial/expiry stops login. No arbitrary callback URLs
 are accepted. This polling flow also works when the agent is on a remote host.
+`--vault-access` is optional and appears as a separate sensitive permission on
+the approval page. Existing and ordinary keys do not receive it automatically.
+
+### Encrypted Vault
+
+Users add, rotate, and delete values in the web console. Secret names and access
+metadata are visible; stored values are never listed again. The server encrypts
+each value with AES-256-GCM using a fresh 96-bit nonce and binds the ciphertext to
+its account and name as authenticated data. Agent keys require an independent
+Vault permission. Agent API calls can list metadata and retrieve a selected value,
+but cannot create, replace, or delete entries.
+
+Agents should use `vault exec --env VARIABLE=ENTRY -- PROGRAM ...`. The Rust CLI
+retrieves the selected value, injects it into that one child process, and never
+prints it. The child process can still expose its own environment or arguments,
+so do not run diagnostic commands that print credentials. The CLI has no command
+that prints a Vault value directly.
 
 Client configuration is plaintext JSON at `$XDG_CONFIG_HOME/vibe-memory/client.json`
 (default `~/.config/vibe-memory/client.json`) or `%APPDATA%/vibe-memory/client.json`

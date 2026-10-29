@@ -49,6 +49,7 @@ with sync_playwright() as p:
     page.locator('.sidebar [data-view="keys"]').click()
     page.locator('#primary-action').click()
     page.locator('#editor [name="name"]').fill('QA Claude Code')
+    page.locator('#editor [name="vault_access"]').check()
     page.locator('#editor-submit').click()
     expect(page.locator('#new-key')).to_be_visible()
     agent_key = page.locator('#new-key').inner_text()
@@ -56,6 +57,16 @@ with sync_playwright() as p:
     expect(page.locator('.records-table')).to_contain_text('QA Claude Code')
     agent = p.request.new_context(base_url=base,extra_http_headers={'Authorization':'Bearer '+agent_key})
     assert agent.get('/v1/records').json()['items'][0]['id'] == memory_id
+    page.locator('.sidebar [data-view="vault"]').click()
+    page.locator('#primary-action').click()
+    page.locator('#editor [name="name"]').fill('CONSOLE_QA_SECRET')
+    page.locator('#editor [name="description"]').fill('브라우저 검증 전용')
+    page.locator('#editor [name="value"]').fill('console-qa-secret-value')
+    page.locator('#editor-submit').click()
+    expect(page.locator('#editor')).not_to_be_visible(timeout=30000)
+    expect(page.locator('.records-table')).to_contain_text('CONSOLE_QA_SECRET')
+    assert 'console-qa-secret-value' not in page.locator('body').inner_text()
+    assert agent.get('/v1/vault/CONSOLE_QA_SECRET').json()['value'] == 'console-qa-secret-value'
     entity_response = agent.post('/v1/entities', data={'name':'QA developer','entity_type':'Person','keywords':['개발자']})
     assert entity_response.status == 201, entity_response.text()
     entity_id = entity_response.json()['id']; created.append(entity_id)
@@ -89,6 +100,7 @@ with sync_playwright() as p:
     assert other.request.get(base+'/v1/records').json()['items'] == []
     assert other.request.get(base+'/v1/records/'+memory_id).status == 404
     assert other.request.get(base+'/auth/api-keys').json()['items'] == []
+    assert other.request.get(base+'/v1/vault').json()['items'] == []
     assert other.request.get(base+'/v1/feature-requests').json()['items'] == []
     other.request.post(base+'/auth/logout',headers={'Origin':base})
     other.close()
@@ -118,6 +130,10 @@ with sync_playwright() as p:
     page.locator('[data-action="revoke"]').click()
     expect(page.locator('[data-action="revoke"]')).to_have_count(0)
     assert agent.get('/v1/records').status == 401
+    page.locator('.sidebar [data-view="vault"]').click()
+    page.once('dialog',lambda dialog:dialog.accept())
+    page.locator('[data-action="delete-vault"]').click()
+    expect(page.locator('[data-action="delete-vault"]')).to_have_count(0)
     page.locator('#account-menu').click()
     page.locator('#logout').click()
     page.wait_for_url('**/login')

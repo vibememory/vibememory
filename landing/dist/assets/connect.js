@@ -17,6 +17,7 @@ async function start() {
   document.querySelector('#account').textContent = account.email;
   document.querySelector('#agent-name').textContent = data.name;
   document.querySelector('#user-code').textContent = code.toUpperCase();
+  document.querySelector('#vault-scope').hidden = !data.vault_access;
   statusBox.textContent = '이 에이전트의 연결을 승인할까요?';
   document.querySelector('#approval').hidden = false;
 }

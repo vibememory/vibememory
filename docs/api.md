@@ -6,7 +6,7 @@ Your own server exposes an interactive schema at `/docs` and machine-readable Op
 
 Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/logout`. The session cookie is HttpOnly; mutations must include an Origin exactly matching `MEMORY_PUBLIC_ORIGIN`.
 
-Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
+Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
 
 ## Endpoints
 
@@ -29,6 +29,32 @@ Issue agent keys through the console (or an authenticated browser session at `PO
 | POST | `/v1/search` | keywords, optional limit/scope/tags |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
+| GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
+| GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
+| PUT/DELETE | `/v1/vault/{name}` | Browser-session-only create/rotate/delete with same-origin protection |
+
+## Encrypted Vault
+
+Vault entries are owner-scoped and encrypted at rest with AES-256-GCM. Each write
+uses a fresh 96-bit nonce and authenticates the account ID and entry name as
+associated data. Names must match `[A-Za-z][A-Za-z0-9_.-]{0,99}`; values are
+1–65,536 characters. Listing and write responses never contain the value.
+
+Ordinary and pre-existing agent keys receive 403 from Vault endpoints. A browser
+session can explicitly create a key with `vault_access: true`, toggle that flag,
+or approve a device-login request that asks for Vault access. Agent keys can list
+and read but cannot write or delete entries. Use the Rust CLI instead of handling
+the value directly:
+
+```sh
+./bin/vibe-memory vault list
+./bin/vibe-memory vault exec \
+  --env GITHUB_TOKEN=github-token -- gh api user
+```
+
+The CLI intentionally has no command that prints a value. `vault exec` injects it
+only into the selected child process; that process remains capable of logging its
+own environment, so choose commands carefully.
 
 ## Keyword-only retrieval
 
@@ -133,7 +159,7 @@ within the configured duration; HTTP rejection stops the listener.
 
 ### Browser-approved agent login
 
-`POST /auth/device/start` with `{ "name": "Agent name" }` creates a 5-minute
+`POST /auth/device/start` with `{ "name": "Agent name", "vault_access": false }` creates a 5-minute
 request, returning a private `device_code`, public `user_code`, approval URL and
 poll interval. The agent must keep the private code secret and show the approval
 link and public confirmation code to the user. Start requests are rate-limited.
@@ -147,4 +173,6 @@ at the returned interval. Pending returns `{ "state": "pending" }`. Approval
 allows a single atomic exchange for `{ "state": "connected", "key": "...",
 "key_id": "..." }`; the browser never receives this key. Denial returns 403,
 expiry or a consumed request 410, excessive polling 429. Only hashed codes and
-keys are stored. The resulting key is a normal revocable full-access agent key.
+keys are stored. The resulting key is a normal revocable memory key. Vault access
+is granted only when requested and visibly approved; existing keys default to no
+Vault access.

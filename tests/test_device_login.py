@@ -30,7 +30,9 @@ def allow_poll(settings):
 
 def test_web_approval_one_time_key_and_no_secret_in_browser(web):
     client, settings = web
-    pending = client.post('/auth/device/start', json={'name': 'Claude Code'}).json()
+    pending = client.post('/auth/device/start', json={
+        'name': 'Claude Code', 'vault_access': True
+    }).json()
     assert pending['verification_uri_complete'] == ORIGIN+'/connect?code='+pending['user_code']
     assert pending['device_code'] not in pending['verification_uri_complete']
     assert client.get('/auth/device', params={'code': pending['user_code']}).status_code == 401
@@ -40,7 +42,8 @@ def test_web_approval_one_time_key_and_no_secret_in_browser(web):
     assert client.post('/auth/device/poll', json={'device_code': pending['device_code']}).json() == {'state': 'pending'}
     assert client.post('/auth/device/poll', json={'device_code': pending['device_code']}).status_code == 429
     signup(client)
-    assert client.get('/auth/device', params={'code': pending['user_code']}).json()['name'] == 'Claude Code'
+    device = client.get('/auth/device', params={'code': pending['user_code']}).json()
+    assert device['name'] == 'Claude Code' and device['vault_access'] is True
     approval = {'user_code': pending['user_code'], 'approved': True}
     assert client.post('/auth/device/approve', json=approval, headers={'Origin': 'https://evil.example'}).status_code == 403
     response = client.post('/auth/device/approve', json=approval)
@@ -49,10 +52,12 @@ def test_web_approval_one_time_key_and_no_secret_in_browser(web):
     allow_poll(settings)
     result = client.post('/auth/device/poll', json={'device_code': pending['device_code']}).json()
     assert result['state'] == 'connected'
-    assert client.get('/v1/me', headers={'Authorization': 'Bearer '+result['key']}).status_code == 200
+    me = client.get('/v1/me', headers={'Authorization': 'Bearer '+result['key']})
+    assert me.status_code == 200 and me.json()['vault_access'] is True
     assert client.post('/auth/device/poll', json={'device_code': pending['device_code']}).status_code == 410
     keys = client.get('/auth/api-keys').json()['items']
     assert len(keys) == 1 and keys[0]['name'] == 'Claude Code'
+    assert keys[0]['vault_access'] is True
     assert result['key'] not in str(keys)
     with sqlite3.connect(settings.data_dir / 'auth.sqlite') as db:
         dump = '\n'.join(db.iterdump())

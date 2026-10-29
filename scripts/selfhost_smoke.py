@@ -75,7 +75,19 @@ def main():
                 "password": secrets.token_urlsafe(24),
             },
         )["user"]
-        key = call("/auth/api-keys", "POST", {"name": "self-host-agent"}, expected=201)["key"]
+        key = call(
+            "/auth/api-keys",
+            "POST",
+            {"name": "self-host-agent", "vault_access": True},
+            expected=201,
+        )["key"]
+        vault = call(
+            "/v1/vault/SELFHOST_SMOKE",
+            "PUT",
+            {"value": "selfhost-vault-secret", "description": "restart verification"},
+        )
+        assert vault["name"] == "SELFHOST_SMOKE" and "value" not in vault
+        assert call("/v1/vault/SELFHOST_SMOKE", key=key)["value"] == "selfhost-vault-secret"
         memory = call(
             "/v1/memories",
             "POST",
@@ -142,7 +154,7 @@ def main():
         args.state_file.write_text(json.dumps(state))
         call("/auth/logout", "POST", expected=204)
         print(
-            "PASS: self-hosted console, account, agent key, keyword search, raw bytes, graph, feedback. State saved for restart verification (no key printed)."
+            "PASS: self-hosted console, account, scoped agent key, encrypted Vault, keyword search, raw bytes, graph, feedback. State saved for restart verification (no key printed)."
         )
     else:
         state = json.loads(args.state_file.read_text())
@@ -155,6 +167,7 @@ def main():
         graph = call("/v1/graph/" + state["memory_id"], key=key)
         assert graph["relations"][0]["id"] == state["relation_id"]
         assert call("/v1/feature-requests/" + state["feature_id"], key=key)["status"] == "received"
+        assert call("/v1/vault/SELFHOST_SMOKE", key=key)["value"] == "selfhost-vault-secret"
         assert (
             call("/v1/search", "POST", {"keywords": ["tea"], "limit": 1}, key)["hits"][0]["id"]
             == state["memory_id"]
@@ -163,7 +176,7 @@ def main():
             call("/v1/records/" + id, "DELETE", key=key, expected=204)
         args.state_file.unlink()
         print(
-            "PASS: user/key, graph, file bytes, metadata, feedback and keyword index survive process/container replacement."
+            "PASS: user/key, encrypted Vault, graph, file bytes, metadata, feedback and keyword index survive process/container replacement."
         )
 
 

@@ -21,23 +21,26 @@ http://localhost:8080 에서 회원가입하고 콘솔의 **에이전트 API 키
 
 ## 에이전트 연결
 
-`skills/vibe-memory/`를 에이전트의 skill 디렉터리에 넣고 콘솔에서 발급한 키를 설정합니다.
+`skills/vibe-memory/`를 에이전트의 skill 디렉터리에 넣고 브라우저 승인으로 연결합니다. Vault 권한은 저장된 모든 비밀을 사용할 수 있으므로 신뢰하는 에이전트에만 허용합니다.
 
 ```sh
-export MEMORY_URL=http://localhost:8080
-export MEMORY_API_KEY='콘솔에서-발급한-키'
-python3 skills/vibe-memory/scripts/memory.py sync
+MEMORY_URL=http://localhost:8080 python3 skills/vibe-memory/scripts/memory.py sync
+skills/vibe-memory/bin/vibe-memory login --url http://localhost:8080 \
+  --name '내 에이전트' --vault-access
 skills/vibe-memory/bin/vibe-memory remember '나는 녹차를 선호한다' \
   --kind preference --keyword 녹차 --keyword 음료
 skills/vibe-memory/bin/vibe-memory recall 녹차 음료
+skills/vibe-memory/bin/vibe-memory vault exec \
+  --env GITHUB_TOKEN=github-token -- gh api user
 ```
 
-네이티브 Rust CLI가 인증·저장·검색·바이트 스트림 파일·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리하며, 이 저장소에는 Skill 지침과 검증된 호환 부트스트랩을 둡니다.
+네이티브 Rust CLI가 인증·저장·검색·바이트 스트림 파일·암호화 Vault 실행·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. `vault list`는 이름과 메타정보만 보여주고, `vault exec`는 선택한 값을 출력하지 않은 채 한 자식 프로세스에만 전달합니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리합니다.
 
 - 기억·엔티티·문서·관계는 그래프 DB에 저장합니다.
 - 문서는 서버에서 파싱하지 않습니다. 원본은 byte stream으로 올리고 에이전트가 분석한 JSON을 file_id로 연결합니다.
 - 검색은 에이전트가 추출한 키워드 배열만 받습니다. 원문·제목·요약은 임베딩하지 않습니다.
 - API 키는 생성 직후 한 번만 표시하고 해시로 저장합니다. 계정이 다르면 데이터도 분리됩니다.
+- Vault 값은 AES-256-GCM으로 암호화하고 에이전트 키별 별도 권한으로 보호합니다. 저장된 값은 콘솔에서 다시 표시하지 않습니다.
 - 기능 요청은 `/v1/feature-requests`로 접수할 수 있고 개인 기억 검색과 분리합니다.
 
 ## 설정과 운영

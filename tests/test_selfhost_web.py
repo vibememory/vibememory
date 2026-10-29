@@ -25,10 +25,13 @@ def test_console_and_api_share_one_origin(settings):
         assert "설치 프롬프트 복사하기" in console_script.text
         assert "location.origin" in console_script.text
         assert "/downloads/vibe-memory-skill.zip" in console_script.text
-        assert "login --no-browser" in console_script.text
+        assert "login --vault-access --no-browser" in console_script.text
+        assert "vault exec" in console_script.text
         console = client.get("/console").text
         assert "topbar-search" in console
         assert "sidebar-backdrop" in console
+        assert 'data-view="vault"' in console
+        assert "vault-scope" in client.get("/connect").text
         assert client.get("/assets/brands/openclaw.svg").status_code == 200
         assert client.get("/v1/records").status_code == 401
         assert client.get("/.env").status_code == 404

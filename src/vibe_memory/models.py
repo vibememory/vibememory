@@ -84,6 +84,12 @@ class KeywordUpdate(KeywordsInput):
     """Replace an agent-supplied keyword index without analyzing original content."""
 
 
+class VaultInput(Input):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+    value: str = Field(min_length=1, max_length=65536)
+    description: str = Field(default="", max_length=500)
+
+
 class SearchInput(KeywordsInput):
     limit: int = Field(default=8, ge=1, le=50)
     scope: Literal["all", "memories", "documents", "entities"] = "all"

@@ -35,10 +35,11 @@ Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
 진행 방법:
 1. Skill ZIP을 내려받아 이 에이전트의 Skill 디렉터리에 설치하고 SKILL.md 전체를 읽어.
 2. 설치된 vibe-memory 디렉터리에서 호환 설치기를 실행해 서비스 매니페스트가 지정한 현재 플랫폼용 배포 바이너리를 내려받고 SHA-256을 검증해. 작업 중 Rust를 직접 컴파일하지 마. Linux/macOS에서는 MEMORY_URL="${base}" python3 scripts/memory.py sync를 사용하고, Windows에서는 현재 셸 문법에 맞게 MEMORY_URL을 설정한 뒤 py scripts\\memory.py sync를 사용해.
-3. 브라우저 승인 연결을 login --no-browser --name "현재 에이전트 이름"으로 시작하고 서비스 URL은 ${base}로 지정해.
+3. 브라우저 승인 연결을 login --vault-access --no-browser --name "현재 에이전트 이름"으로 시작하고 서비스 URL은 ${base}로 지정해. 승인 화면에 기억 접근과 별도로 Vault 사용 권한이 표시되는지 확인하게 해.
 4. 출력된 승인 URL과 확인 코드를 클릭 가능한 링크로 나에게 보여줘. 비밀번호나 API 키를 요청하거나 채팅에 노출하지 말고, 연결 프로세스를 유지한 채 내가 웹에서 승인할 때까지 기다려.
 5. 승인 후 status로 연결을 확인해. 이후 작업부터 SKILL.md 지침에 따라 Vibe Memory를 적극 사용하고, API 요청을 직접 조립하지 말고 Rust CLI를 사용해.
-6. 각 대화에서 관련 프로젝트 기억을 먼저 조회하고, 결정·수정·검증 완료·블로커·다음 작업이 바뀌면 전체 대화 대신 짧은 session checkpoint를 저장해. 인계, 컨텍스트 압축 또는 종료 전에는 아직 저장하지 않은 변경분을 체크포인트로 남기고, 이전 체크포인트와 달라진 내용이 없으면 중복 저장하지 마.`;
+6. 각 대화에서 관련 프로젝트 기억을 먼저 조회하고, 결정·수정·검증 완료·블로커·다음 작업이 바뀌면 전체 대화 대신 짧은 session checkpoint를 저장해. 인계, 컨텍스트 압축 또는 종료 전에는 아직 저장하지 않은 변경분을 체크포인트로 남기고, 이전 체크포인트와 달라진 내용이 없으면 중복 저장하지 마.
+7. 서비스 비밀값은 채팅, 로컬 .env 또는 지속 환경변수로 복사하지 마. 필요한 경우 vault list로 이름만 확인하고 vault exec로 해당 프로세스에만 일시 전달하며, 비밀값 자체를 출력하거나 로그에 남기지 마.`;
 }
 async function copyText(value) {
   if (navigator.clipboard?.writeText) {
@@ -63,6 +64,7 @@ const viewInfo = {
   documents: ['문서 · 파일','YOUR KNOWLEDGE, CONNECTED','문서 · 파일','원본과 에이전트가 분석한 문서 메타정보를 관리하세요.','↑ 원본 업로드'],
   relations: ['관계 그래프','CONNECTIONS WITH A REASON','관계 그래프','에이전트가 구성한 기억의 연결과 근거를 살펴보세요.'],
   keys: ['에이전트 연결','ONE MEMORY, EVERY AGENT','에이전트 연결','연결된 에이전트를 확인하고 접근 권한을 관리하세요.','+ API 키 만들기'],
+  vault: ['Vault','ENCRYPTED SECRETS','Vault','에이전트가 로컬 설정 파일 없이 사용할 비밀값을 암호화해 관리하세요.','+ 비밀 추가'],
   requests: ['기능 요청','HELP SHAPE VIBE MEMORY','기능 요청','필요한 기능과 실제 사용 사례를 남겨주세요.','+ 기능 요청']
 };
 async function navigate(view, reset = true) {
@@ -108,9 +110,12 @@ async function navigate(view, reset = true) {
       const result = await api(`/v1/records?kind=${recordKind}&limit=50&offset=${pageOffset}`);
       const options = view === 'memories' ? [['memory','기억'],['entity','엔티티']] : [['document','문서 메타정보'],['file','원본 파일']];
       html = `<section class="console-panel"><form id="search-records" class="list-toolbar"><select id="kind-filter" aria-label="기록 종류">${options.map(([value,label]) => `<option value="${value}" ${recordKind === value ? 'selected' : ''}>${label}</option>`).join('')}</select><input name="keywords" placeholder="검색 키워드를 쉼표로 구분" aria-label="검색 키워드"><button class="secondary-button" type="submit">키워드 검색</button><button class="secondary-button" type="button" data-action="reload">초기화</button></form><div id="record-results">${result.items.length ? recordRows(result.items) : empty('아직 기록이 없어요.',view === 'documents' ? '에이전트에서 파일을 등록하거나 원본을 업로드해보세요. 분석과 키워드 추출은 에이전트가 담당합니다.' : '기억을 직접 남기거나 에이전트에서 데이터를 보내보세요.')}</div><div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>← 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 →</button></div></section>`;
+    } else if (view === 'vault') {
+      const result = await api('/v1/vault');
+      html = `<section class="vault-note"><strong>값은 저장 후 다시 표시되지 않습니다.</strong><p>비밀값은 AES-256-GCM으로 암호화되며, Vault 권한을 따로 허용한 에이전트만 <code>vault exec</code>로 프로세스에 전달할 수 있습니다. 이름과 사용 기록은 이 화면에 표시됩니다.</p></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>암호화된 비밀</h2><p>${result.items.length}개의 비밀값이 저장되어 있습니다.</p></div></div>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 설명</th><th>마지막 사용</th><th>사용 횟수</th><th></th></tr></thead><tbody>${result.items.map(item => `<tr><td><strong>${h(item.name)}</strong><span class="record-subtitle">${h(item.description || '설명 없음')}</span></td><td>${date(item.last_accessed_at)}</td><td>${h(item.access_count)}</td><td><div class="row-actions"><button data-action="rotate-vault" data-name="${h(item.name)}" data-description="${h(item.description)}">교체</button><button class="danger" data-action="delete-vault" data-name="${h(item.name)}">삭제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('저장된 비밀값이 없어요.','API 토큰과 자동화 자격 증명을 암호화해 저장하고 허용한 에이전트에서 사용하세요.')}</section>`;
     } else if (view === 'keys') {
       const result = await api('/auth/api-keys');
-      html = `<div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>활성 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드</a></div><p class="key-note">에이전트가 안내한 웹 승인 링크를 열면 키를 복사하지 않고 연결할 수 있습니다. 여기에서 각 연결을 확인하고 언제든 철회하세요.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.','<a class="secondary-button" href="/guide.html" target="_blank">연결 방법 보기</a>')}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
+      html = `<div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>활성 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드</a></div><p class="key-note">Vault 권한은 기억 접근과 별도로 관리됩니다. 신뢰하는 에이전트에만 허용하고 언제든 철회하세요.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>Vault</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><button class="permission-toggle ${key.vault_access ? 'enabled' : ''}" data-action="toggle-vault-access" data-id="${h(key.id)}" data-enabled="${key.vault_access}">${key.vault_access ? '허용됨' : '차단됨'}</button></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.','<a class="secondary-button" href="/guide.html" target="_blank">연결 방법 보기</a>')}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
     } else if (view === 'requests') {
       const result = await api(`/v1/feature-requests?limit=50&offset=${pageOffset}`);
       html = `<section class="console-panel">${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>요청 내용</th><th>에이전트</th><th>상태</th><th>등록일</th></tr></thead><tbody>${result.items.map(item => `<tr><td><button class="record-title" data-action="request-detail" data-id="${h(item.id)}">${h(item.title)}</button><span class="record-subtitle">${h(item.description.slice(0,100))}</span></td><td>${h(item.agent_name)}</td><td><span class="tag">접수됨</span></td><td>${date(item.created_at)}</td></tr>`).join('')}</tbody></table></div>` : empty('더 나은 기억을 위한 아이디어가 있나요?','에이전트에서 요청을 보내거나 콘솔에서 필요한 기능과 사용 사례를 남겨주세요.')}</section>`;
@@ -153,14 +158,23 @@ function editor(title, fields, onSave, submitLabel = '저장') {
 }
 function detail(title, html) { $('#detail-title').textContent = title; $('#detail-content').innerHTML = html; $('#detail-dialog').showModal(); }
 function createKey() {
-  editor('에이전트 API 키 만들기','<p class="dialog-help">어떤 에이전트에 사용할 키인지 이름을 붙여주세요.</p><label>에이전트 이름<input name="name" placeholder="예: Claude Code, Codex, OpenClaw, Hermes" maxlength="80" required></label>', async data => {
-    const record = await api('/auth/api-keys',{method:'POST',body:JSON.stringify({name:data.get('name')})});
-    detail('새 API 키가 만들어졌어요.',`<div class="key-once"><p>지금 한 번만 확인할 수 있어요. 에이전트 설정에 저장해주세요.</p><code id="new-key">${h(record.key)}</code><button class="secondary-button" id="copy-key">API 키 복사 ⧉</button></div><pre class="detail-pre">export MEMORY_URL=${h(location.origin)}\nexport MEMORY_API_KEY=${h(record.key)}</pre>`);
+  editor('에이전트 API 키 만들기','<p class="dialog-help">어떤 에이전트에 사용할 키인지 이름을 붙여주세요.</p><label>에이전트 이름<input name="name" placeholder="예: Claude Code, Codex, OpenClaw, Hermes" maxlength="80" required></label><label class="check-field"><input type="checkbox" name="vault_access"> 이 키에 Vault 비밀값 사용 권한 허용</label><p class="dialog-help">Vault 권한은 저장된 모든 비밀값을 실행 프로세스에 전달할 수 있는 민감한 권한입니다.</p>', async data => {
+    const record = await api('/auth/api-keys',{method:'POST',body:JSON.stringify({name:data.get('name'),vault_access:data.has('vault_access')})});
+    detail('새 API 키가 만들어졌어요.',`<div class="key-once"><p>지금 한 번만 확인할 수 있어요. 에이전트에서 <code>configure</code>의 숨김 입력으로 저장하고 채팅이나 환경변수에 붙여넣지 마세요.</p><code id="new-key">${h(record.key)}</code><button class="secondary-button" id="copy-key">API 키 복사 ⧉</button></div><pre class="detail-pre">./bin/vibe-memory configure</pre>`);
     $('#copy-key').addEventListener('click',async () => { try { await navigator.clipboard.writeText(record.key); toast('API 키를 복사했습니다.'); } catch { toast('표시된 키를 선택해 복사해주세요.'); } });
   },'키 만들기');
 }
+function editVault(name = '', description = '') {
+  const fixed = Boolean(name);
+  editor(fixed ? 'Vault 비밀값 교체' : 'Vault 비밀값 추가',`<p class="dialog-help">값은 전송 후 이 화면에 다시 표시되지 않습니다. 이름에는 영문자, 숫자, 점, 밑줄, 하이픈만 사용할 수 있습니다.</p><label>이름<input name="name" value="${h(name)}" ${fixed ? 'readonly' : ''} pattern="[A-Za-z][A-Za-z0-9_.-]{0,99}" maxlength="100" placeholder="예: GITHUB_TOKEN" required></label><label>설명<input name="description" value="${h(description)}" maxlength="500" placeholder="어디에 사용하는 비밀값인지"></label><label>비밀값<textarea name="value" maxlength="65536" autocomplete="off" autocapitalize="off" spellcheck="false" required placeholder="값을 붙여넣으세요"></textarea></label>`,async data => {
+    const vaultName = data.get('name');
+    await api('/v1/vault/' + encodeURIComponent(vaultName),{method:'PUT',body:JSON.stringify({value:data.get('value'),description:data.get('description')})});
+    toast(fixed ? '비밀값을 안전하게 교체했습니다.' : '비밀값을 암호화해 저장했습니다.');
+  },fixed ? '교체' : '암호화 저장');
+}
 function primaryAction() {
   if (currentView === 'keys') return createKey();
+  if (currentView === 'vault') return editVault();
   if (currentView === 'memories') return editor('새 기억 남기기','<label>기억할 내용<textarea name="content" maxlength="10000" required placeholder="기억할 사실이나 선호를 입력하세요."></textarea></label><label>종류<select name="kind"><option value="fact">사실</option><option value="preference">선호</option><option value="event">이벤트</option><option value="instruction">지침</option></select></label><label>키워드<input name="keywords" required placeholder="예: Python, 개발 언어"></label><p class="dialog-help">키워드를 쉼표로 구분해주세요. 입력한 키워드만 임베딩하며, 원문은 분석하지 않습니다.</p>',async data => {
     const keywords = data.get('keywords').split(',').map(word => word.trim()).filter(Boolean);
     await api('/v1/memories',{method:'POST',body:JSON.stringify({content:data.get('content'),kind:data.get('kind'),keywords,source:'web-console'})});
@@ -180,7 +194,7 @@ document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return navigate(nav.dataset.view);
   const button = event.target.closest('[data-action]'); if (!button) return;
-  const {action,id} = button.dataset;
+  const {action,id,name,description} = button.dataset;
   try {
     if (action === 'toggle-account') {
       if (window.innerWidth <= 820) {
@@ -206,6 +220,14 @@ document.addEventListener('click', async event => {
       return;
     }
     if (action === 'create-key') return createKey();
+    if (action === 'rotate-vault') return editVault(name, description);
+    if (action === 'toggle-vault-access') {
+      const enabled = button.dataset.enabled === 'true';
+      if (!enabled && !confirm('이 에이전트에 Vault의 모든 비밀값을 사용할 권한을 허용할까요?')) return;
+      await api('/auth/api-keys/' + encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({vault_access:!enabled})});
+      toast(enabled ? 'Vault 권한을 차단했습니다.' : 'Vault 권한을 허용했습니다.');
+      return navigate(currentView,false);
+    }
     if (action === 'reload') return navigate(currentView, false);
     if (action === 'next') { pageOffset += 50; return navigate(currentView, false); }
     if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); return navigate(currentView, false); }
@@ -217,6 +239,9 @@ document.addEventListener('click', async event => {
     }
     if (action === 'revoke' && confirm('이 API 키를 삭제할까요? 연결된 에이전트에서 더 이상 사용할 수 없습니다.')) {
       await api('/auth/api-keys/' + encodeURIComponent(id),{method:'DELETE'}); toast('API 키를 삭제했습니다.'); await navigate(currentView,false);
+    }
+    if (action === 'delete-vault' && confirm(`${name} 비밀값을 영구 삭제할까요?`)) {
+      await api('/v1/vault/' + encodeURIComponent(name),{method:'DELETE'}); toast('Vault 비밀값을 삭제했습니다.'); await navigate(currentView,false);
     }
     if (action === 'delete' && confirm('이 기록을 삭제할까요? 연결된 키워드와 관계도 삭제됩니다.')) {
       await api('/v1/records/' + encodeURIComponent(id),{method:'DELETE'}); toast('기록을 삭제했습니다.'); await navigate(currentView,false);

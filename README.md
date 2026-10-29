@@ -21,6 +21,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Keyword-only search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
 - **Agent keys:** independently revocable keys share the same account's memory; keys are shown once and stored as hashes.
+- **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; values are never listed in the console.
 - **Byte streams:** upload originals as `application/octet-stream`, then attach agent-prepared JSON using `file_id`.
 - **Portable skill:** a compact `SKILL.md`, native Rust CLI, and verified compatibility bootstrap, with no vendor SDK requirement.
 
@@ -48,23 +49,26 @@ For another domain or port, set `MEMORY_PUBLIC_ORIGIN` to the **exact browser or
 
 ## Connect an agent
 
-Copy [`skills/vibe-memory`](skills/vibe-memory) into your agent's skill directory. Use the API key generated in your own console:
+Copy [`skills/vibe-memory`](skills/vibe-memory) into your agent's skill directory, install the native CLI, and use browser approval. Request Vault access only for agents you trust with every stored secret:
 
 ```sh
-export MEMORY_URL=http://localhost:8080
-export MEMORY_API_KEY='your-console-generated-key'
-
 # Download and verify the current native Rust CLI, then refresh the Skill.
-python3 skills/vibe-memory/scripts/memory.py sync
+MEMORY_URL=http://localhost:8080 python3 skills/vibe-memory/scripts/memory.py sync
+skills/vibe-memory/bin/vibe-memory login --url http://localhost:8080 \
+  --name 'My agent' --vault-access
 
 skills/vibe-memory/bin/vibe-memory remember 'I prefer Python examples' \
   --kind preference --keyword Python --keyword 'code examples' --source coding-agent
 
 # The agent extracts these keywords before sending the request.
 skills/vibe-memory/bin/vibe-memory recall Python 'code examples'
+
+# Secret values stay out of chat and persistent shell configuration.
+skills/vibe-memory/bin/vibe-memory vault exec \
+  --env GITHUB_TOKEN=github-token -- gh api user
 ```
 
-The native Rust CLI wraps authentication, storage, search, byte-stream files, live events, and Skill updates so agents do not need to load API schemas into context. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
+The native Rust CLI wraps authentication, storage, search, byte-stream files, encrypted Vault execution, live events, and Skill updates so agents do not need to load API schemas into context. `vault list` exposes names and metadata only; `vault exec` fetches selected values and injects them into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
 ## Run from source
 

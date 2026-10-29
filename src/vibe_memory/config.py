@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MEMORY_", env_file=".env", extra="ignore")
     data_dir: Path = Path(".data")
+    vault_key_file: Path | None = None
     # Map independently revocable agent keys to a common user ID.
     api_keys: dict[str, str] = Field(default_factory=dict)
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

@@ -45,6 +45,12 @@ class Signup(Credentials):
 class KeyInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=80)
+    vault_access: bool = False
+
+
+class KeyAccessUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    vault_access: bool
 
 
 def digest(value):
@@ -71,14 +77,25 @@ class AuthStore:
                 CREATE TABLE IF NOT EXISTS api_keys (
                     id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, prefix TEXT NOT NULL,
-                    created_at INTEGER NOT NULL);
+                    created_at INTEGER NOT NULL, vault_access INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS device_logins (
                     device_hash TEXT PRIMARY KEY, user_hash TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL,
-                    user_id TEXT REFERENCES users(id) ON DELETE CASCADE, polled_at INTEGER NOT NULL);
+                    user_id TEXT REFERENCES users(id) ON DELETE CASCADE, polled_at INTEGER NOT NULL,
+                    vault_access INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS auth_attempts (
                     key TEXT PRIMARY KEY, count INTEGER NOT NULL, resets_at INTEGER NOT NULL);
             """)
+            api_columns = {row[1] for row in db.execute("PRAGMA table_info(api_keys)")}
+            if "vault_access" not in api_columns:
+                db.execute(
+                    "ALTER TABLE api_keys ADD COLUMN vault_access INTEGER NOT NULL DEFAULT 0"
+                )
+            device_columns = {row[1] for row in db.execute("PRAGMA table_info(device_logins)")}
+            if "vault_access" not in device_columns:
+                db.execute(
+                    "ALTER TABLE device_logins ADD COLUMN vault_access INTEGER NOT NULL DEFAULT 0"
+                )
         path.chmod(0o600)
         self.dummy_salt = secrets.token_hex(16)
         self.dummy_hash = password_hash("not-a-real-password", self.dummy_salt)
@@ -163,27 +180,39 @@ class AuthStore:
             db.execute("DELETE FROM sessions WHERE hash=?", (digest(token or ""),))
 
     def user_for_key(self, token):
+        principal = self.principal_for_key(token)
+        return principal["user_id"] if principal else None
+
+    def principal_for_key(self, token):
         with self.connection() as db:
             row = db.execute(
-                "SELECT user_id FROM api_keys WHERE hash=?", (digest(token),)
+                "SELECT id,user_id,vault_access FROM api_keys WHERE hash=?", (digest(token),)
             ).fetchone()
-        return row["user_id"] if row else None
+        if not row:
+            return None
+        return {
+            "key_id": row["id"],
+            "user_id": row["user_id"],
+            "vault_access": bool(row["vault_access"]),
+        }
 
     def list_keys(self, user_id):
         with self.connection() as db:
-            return [
-                dict(row)
-                for row in db.execute(
-                    """SELECT id,name,prefix,created_at FROM api_keys
+            rows = db.execute(
+                """SELECT id,name,prefix,created_at,vault_access FROM api_keys
                 WHERE user_id=? ORDER BY created_at DESC,id""",
-                    (user_id,),
-                )
-            ]
+                (user_id,),
+            ).fetchall()
+        return [{**dict(row), "vault_access": bool(row["vault_access"])} for row in rows]
 
-    def create_key(self, user_id, name):
+    def create_key(self, user_id, name, vault_access=False):
         token = "vm_" + secrets.token_urlsafe(36)
         record = dict(
-            id=str(uuid4()), name=name, prefix=token[:10] + "…", created_at=int(time.time())
+            id=str(uuid4()),
+            name=name,
+            prefix=token[:10] + "…",
+            created_at=int(time.time()),
+            vault_access=bool(vault_access),
         )
         with self.connection() as db:
             if (
@@ -196,7 +225,9 @@ class AuthStore:
                     422, "키는 최대 30개까지 만들 수 있습니다. 사용하지 않는 키를 삭제해주세요."
                 )
             db.execute(
-                "INSERT INTO api_keys VALUES(?,?,?,?,?,?)",
+                """INSERT INTO api_keys(
+                    id,user_id,hash,name,prefix,created_at,vault_access
+                ) VALUES(?,?,?,?,?,?,?)""",
                 (
                     record["id"],
                     user_id,
@@ -204,29 +235,54 @@ class AuthStore:
                     name,
                     record["prefix"],
                     record["created_at"],
+                    int(record["vault_access"]),
                 ),
             )
         return {**record, "key": token}
 
-    def start_device(self, name):
+    def set_key_vault_access(self, user_id, id, vault_access):
+        with self.connection() as db:
+            result = db.execute(
+                "UPDATE api_keys SET vault_access=? WHERE id=? AND user_id=?",
+                (int(vault_access), id, user_id),
+            )
+            if not result.rowcount:
+                raise HTTPException(404, "키를 찾을 수 없습니다.")
+        return {"id": id, "vault_access": bool(vault_access)}
+
+    def start_device(self, name, vault_access=False):
         device = secrets.token_urlsafe(36)
         code = secrets.token_hex(5).upper()
         expires = int(time.time()) + 300
         with self.connection() as db:
             db.execute("DELETE FROM device_logins WHERE expires_at <= ?", (int(time.time()),))
-            db.execute("INSERT INTO device_logins VALUES(?,?,?,?,?,?,?)",
-                       (digest(device), digest(code), name, expires, "pending", None, 0))
+            db.execute(
+                """INSERT INTO device_logins(
+                    device_hash,user_hash,name,expires_at,state,user_id,polled_at,vault_access
+                ) VALUES(?,?,?,?,?,?,?,?)""",
+                (
+                    digest(device),
+                    digest(code),
+                    name,
+                    expires,
+                    "pending",
+                    None,
+                    0,
+                    int(vault_access),
+                ),
+            )
         return {"device_code": device, "user_code": code, "expires_in": 300, "interval": 3}
 
     def device_info(self, code):
         with self.connection() as db:
             row = db.execute(
-                "SELECT name,expires_at,state FROM device_logins WHERE user_hash=?",
+                """SELECT name,expires_at,state,vault_access FROM device_logins
+                WHERE user_hash=?""",
                 (digest(code.upper()),),
             ).fetchone()
         if not row or row["expires_at"] <= int(time.time()):
             raise HTTPException(410, "연결 요청이 만료되었거나 존재하지 않습니다.")
-        return dict(row)
+        return {**dict(row), "vault_access": bool(row["vault_access"])}
 
     def approve_device(self, user_id, code, approved):
         with self.connection() as db:
@@ -257,8 +313,20 @@ class AuthStore:
                 raise HTTPException(422, "Too many agent keys; revoke an unused key in the console")
             token = "vm_" + secrets.token_urlsafe(36)
             key_id = str(uuid4())
-            db.execute("INSERT INTO api_keys VALUES(?,?,?,?,?,?)",
-                       (key_id, row["user_id"], digest(token), row["name"], token[:10] + "…", now))
+            db.execute(
+                """INSERT INTO api_keys(
+                    id,user_id,hash,name,prefix,created_at,vault_access
+                ) VALUES(?,?,?,?,?,?,?)""",
+                (
+                    key_id,
+                    row["user_id"],
+                    digest(token),
+                    row["name"],
+                    token[:10] + "…",
+                    now,
+                    row["vault_access"],
+                ),
+            )
             db.execute("UPDATE device_logins SET state='used' WHERE device_hash=?", (digest(device),))
         return {"state": "connected", "key": token, "key_id": key_id}
 

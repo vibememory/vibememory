@@ -46,9 +46,13 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
             "vibe-memory/SKILL.md",
             "vibe-memory/scripts/memory.py",
         }
-        assert b"native Rust" in archive.read("vibe-memory/SKILL.md")
-        assert b"## Product feedback" in archive.read("vibe-memory/SKILL.md")
-        assert b"feedback-list" in archive.read("vibe-memory/SKILL.md")
+        skill = archive.read("vibe-memory/SKILL.md")
+        assert b"native Rust" in skill
+        assert b"## Product feedback" in skill
+        assert b"feedback-list" in skill
+        assert b"VM_SKILL_DIR" in skill
+        assert b"Never test or invoke a bare global" in skill
+        assert b"Do not use curl or direct API calls as a fallback" in skill
         assert b"native_cli" in archive.read("vibe-memory/scripts/memory.py")
         for name, digest in manifest["files"].items():
             release = client.get(
@@ -104,6 +108,15 @@ def test_bootstrap_selects_and_verifies_native_binary(tmp_path, monkeypatch):
         lambda url: (_ for _ in ()).throw(AssertionError("current binary was redownloaded")),
     )
     assert launcher.ensure_cli() == target
+
+
+def test_skill_commands_are_anchored_to_the_loaded_skill_directory():
+    skill = (ROOT / "skills/vibe-memory/SKILL.md").read_text()
+    assert 'python3 "$VM_SKILL_DIR/scripts/memory.py" sync' in skill
+    assert 'VM_CLI="$VM_SKILL_DIR/bin/vibe-memory"' in skill
+    assert '$VmCli = Join-Path $VmSkillDir "bin\\vibe-memory.exe"' in skill
+    assert "run `python3 scripts/memory.py" not in skill
+    assert "execute `./bin/vibe-memory`" not in skill
 
 
 def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monkeypatch):

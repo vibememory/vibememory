@@ -22,10 +22,14 @@ def test_console_and_api_share_one_origin(settings):
             assert phrase in response.text
         console_script = client.get("/assets/console.js")
         assert console_script.status_code == 200
-        assert "설치 프롬프트 복사하기" in console_script.text
+        assert "설치·최신화 프롬프트 복사" in console_script.text
         assert "location.origin" in console_script.text
         assert "/downloads/vibe-memory-skill.zip" in console_script.text
-        assert "login --vault-access --no-browser" in console_script.text
+        assert "login --url" in console_script.text
+        assert "--vault-access --no-browser" in console_script.text
+        assert "전역 vibe-memory 명령을 먼저 실행하지 마" in console_script.text
+        assert 'python3 "$VM_SKILL_DIR/scripts/memory.py" sync' in console_script.text
+        assert 'Join-Path $VmSkillDir "bin\\\\vibe-memory.exe"' in console_script.text
         assert "vault exec" in console_script.text
         assert "relationship-graph-stage" in console_script.text
         assert "prefers-reduced-motion" in client.get("/assets/console.css").text

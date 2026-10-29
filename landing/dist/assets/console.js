@@ -22,7 +22,7 @@ function toast(message) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2800);
 }
 function installPromptCard() {
-  return `<section class="install-prompt-card" aria-labelledby="install-prompt-title"><div class="install-prompt-copy"><span>RECOMMENDED · NO KEY COPY</span><h2 id="install-prompt-title">대화 한 번으로 에이전트를 연결하세요.</h2><p id="install-prompt-description">설치 프롬프트를 Claude Code, Codex, OpenClaw 또는 Hermes에 붙여넣으면 Skill 설치부터 웹 승인까지 에이전트가 진행합니다.</p></div><button class="button primary" type="button" data-action="copy-install-prompt" aria-describedby="install-prompt-description">설치 프롬프트 복사하기 <span aria-hidden="true">⧉</span></button></section>`;
+  return `<section class="install-prompt-card" aria-labelledby="install-prompt-title"><div class="install-prompt-copy"><span>RECOMMENDED · NO KEY COPY</span><h2 id="install-prompt-title">대화 한 번으로 설치·최신화하고 연결하세요.</h2><p id="install-prompt-description">프롬프트를 Claude Code, Codex, OpenClaw 또는 Hermes에 붙여넣으면 오래된 Skill 교체부터 웹 승인까지 에이전트가 진행합니다.</p></div><button class="button primary" type="button" data-action="copy-install-prompt" aria-describedby="install-prompt-description">설치·최신화 프롬프트 복사 <span aria-hidden="true">⧉</span></button></section>`;
 }
 function installPrompt() {
   const base = location.origin;
@@ -33,13 +33,14 @@ Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
 최신 지침: ${base}/skills/vibe-memory/SKILL.md
 
 진행 방법:
-1. Skill ZIP을 내려받아 이 에이전트의 Skill 디렉터리에 설치하고 SKILL.md 전체를 읽어.
-2. 설치된 vibe-memory 디렉터리에서 호환 설치기를 실행해 서비스 매니페스트가 지정한 현재 플랫폼용 배포 바이너리를 내려받고 SHA-256을 검증해. 작업 중 Rust를 직접 컴파일하지 마. Linux/macOS에서는 MEMORY_URL="${base}" python3 scripts/memory.py sync를 사용하고, Windows에서는 현재 셸 문법에 맞게 MEMORY_URL을 설정한 뒤 py scripts\\memory.py sync를 사용해.
-3. 브라우저 승인 연결을 login --vault-access --no-browser --name "현재 에이전트 이름"으로 시작하고 서비스 URL은 ${base}로 지정해. 승인 화면에 기억 접근과 별도로 Vault 사용 권한이 표시되는지 확인하게 해.
-4. 출력된 승인 URL과 확인 코드를 클릭 가능한 링크로 나에게 보여줘. 비밀번호나 API 키를 요청하거나 채팅에 노출하지 말고, 연결 프로세스를 유지한 채 내가 웹에서 승인할 때까지 기다려.
-5. 승인 후 status로 연결을 확인해. 이후 작업부터 SKILL.md 지침에 따라 Vibe Memory를 적극 사용하고, API 요청을 직접 조립하지 말고 Rust CLI를 사용해.
-6. 각 대화에서 관련 프로젝트 기억을 먼저 조회하고, 결정·수정·검증 완료·블로커·다음 작업이 바뀌면 전체 대화 대신 짧은 session checkpoint를 저장해. 인계, 컨텍스트 압축 또는 종료 전에는 아직 저장하지 않은 변경분을 체크포인트로 남기고, 이전 체크포인트와 달라진 내용이 없으면 중복 저장하지 마.
-7. 서비스 비밀값은 채팅, 로컬 .env 또는 지속 환경변수로 복사하지 마. 필요한 경우 vault list로 이름만 확인하고 vault exec로 해당 프로세스에만 일시 전달하며, 비밀값 자체를 출력하거나 로그에 남기지 마.`;
+1. 지금 로드된 기존 vibe-memory Skill의 지침이나 전역 vibe-memory 명령을 먼저 실행하지 마. 위 ZIP 최신판을 내려받아 기존에 설치된 vibe-memory Skill 폴더만 완전히 교체하고, 새 SKILL.md 전체를 다시 읽어. 다른 Skill이나 사용자 프로젝트 파일은 건드리지 마.
+2. 새 SKILL.md가 있는 설치 폴더의 절대 경로를 구해. 현재 프로젝트 폴더로 추측하지 말고 전역 vibe-memory 명령도 사용하지 마. Linux/macOS에서는 VM_SKILL_DIR="설치된 vibe-memory 폴더의 절대 경로"를 작업 로컬 변수로 둔 뒤 MEMORY_URL="${base}" python3 "$VM_SKILL_DIR/scripts/memory.py" sync를 실행하고 VM_CLI="$VM_SKILL_DIR/bin/vibe-memory"를 사용해. Windows PowerShell에서는 $VmSkillDir에 그 절대 경로를 넣고 $env:MEMORY_URL="${base}"를 설정한 뒤 py (Join-Path $VmSkillDir "scripts\\memory.py") sync를 실행하고 $VmCli = Join-Path $VmSkillDir "bin\\vibe-memory.exe"로 사용해.
+3. sync가 Skill을 갱신했다면 새 SKILL.md를 다시 읽어. 호환 설치기가 서비스 매니페스트의 현재 플랫폼용 Rust 바이너리를 내려받고 SHA-256을 검증하게 하며, 직접 컴파일하거나 curl·직접 API 호출로 우회하지 마.
+4. 위 절대 경로의 Rust CLI로 브라우저 승인 연결을 login --url ${base} --vault-access --no-browser --name "현재 에이전트 이름"으로 시작해. 승인 화면에 기억 접근과 별도로 Vault 사용 권한이 표시되는지 확인하게 해.
+5. 출력된 승인 URL과 확인 코드를 클릭 가능한 링크로 나에게 보여줘. 비밀번호나 API 키를 요청하거나 채팅에 노출하지 말고, 연결 프로세스를 유지한 채 내가 웹에서 승인할 때까지 기다려.
+6. 승인 후 같은 절대 경로 CLI의 status로 연결을 확인해. 이후 작업부터 새 SKILL.md 지침에 따라 Vibe Memory를 적극 사용하고, API 요청을 직접 조립하지 말고 Rust CLI를 사용해.
+7. 각 대화에서 관련 프로젝트 기억을 먼저 조회하고, 결정·수정·검증 완료·블로커·다음 작업이 바뀌면 전체 대화 대신 짧은 session checkpoint를 저장해. 인계, 컨텍스트 압축 또는 종료 전에는 아직 저장하지 않은 변경분을 체크포인트로 남기고, 이전 체크포인트와 달라진 내용이 없으면 중복 저장하지 마.
+8. 서비스 비밀값은 채팅, 로컬 .env 또는 지속 환경변수로 복사하지 마. 필요한 경우 vault list로 이름만 확인하고 vault exec로 해당 프로세스에만 일시 전달하며, 비밀값 자체를 출력하거나 로그에 남기지 마.`;
 }
 async function copyText(value) {
   if (navigator.clipboard?.writeText) {
@@ -317,7 +318,7 @@ function detail(title, html) { $('#detail-title').textContent = title; $('#detai
 function createKey() {
   editor('에이전트 API 키 만들기','<p class="dialog-help">어떤 에이전트에 사용할 키인지 이름을 붙여주세요.</p><label>에이전트 이름<input name="name" placeholder="예: Claude Code, Codex, OpenClaw, Hermes" maxlength="80" required></label><label class="check-field"><input type="checkbox" name="vault_access"> 이 키에 Vault 비밀값 사용 권한 허용</label><p class="dialog-help">Vault 권한은 저장된 모든 비밀값을 실행 프로세스에 전달할 수 있는 민감한 권한입니다.</p>', async data => {
     const record = await api('/auth/api-keys',{method:'POST',body:JSON.stringify({name:data.get('name'),vault_access:data.has('vault_access')})});
-    detail('새 API 키가 만들어졌어요.',`<div class="key-once"><p>지금 한 번만 확인할 수 있어요. 에이전트에서 <code>configure</code>의 숨김 입력으로 저장하고 채팅이나 환경변수에 붙여넣지 마세요.</p><code id="new-key">${h(record.key)}</code><button class="secondary-button" id="copy-key">API 키 복사 ⧉</button></div><pre class="detail-pre">./bin/vibe-memory configure</pre>`);
+    detail('새 API 키가 만들어졌어요.',`<div class="key-once"><p>지금 한 번만 확인할 수 있어요. 에이전트에서 설치된 Skill 안의 Rust CLI를 절대 경로로 실행하고 <code>configure</code>의 숨김 입력으로 저장하세요. 채팅이나 환경변수에 붙여넣지 마세요.</p><code id="new-key">${h(record.key)}</code><button class="secondary-button" id="copy-key">API 키 복사 ⧉</button></div><pre class="detail-pre">"/absolute/path/to/vibe-memory/bin/vibe-memory" configure</pre>`);
     $('#copy-key').addEventListener('click',async () => { try { await navigator.clipboard.writeText(record.key); toast('API 키를 복사했습니다.'); } catch { toast('표시된 키를 선택해 복사해주세요.'); } });
   },'키 만들기');
 }
@@ -372,8 +373,8 @@ document.addEventListener('click', async event => {
     if (action === 'upload-file') { await navigate('documents'); return primaryAction(); }
     if (action === 'copy-install-prompt') {
       const prompt = installPrompt();
-      try { await copyText(prompt); toast('설치 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.'); }
-      catch { detail('에이전트 설치 프롬프트', `<p class="dialog-help">자동 복사가 차단됐습니다. 아래 내용을 선택해 복사하세요.</p><pre class="detail-pre">${h(prompt)}</pre>`); }
+      try { await copyText(prompt); toast('설치·최신화 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.'); }
+      catch { detail('에이전트 설치·최신화 프롬프트', `<p class="dialog-help">자동 복사가 차단됐습니다. 아래 내용을 선택해 복사하세요.</p><pre class="detail-pre">${h(prompt)}</pre>`); }
       return;
     }
     if (action === 'create-key') return createKey();

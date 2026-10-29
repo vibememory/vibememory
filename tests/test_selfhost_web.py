@@ -20,20 +20,31 @@ def test_console_and_api_share_one_origin(settings):
             response = client.get(route)
             assert response.status_code == 200
             assert phrase in response.text
+        landing = client.get("/").text
+        console = client.get("/console").text
+        install_script = client.get("/assets/install-prompt.js")
         console_script = client.get("/assets/console.js")
+        landing_script = client.get("/assets/app.js")
+        assert install_script.status_code == 200
         assert console_script.status_code == 200
+        assert landing_script.status_code == 200
+        assert "설치 프롬프트 복사하기" in landing
+        assert "data-copy-install-prompt" in landing
+        assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
+        assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
         assert "설치·최신화 프롬프트 복사" in console_script.text
-        assert "location.origin" in console_script.text
-        assert "/downloads/vibe-memory-skill.zip" in console_script.text
-        assert "login --url" in console_script.text
-        assert "--vault-access --no-browser" in console_script.text
-        assert "전역 vibe-memory 명령을 먼저 실행하지 마" in console_script.text
-        assert 'python3 "$VM_SKILL_DIR/scripts/memory.py" sync' in console_script.text
-        assert 'Join-Path $VmSkillDir "bin\\\\vibe-memory.exe"' in console_script.text
+        assert "vibeMemoryInstallPrompt" in console_script.text
+        assert "vibeMemoryInstallPrompt" in landing_script.text
+        assert "location.origin" in install_script.text
+        assert "/downloads/vibe-memory-skill.zip" in install_script.text
+        assert "login --url" in install_script.text
+        assert "--vault-access --no-browser" in install_script.text
+        assert "전역 vibe-memory 명령을 먼저 실행하지 마" in install_script.text
+        assert 'python3 "$VM_SKILL_DIR/scripts/memory.py" sync' in install_script.text
+        assert 'Join-Path $VmSkillDir "bin\\\\vibe-memory.exe"' in install_script.text
         assert "vault exec" in console_script.text
         assert "relationship-graph-stage" in console_script.text
         assert "prefers-reduced-motion" in client.get("/assets/console.css").text
-        console = client.get("/console").text
         assert "topbar-search" in console
         assert "sidebar-backdrop" in console
         assert 'data-view="vault"' in console

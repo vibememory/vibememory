@@ -5,7 +5,7 @@
   "scripts": {
     "prepare-assets": "python3 scripts/package_skill.py",
     "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
-    "check": "node --check dist/assets/app.js && node --check dist/assets/login.js && node --check dist/assets/connect.js && node --check dist/assets/console.js && node --check src/worker.js && wrangler deploy --dry-run",
+    "check": "node --check dist/assets/install-prompt.js && node --check dist/assets/app.js && node --check dist/assets/login.js && node --check dist/assets/connect.js && node --check dist/assets/console.js && node --check src/worker.js && wrangler deploy --dry-run",
     "deploy": "npm run prepare-assets && wrangler deploy"
   },
   "devDependencies": {

@@ -96,6 +96,26 @@ function notify(message) {
   toast.textContent = message; toast.classList.add('visible');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove('visible'), 2600);
 }
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(value); return; } catch { /* Use the selection fallback below. */ }
+  }
+  const field = document.createElement('textarea');
+  field.value = value; field.setAttribute('readonly', ''); field.style.position = 'fixed'; field.style.opacity = '0';
+  document.body.append(field); field.select();
+  const copied = document.execCommand('copy'); field.remove();
+  if (!copied) throw new Error('copy failed');
+}
+for (const button of document.querySelectorAll('[data-copy-install-prompt]')) {
+  button.addEventListener('click', async () => {
+    try {
+      await copyText(window.vibeMemoryInstallPrompt());
+      notify('설치·최신화 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.');
+    } catch {
+      notify('자동 복사가 차단됐습니다. 콘솔에서 프롬프트를 복사해주세요.');
+    }
+  });
+}
 document.querySelector('#copy-example').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(JSON.stringify(demos[activeDemo].code, null, 2));

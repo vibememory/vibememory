@@ -51,6 +51,11 @@ class Store:
             id STRING PRIMARY KEY, owner STRING, title STRING, description STRING,
             agent_name STRING, use_case STRING, priority STRING, source STRING,
             client_request_id STRING, status STRING, created_at STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS ChangeEvent(
+            id INT64 PRIMARY KEY, owner STRING, event STRING, payload STRING)""")
+        self.event_sequence = self.query(
+            "MATCH (e:ChangeEvent) RETURN max(e.id) AS latest"
+        )[0]["latest"] or 0
         rows = self.query("MATCH (m:Meta {key: 'embedding_model'}) RETURN m.value AS value")
         if rows and rows[0]["value"] != model:
             self.close()
@@ -70,6 +75,25 @@ class Store:
         with self.transaction():
             self.query("MATCH (n:Item) WHERE n.kind = 'chunk' DETACH DELETE n")
             self.query("MATCH (n:Item) WHERE n.kind <> 'keyword' SET n.embedding = []")
+
+    def _event(self, owner, event, payload):
+        # Called inside the mutation transaction: rollback removes its event as well.
+        self.event_sequence += 1
+        self.query(
+            "CREATE (:ChangeEvent {id: $id, owner: $owner, event: $event, payload: $payload})",
+            dict(id=self.event_sequence, owner=owner, event=event,
+                 payload=json.dumps(payload, ensure_ascii=False)),
+        )
+
+    def events(self, owner, after=0, limit=100):
+        rows = self.query(
+            """MATCH (e:ChangeEvent {owner: $owner}) WHERE e.id > $after
+            RETURN e.id AS id, e.event AS event, e.payload AS payload
+            ORDER BY e.id LIMIT $limit""",
+            dict(owner=owner, after=after, limit=limit),
+        )
+        return [dict(id=row["id"], event=row["event"], data=json.loads(row["payload"]))
+                for row in rows]
 
     def close(self):
         self.conn.close()
@@ -157,6 +181,7 @@ class Store:
                 )
             )
             self._index(owner, id, keywords, vectors)
+            self._event(owner, kind + ".created", {"record_id": id, "kind": kind})
             return self.get(owner, id)
 
     def _index(self, owner, parent_id, keywords, vectors):
@@ -187,7 +212,7 @@ class Store:
 
     def update_keywords(self, owner, id, keywords, vectors):
         with self.transaction():
-            self.get(owner, id)
+            record = self.get(owner, id)
             self.query(
                 "MATCH (n:Item {owner: $owner, parent_id: $id}) DETACH DELETE n",
                 {"owner": owner, "id": id},
@@ -197,6 +222,8 @@ class Store:
                 {"owner": owner, "id": id, "keywords": keywords},
             )
             self._index(owner, id, keywords, vectors)
+            self._event(owner, record["kind"] + ".updated",
+                        {"record_id": id, "kind": record["kind"], "change": "keywords"})
             return self.get(owner, id)
 
     def get(self, owner, id, internal=False):
@@ -229,6 +256,9 @@ class Store:
                 DETACH DELETE n""",
                 {"owner": owner, "id": id},
             )
+            self._event(owner, record["kind"] + ".deleted",
+                        {"record_id": id, "kind": record["kind"],
+                         "incident_relations_removed": True})
 
     def _link(self, owner, source, target, relation, reason):
         id, created = uid(), now()
@@ -258,6 +288,8 @@ class Store:
             if data.source_id == data.target_id:
                 raise ValueError("A relationship must connect two distinct records")
             id = self._link(owner, data.source_id, data.target_id, data.relation, data.reason)
+            self._event(owner, "relation.created", {"relation_id": id,
+                        "source_id": data.source_id, "target_id": data.target_id, "version": 1})
             return next(r for r in self.relations(owner, "all") if r["id"] == id)
 
     def relations(self, owner, status="active"):
@@ -299,6 +331,9 @@ class Store:
                     history=json.dumps(history),
                 ),
             )
+            self._event(owner, "relation.updated", {"relation_id": id,
+                        "source_id": edge["source_id"], "target_id": edge["target_id"],
+                        "version": version})
             return {
                 **edge,
                 "status": data.status,

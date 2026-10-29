@@ -99,3 +99,33 @@ Retraction/restoration requires a reason and expected_version. A stale version r
 ```
 
 Required: title, description, agent_name. A stable optional client_request_id makes identical retries return the existing record (200); first submission is 201 and changed content under the same ID is 409. Feedback is stored as `received` without embedding or mixing it into memory search. Submission does not approve or implement a feature automatically.
+
+### Live change events
+
+`GET /v1/events?after=0&seconds=25` is an authenticated SSE stream (same
+Bearer key or browser session as other `/v1` endpoints). `seconds` is 1–60;
+the server closes each bounded connection normally, and clients reconnect.
+`Last-Event-ID` overrides `after`. IDs are persistent increasing integers;
+only events belonging to the authenticated user are returned. Events are
+stored in the graph transaction alongside each successful mutation, so failed
+writes emit nothing. History currently remains until the operator replaces the
+data store; it is not a bounded notification queue.
+
+Events include `memory.created/updated/deleted`, corresponding `document`,
+`entity` and `file` changes, and `relation.created/updated`. Updates currently
+mean keyword replacement or relationship status changes, which are the supported
+update operations. Record deletion also invalidates incident relationships.
+Payloads contain IDs and change metadata, without original text or keywords.
+Fetch current records/relations to refresh context; events can be replayed and
+must be deduplicated by ID. Deleting a record retains its minimal event history.
+
+The stream sends heartbeats, disables buffering/caching, checks authentication
+while connected and closes access after key revocation or session expiration.
+The current single-process service polls its event journal every 0.5 seconds.
+
+Agents use `python3 scripts/memory.py watch --seconds 3600 --cursor-file PATH`.
+The helper prints JSON lines, reconnects and persists the last printed ID. Use a
+separate private cursor path for each service/account/workspace. The skill directs
+agents to inspect background output at work checkpoints; SSE cannot wake a stopped
+agent or inject context into an unsupported host. Network interruptions retry
+within the configured duration; HTTP rejection stops the listener.

@@ -1,11 +1,15 @@
+import asyncio
 import hashlib
 import hmac
+import json
 import logging
+import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
+import anyio
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from .auth import COOKIE, SESSION_SECONDS, AuthStore, Credentials, KeyInput, Signup
@@ -221,6 +225,53 @@ def create_app(settings=None, embedder=None):
     @app.get("/health", tags=["service"])
     def health():
         return {"status": "ok"}
+
+    @app.get("/v1/events", tags=["service"])
+    async def events(
+        request: Request,
+        after: int = Query(default=0, ge=0, le=9223372036854775807),
+        seconds: int = Query(default=25, ge=1, le=60),
+        user=Depends(owner), db=Depends(store),
+    ):
+        last_id = request.headers.get("Last-Event-ID")
+        if last_id is not None:
+            try:
+                after = int(last_id)
+                if not 0 <= after <= 9223372036854775807:
+                    raise ValueError()
+            except ValueError:
+                raise HTTPException(422, "Last-Event-ID must be a nonnegative integer") from None
+
+        async def stream():
+            cursor = after
+            deadline = time.monotonic() + seconds
+            heartbeat = 0
+            yield "retry: 1000\n\n"
+            while time.monotonic() < deadline:
+                if await request.is_disconnected():
+                    return
+                # Revoked credentials and expired/logged-out sessions must lose live access too.
+                credentials = await auth(request)
+                try:
+                    current = await anyio.to_thread.run_sync(owner, request, credentials)
+                except HTTPException:
+                    return
+                if current != user:
+                    return
+                batch = await anyio.to_thread.run_sync(db.events, user, cursor)
+                for event in batch:
+                    cursor = event["id"]
+                    payload = json.dumps(event["data"], ensure_ascii=False)
+                    yield f"id: {cursor}\nevent: {event['event']}\ndata: {payload}\n\n"
+                if time.monotonic() >= heartbeat:
+                    yield ": heartbeat\n\n"
+                    heartbeat = time.monotonic() + 10
+                if not batch:
+                    await asyncio.sleep(0.5)
+
+        return StreamingResponse(stream(), media_type="text/event-stream", headers={
+            "Cache-Control": "no-store", "X-Accel-Buffering": "no",
+        })
 
     @app.get("/v1/me", tags=["service"])
     def me(user=Depends(owner)):

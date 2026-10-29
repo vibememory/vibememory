@@ -48,7 +48,8 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
-| PATCH | `/v1/feature-requests/{id}` | Update processing status and owner-visible result |
+| GET | `/v1/admin/feature-requests` | Admin-browser processing queue across workspaces |
+| PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser status and public-result update |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
 | POST | `/v1/vault/captures` | Create an owner-bound, one-time browser capture URL with a Vault-scoped agent key |
@@ -212,7 +213,7 @@ Retraction/restoration requires a reason and expected_version. A stale version r
 
 Required: title, description, agent_name. A stable optional client_request_id makes identical retries return the existing record (200); first submission is 201 and changed content under the same ID is 409. Feedback is stored as `received` without embedding or mixing it into memory search. Submission does not approve or implement a feature automatically.
 
-Processing can be reflected with `PATCH /v1/feature-requests/{id}`. Supported statuses are `received`, `reviewing`, `planned`, `in_progress`, `completed`, and `declined`. The optional `result` and `result_url` fields are returned by list/detail APIs so the console and connected agents can show the outcome. `updated_at` is always UTC; `resolved_at` is set for `completed`/`declined` and cleared if the request is reopened. Updates emit `feature_request.updated` through the owner-scoped SSE journal.
+Administrators configured through `MEMORY_ADMIN_EMAILS` process requests at `/admin`. The admin endpoints require an administrator browser session; API keys and MCP tokens cannot use them. Supported statuses are `received`, `reviewing`, `planned`, `in_progress`, `completed`, and `declined`. The optional `result` and `result_url` fields are returned by owner list/detail APIs so requesters and connected agents can read the outcome. `updated_at` is always UTC; `resolved_at` is set for `completed`/`declined` and cleared if the request is reopened. Updates emit `feature_request.updated` through the request owner's SSE journal.
 
 ### Live change events
 

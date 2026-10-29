@@ -175,6 +175,14 @@ def create_app(settings=None, embedder=None):
             check_origin(request)
         return user
 
+    def is_admin(user):
+        return user["email"].casefold() in settings.admin_emails
+
+    def admin_user(user=Depends(browser_user)):
+        if not is_admin(user):
+            raise HTTPException(403, "관리자 권한이 필요합니다.")
+        return user
+
     def owner(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(auth)):
         request.state.vault_access = False
         request.state.auth_kind = "none"
@@ -348,7 +356,7 @@ def create_app(settings=None, embedder=None):
         return response
 
     def signed_in(user):
-        response = JSONResponse({"user": user})
+        response = JSONResponse({"user": user, "is_admin": is_admin(user)})
         response.set_cookie(
             COOKIE,
             accounts.session(user["id"]),
@@ -396,7 +404,7 @@ def create_app(settings=None, embedder=None):
 
     @app.get("/auth/me", tags=["account"])
     def account(user=Depends(browser_user)):
-        return {"user": user}
+        return {"user": user, "is_admin": is_admin(user)}
 
     @app.post("/auth/logout", status_code=204, tags=["account"])
     def logout(request: Request):
@@ -1135,11 +1143,61 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def feature_request(id: str, user=Depends(owner), db=Depends(store)):
         return db.get_feature_request(user, id)
 
-    @app.patch("/v1/feature-requests/{id}", tags=["feature requests"])
-    def update_feature_request(
-        id: str, data: FeatureRequestUpdate, user=Depends(owner), db=Depends(store)
+    def admin_request_record(record):
+        requester = accounts.user(record["owner_id"])
+        return {
+            **record,
+            "requester": (
+                {"name": requester["name"], "email": requester["email"]}
+                if requester
+                else {"name": "Legacy workspace", "email": ""}
+            ),
+        }
+
+    @app.get("/v1/admin/feature-requests", tags=["admin"])
+    def admin_feature_requests(
+        status: Literal[
+            "received", "reviewing", "planned", "in_progress", "completed", "declined"
+        ]
+        | None = None,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        _admin=Depends(admin_user),
+        db=Depends(store),
     ):
-        return db.update_feature_request(user, id, data)
+        counts = {
+            name: 0
+            for name in (
+                "received",
+                "reviewing",
+                "planned",
+                "in_progress",
+                "completed",
+                "declined",
+            )
+        }
+        counts.update(db.feature_request_status_counts())
+        return {
+            "items": [
+                admin_request_record(record)
+                for record in db.admin_feature_requests(status or "", limit, offset)
+            ],
+            "counts": counts,
+            "total": sum(counts.values()),
+            "limit": limit,
+            "offset": offset,
+        }
+
+    @app.patch("/v1/admin/feature-requests/{owner_id}/{id}", tags=["admin"])
+    def admin_update_feature_request(
+        owner_id: str,
+        id: str,
+        data: FeatureRequestUpdate,
+        _admin=Depends(admin_user),
+        db=Depends(store),
+    ):
+        record = db.update_feature_request(owner_id, id, data)
+        return admin_request_record({**record, "owner_id": owner_id})
 
     @app.post("/v1/memories", status_code=201, tags=["memories"])
     def add_memory(data: MemoryInput, user=Depends(owner), db=Depends(store)):

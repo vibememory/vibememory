@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -17,10 +17,17 @@ class Settings(BaseSettings):
     embedding_cache: Path = Path(".data/models")
     public_origin: str = "http://127.0.0.1:8080"
     signup_enabled: bool = True
+    # Browser-session administrators. Agent/API keys never receive administrator access.
+    admin_emails: set[str] = Field(default_factory=set)
     web_dir: Path | None = None
     host: str = "127.0.0.1"
     port: int = 8080
     upload_max_bytes: int = Field(default=100 * 1024 * 1024, ge=1)
+
+    @field_validator("admin_emails")
+    @classmethod
+    def normalize_admin_emails(cls, values):
+        return {value.strip().casefold() for value in values if value.strip()}
 
     def validate_keys(self):
         if any(len(k) < 32 or not v.strip() for k, v in self.api_keys.items()):

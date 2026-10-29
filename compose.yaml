@@ -28,6 +28,7 @@ services:
       MEMORY_DATABASE_URL: "postgresql://${POSTGRES_USER:-vibe_memory}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-vibe_memory}"
       MEMORY_PUBLIC_ORIGIN: "${MEMORY_PUBLIC_ORIGIN:-http://localhost:8080}"
       MEMORY_SIGNUP_ENABLED: "${MEMORY_SIGNUP_ENABLED:-true}"
+      MEMORY_ADMIN_EMAILS: "${MEMORY_ADMIN_EMAILS:-[]}"
       MEMORY_UPLOAD_MAX_BYTES: "${MEMORY_UPLOAD_MAX_BYTES:-104857600}"
     depends_on:
       db:

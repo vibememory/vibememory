@@ -15,6 +15,7 @@ def test_console_and_api_share_one_origin(settings):
             ("/", "Vibe Memory"),
             ("/login", "auth-form"),
             ("/console", "console-main"),
+            ("/admin", "admin-main"),
             ("/guide", "Vibe Memory"),
             ("/capture", "capture-form"),
         ]:
@@ -23,10 +24,13 @@ def test_console_and_api_share_one_origin(settings):
             assert phrase in response.text
         landing = client.get("/").text
         console = client.get("/console").text
+        admin = client.get("/admin").text
         install_script = client.get("/assets/install-prompt.js")
         locale_script = client.get("/assets/i18n.js")
         console_script = client.get("/assets/console.js")
         console_styles = client.get("/assets/console.css")
+        admin_script = client.get("/assets/admin.js")
+        admin_styles = client.get("/assets/admin.css")
         landing_script = client.get("/assets/app.js")
         capture_script = client.get("/assets/capture.js")
         landing_styles = client.get("/assets/style.css")
@@ -34,6 +38,8 @@ def test_console_and_api_share_one_origin(settings):
         assert locale_script.status_code == 200
         assert console_script.status_code == 200
         assert console_styles.status_code == 200
+        assert admin_script.status_code == 200
+        assert admin_styles.status_code == 200
         assert landing_script.status_code == 200
         assert capture_script.status_code == 200
         assert landing_styles.status_code == 200
@@ -78,11 +84,12 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261029-feature-results-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261029-feature-results-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261029-feature-results-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-feature-results-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261029-feature-results-1" defer="">' in console
+        assert '<script src="/assets/i18n.js?v=20261029-admin-console-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261029-admin-console-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261029-admin-console-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-admin-console-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261029-admin-console-1" defer="">' in console
+        assert '<script src="/assets/admin.js?v=20261029-admin-console-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -134,6 +141,11 @@ def test_console_and_api_share_one_origin(settings):
         assert "처리 결과" in console_script.text
         assert "featureRequestDetail" in console_script.text
         assert ".request-status.completed" in console_styles.text
+        assert 'id="admin-link" href="/admin" hidden' in console
+        assert "if (data.is_admin) $('#admin-link').hidden = false" in console_script.text
+        assert "/v1/admin/feature-requests" in admin_script.text
+        assert "PRODUCT OPERATIONS" in admin
+        assert ".admin-stats" in admin_styles.text
         assert "Console UI refresh" in console_styles.text
         assert ".console-page{\n  --sidebar-width:280px" in console_styles.text
         assert ".welcome-panel{grid-template-columns:minmax(0,1fr);gap:22px" in console_styles.text

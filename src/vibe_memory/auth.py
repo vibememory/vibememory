@@ -189,6 +189,13 @@ class AuthStore:
             ).fetchone()
         return dict(row) if row else None
 
+    def user(self, user_id):
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT id,email,name,created_at FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+        return dict(row) if row else None
+
     def logout(self, token):
         with self.connection() as db:
             db.execute("DELETE FROM sessions WHERE hash=?", (digest(token or ""),))

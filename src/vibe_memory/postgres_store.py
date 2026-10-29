@@ -1060,6 +1060,27 @@ class PostgresStore:
             ).fetchall()
         return [self._feature(row) for row in rows]
 
+    def admin_feature_requests(self, status="", limit=50, offset=0):
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT * FROM feature_requests WHERE (%s='' OR status=%s)
+                ORDER BY updated_at DESC,created_at DESC,id OFFSET %s LIMIT %s""",
+                (status, status, offset, limit),
+            ).fetchall()
+        items = []
+        for row in rows:
+            record = self._feature(row)
+            record["owner_id"] = row["owner"]
+            items.append(record)
+        return items
+
+    def feature_request_status_counts(self):
+        with self._connection() as connection:
+            rows = connection.execute(
+                "SELECT status,count(*) AS count FROM feature_requests GROUP BY status"
+            ).fetchall()
+        return {row["status"]: row["count"] for row in rows}
+
     def add_feature_request(self, owner, data):
         payload = data.model_dump()
         with self.transaction(), self._connection() as connection:

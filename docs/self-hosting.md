@@ -35,6 +35,7 @@ For ChatGPT or Claude remote MCP connections, expose the deployment through HTTP
 | `MEMORY_BIND_ADDRESS` | `127.0.0.1` | Compose host-side bind address |
 | `MEMORY_HTTP_PORT` | `8080` | Compose host-side port |
 | `MEMORY_SIGNUP_ENABLED` | `true` | Accept new accounts; set `false` after creating your accounts if desired |
+| `MEMORY_ADMIN_EMAILS` | `[]` | JSON array of browser-login emails allowed to access `/admin`; agent keys are never administrators |
 | `MEMORY_UPLOAD_MAX_BYTES` | `104857600` | Raw upload size limit (100 MiB) |
 | `POSTGRES_DB` | `vibe_memory` | Compose PostgreSQL database name |
 | `POSTGRES_USER` | `vibe_memory` | Compose PostgreSQL role |
@@ -50,6 +51,14 @@ For ChatGPT or Claude remote MCP connections, expose the deployment through HTTP
 | `MEMORY_WEB_DIR` | bundled assets | Optional explicit directory containing index.html and console assets |
 
 When using `http://127.0.0.1:8080`, set `MEMORY_PUBLIC_ORIGIN` to that value; it differs from `http://localhost:8080`. A mismatched origin causes 403 on browser writes. Remote deployments should use HTTPS, which enables Secure session cookies. Changing `MEMORY_HTTP_PORT` also requires updating the public origin.
+
+To enable the feature-request operations page, configure an existing login email and restart the app:
+
+```dotenv
+MEMORY_ADMIN_EMAILS=["owner@example.com"]
+```
+
+That browser account can open `/admin` and process requests across workspaces. Normal browser accounts can only read their own requests, and API keys, CLI agents, and MCP clients never receive administrator access.
 
 Compose intentionally passes only the supported application configuration and persists PostgreSQL and app files in separate named volumes. It does not pass arbitrary host credentials into the container. The image runs as UID/GID 10001 with a read-only root filesystem and writable data/tmp locations. If replacing the app named volume with a host bind mount, make that directory writable by UID/GID 10001.
 

@@ -446,6 +446,7 @@ $('#logout').addEventListener('click',async () => {
 (async () => {
   try {
     const data = await api('/auth/me'); user = data.user;
+    if (data.is_admin) $('#admin-link').hidden = false;
     $('#user-name').textContent = user.name; $('#user-email').textContent = user.email;
     const initial = user.name[0].toUpperCase();
     $('#user-initial').textContent = initial; $('#topbar-initial').textContent = initial;

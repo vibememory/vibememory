@@ -1004,6 +1004,27 @@ class Store:
         )
         return [self.feature_request_record(row["r"]) for row in rows]
 
+    def admin_feature_requests(self, status="", limit=50, offset=0):
+        rows = self.query(
+            """MATCH (r:FeatureRequest)
+            WHERE $status = '' OR r.status = $status
+            RETURN r ORDER BY r.updated_at DESC, r.created_at DESC, r.id
+            SKIP $offset LIMIT $limit""",
+            {"status": status, "limit": limit, "offset": offset},
+        )
+        items = []
+        for row in rows:
+            record = self.feature_request_record(row["r"])
+            record["owner_id"] = row["r"]["owner"]
+            items.append(record)
+        return items
+
+    def feature_request_status_counts(self):
+        rows = self.query(
+            "MATCH (r:FeatureRequest) RETURN r.status AS status, count(*) AS count"
+        )
+        return {row["status"]: row["count"] for row in rows}
+
     def add_feature_request(self, owner, data):
         payload = data.model_dump()
         with self.transaction():

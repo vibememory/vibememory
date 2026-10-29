@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>관리자 — Vibe Memory</title>
+  <link rel="icon" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/admin.css">
+  <script src="/assets/admin.js" defer></script>
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <a class="brand" href="/admin" aria-label="Vibe Memory 관리자 홈"><img src="/assets/favicon.svg" width="28" height="28" alt=""><span>vibe<span class="brand-light">memory</span></span><em>ADMIN</em></a>
+    <nav><a href="/console">내 콘솔</a><a href="/guide.html" target="_blank" rel="noopener">문서 ↗</a><button id="admin-logout" type="button">로그아웃</button></nav>
+  </header>
+
+  <main class="admin-main">
+    <section class="admin-heading">
+      <div><p>PRODUCT OPERATIONS</p><h1>기능 요청 관리</h1><span>모든 워크스페이스의 요청을 검토하고 처리 결과를 공개합니다.</span></div>
+      <div class="admin-identity"><small>ADMINISTRATOR</small><strong id="admin-name">권한 확인 중…</strong><span id="admin-email"></span></div>
+    </section>
+
+    <div id="admin-error" class="admin-error" role="alert" hidden></div>
+    <section class="admin-stats" id="admin-stats" aria-label="기능 요청 현황"></section>
+
+    <section class="admin-panel">
+      <div class="admin-toolbar">
+        <div><h2>처리 큐</h2><p id="queue-description">요청을 불러오는 중입니다.</p></div>
+        <div class="admin-filters"><label><span>상태</span><select id="status-filter"><option value="">전체 상태</option><option value="received">접수됨</option><option value="reviewing">검토 중</option><option value="planned">계획됨</option><option value="in_progress">처리 중</option><option value="completed">완료</option><option value="declined">보류</option></select></label><label class="admin-search"><span>검색</span><input id="request-search" type="search" placeholder="제목·사용자·결과 검색"></label><button id="admin-refresh" type="button">새로고침</button></div>
+      </div>
+      <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>요청</th><th>요청자</th><th>우선순위</th><th>상태</th><th>처리 결과</th><th>최종 갱신</th><th></th></tr></thead><tbody id="request-rows"><tr><td colspan="7" class="admin-loading">불러오는 중…</td></tr></tbody></table></div>
+      <div class="admin-pager"><button id="admin-previous" type="button">← 이전</button><span id="admin-page-number">1 페이지</span><button id="admin-next" type="button">다음 →</button></div>
+    </section>
+  </main>
+
+  <dialog id="request-editor">
+    <form id="request-editor-form">
+      <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-title">요청 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기">×</button></div>
+      <div class="admin-request-context"><div><span>요청자</span><strong id="requester-name"></strong><small id="requester-email"></small></div><div><span>우선순위</span><strong id="request-priority"></strong></div></div>
+      <section><span>요청 내용</span><p id="request-description"></p></section>
+      <section id="request-use-case-section"><span>사용 사례</span><p id="request-use-case"></p></section>
+      <input id="request-owner-id" type="hidden"><input id="request-id" type="hidden">
+      <label>처리 상태<select id="request-status" required><option value="received">접수됨</option><option value="reviewing">검토 중</option><option value="planned">계획됨</option><option value="in_progress">처리 중</option><option value="completed">완료</option><option value="declined">보류</option></select></label>
+      <label>처리 결과<textarea id="request-result" maxlength="10000" rows="6" placeholder="사용자에게 공개할 처리 내용과 남은 작업을 적어주세요."></textarea></label>
+      <label>관련 결과 링크<input id="request-result-url" type="url" maxlength="2048" placeholder="https://github.com/..."></label>
+      <p id="request-editor-error" class="admin-form-error" role="alert" hidden></p>
+      <div class="admin-dialog-actions"><button class="admin-dialog-close" type="button">취소</button><button class="button primary" id="request-save" type="submit">처리 결과 저장</button></div>
+    </form>
+  </dialog>
+  <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
+</body>
+</html>

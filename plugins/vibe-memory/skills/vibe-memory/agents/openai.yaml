@@ -1,0 +1,7 @@
+interface:
+  display_name: Vibe Memory
+  short_description: Shared memory across agents
+  default_prompt: Recall relevant context, help with the current task, and preserve durable changes as a concise checkpoint.
+  brand_color: "#315BFB"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "vibe-memory",
+  "version": "0.12.0",
+  "description": "A shared, durable memory layer for ChatGPT Work, Codex, and other connected agents.",
+  "homepage": "https://vibememory.io",
+  "repository": "https://github.com/vibememory/vibememory",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Vibe Memory"
+  },
+  "keywords": [
+    "memory",
+    "continuity",
+    "agents",
+    "context",
+    "mcp"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Vibe Memory",
+        "shortDescription": "Memory across every agent",
+        "longDescription": "Give ChatGPT Work and your other agents one shared memory. Vibe Memory recalls relevant preferences and project context, preserves durable decisions and session checkpoints, maps agent-inferred entities and relationships, exchanges agent handoffs, and tracks product feedback through an OAuth-protected MCP server.",
+        "developerName": "Vibe Memory",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "defaultPrompt": [
+          "Recall the context that matters for my current work.",
+          "Continue this project from the latest saved checkpoint.",
+          "Save the durable decisions from this conversation."
+        ],
+        "websiteURL": "https://vibememory.io",
+        "supportURL": "https://github.com/vibememory/vibememory/issues",
+        "logo": "./assets/icon.svg",
+        "composerIcon": "./assets/icon.svg",
+        "brandColor": "#315BFB"
+      }
+    }
+  }
+}

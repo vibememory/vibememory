@@ -56,7 +56,7 @@ def test_console_and_api_share_one_origin(settings):
         assert ".landing-page .hero-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))" in landing_styles.text
         assert "스킬 설치 프롬프트 복사" in landing
         assert "data-copy-install-prompt" in landing
-        assert "ChatGPT에서 사용" in landing
+        assert "ChatGPT Work에 바로 설치" in landing
         assert "Claude에서 사용" in landing
         assert "사용할 서비스들에" not in landing
         assert 'id="connect-ways-title"' not in landing
@@ -80,16 +80,16 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="memory-showcase wrap"' in landing
         assert 'class="connect-ways wrap section"' not in landing
         assert landing.index('class="hero-connect"') < landing.index('id="how"')
-        assert 'href="https://chatgpt.com/plugins"' in landing
+        assert 'href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec"' in landing
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261029-admin-console-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261029-admin-console-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261029-admin-console-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-admin-console-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261029-admin-console-1" defer="">' in console
-        assert '<script src="/assets/admin.js?v=20261029-admin-console-1" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261029-chatgpt-work-plugin-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261029-chatgpt-work-plugin-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261029-chatgpt-work-plugin-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-chatgpt-work-plugin-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261029-chatgpt-work-plugin-1" defer="">' in console
+        assert '<script src="/assets/admin.js?v=20261029-chatgpt-work-plugin-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")

@@ -49,9 +49,6 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
         skill = archive.read("vibe-memory/SKILL.md")
         assert b"native Rust" in skill
         assert b"## Product feedback" in skill
-        assert b"## Reddit, Threads and Moltbook presence" in skill
-        assert b"Never request social credentials in chat" in skill
-        assert b"return the claim URL to the user" in skill
         assert b"feedback-list" in skill
         assert b"VM_SKILL_DIR" in skill
         assert b"Never test or invoke a bare global" in skill

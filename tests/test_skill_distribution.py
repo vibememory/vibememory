@@ -47,6 +47,8 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
             "vibe-memory/scripts/memory.py",
         }
         assert b"native Rust" in archive.read("vibe-memory/SKILL.md")
+        assert b"## Product feedback" in archive.read("vibe-memory/SKILL.md")
+        assert b"feedback-list" in archive.read("vibe-memory/SKILL.md")
         assert b"native_cli" in archive.read("vibe-memory/scripts/memory.py")
         for name, digest in manifest["files"].items():
             release = client.get(

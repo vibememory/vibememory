@@ -1,0 +1,5 @@
+* text=auto eol=lf
+# Preserve the original bytes and formatting of upstream identification assets.
+landing/dist/assets/brands/* -text -whitespace
+*.woff2 -text
+*.zip -text

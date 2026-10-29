@@ -1,0 +1,36 @@
+# Runtime data and credentials
+.data/
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key
+*.token
+.wrangler/
+
+# Local builds and caches
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+node_modules/
+.next/
+bin/
+obj/
+
+# Maintainer-only deployment state and old prototype; keep locally, never publish.
+legacy/
+landing/wrangler.jsonc
+landing/deployment.json
+ops/cloudflare-origin.json
+# The maintained web source is intentionally distributed.
+!landing/dist/
+!landing/dist/**

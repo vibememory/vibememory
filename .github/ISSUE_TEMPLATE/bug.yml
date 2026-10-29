@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible problem with Vibe Memory.
+title: "[Bug]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe expected and actual behavior. Do not include credentials or personal memories.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include version/commit, OS, architecture, and Docker Compose or source installation.
+    validations:
+      required: true

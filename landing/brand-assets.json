@@ -1,0 +1,34 @@
+[
+  {
+    "name": "claude-code",
+    "file": "assets/brands/claude-code.png",
+    "source_page": "https://claude.com/product/claude-code",
+    "asset_url": "https://assets.claude.com/95a868946ac8a31e5ff832e2899f294aa368b836.png?w=96&h=96",
+    "sha256": "4004381309500f25e49a1ae639912ce307ea81da74cc383954a1ac8b9d343fe6",
+    "retrieved_at": "2026-10-29T00:22:20.489048+00:00"
+  },
+  {
+    "name": "codex",
+    "file": "assets/brands/codex.png",
+    "source_page": "https://marketplace.visualstudio.com/items?itemName=openai.chatgpt",
+    "asset_url": "https://openai.gallerycdn.vsassets.io/extensions/openai/chatgpt/26.51021.22027/1792788319200/Microsoft.VisualStudio.Services.Icons.Default",
+    "sha256": "2ce1c57dd3b312417106a487815ab1235bddce17e1fa9b32a2f048bd71ee25d3",
+    "retrieved_at": "2026-10-29T00:22:19.014086+00:00"
+  },
+  {
+    "name": "openclaw",
+    "file": "assets/brands/openclaw.svg",
+    "source_page": "https://openclaw.ai",
+    "asset_url": "https://openclaw.ai/brand/openclaw-mascot.svg",
+    "sha256": "87d87ee7bb4e6fb868bf5ac1a873fb3669dc5c14cdf71ec8ded97f1869a12ce3",
+    "retrieved_at": "2026-10-29T00:22:19.024417+00:00"
+  },
+  {
+    "name": "hermes",
+    "file": "assets/brands/hermes.png",
+    "source_page": "https://hermes-agent.nousresearch.com/",
+    "asset_url": "https://web-assets.nousresearch.com/marketing/70c3cd5c7fbf51b0b8abc6bee33b53a080813330/assets/hermes-agent/icon.png",
+    "sha256": "5fbced606189c9bfc2925a16f8903333041cabbf1f8699fe9fe9b3e24504048f",
+    "retrieved_at": "2026-10-29T00:22:19.012680+00:00"
+  }
+]

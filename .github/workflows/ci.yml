@@ -1,0 +1,59 @@
+name: CI
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+          enable-cache: true
+      - uses: actions/cache@v4
+        with:
+          path: .data/models
+          key: keyword-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+      - run: uv sync --frozen
+      - run: uv run ruff check src ops tests scripts skills/vibe-memory/scripts
+      - run: uv run pytest -q
+      - run: uv build
+      - name: Verify wheel contains the self-hosted console
+        run: |
+          uv run python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          wheel = next(Path('dist').glob('*.whl'))
+          with zipfile.ZipFile(wheel) as archive:
+              for name in ('index.html', 'login.html', 'console.html', 'assets/console.js'):
+                  assert 'vibe_memory/web/' + name in archive.namelist(), name
+          PY
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - name: Build and start disposable self-hosted stack
+        run: |
+          docker compose -p vibe-memory-ci config --quiet
+          docker compose -p vibe-memory-ci build
+          docker compose -p vibe-memory-ci up -d
+      - name: Verify full installation
+        run: uv run python scripts/selfhost_smoke.py --phase create --state-file "$RUNNER_TEMP/vibe-state.json"
+      - name: Replace container and verify persistent data
+        run: |
+          docker compose -p vibe-memory-ci up -d --force-recreate
+          uv run python scripts/selfhost_smoke.py --phase verify --state-file "$RUNNER_TEMP/vibe-state.json"
+      - name: Container logs
+        if: failure()
+        run: docker compose -p vibe-memory-ci logs --no-color
+      - name: Remove disposable CI stack
+        if: always()
+        run: docker compose -p vibe-memory-ci down -v

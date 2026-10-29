@@ -1,0 +1,17 @@
+name: Feature request
+description: Propose a concrete improvement.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What task is blocked or difficult?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and use case
+      description: Keep the agent-reasoning/server-data-management boundary in mind.
+    validations:
+      required: true

@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vibe-memory",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-28",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": ["/auth/*", "/v1/*", "/health", "/openapi.json"]
+  },
+  "workers_dev": true
+}

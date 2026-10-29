@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "revision": "551b94b8c558a77f48c5ada0b79bbe03b9c1c5b78fa004cfcaa485c6dd817a6e",
+  "files": {
+    "SKILL.md": "30343737a3de6a6cfc2a027a5b7b9f6ca7c3169ff6105db43057f6b845df4443",
+    "scripts/memory.py": "26bc6d7896552a6227f37cd70da002dfd339df545a7c79d8c2f6ea340ce8ed8f"
+  },
+  "archive": "/downloads/vibe-memory-skill.zip"
+}

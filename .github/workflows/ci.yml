@@ -20,6 +20,10 @@ jobs:
           key: keyword-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
       - run: uv sync --frozen
       - run: uv run ruff check src ops tests scripts skills/vibe-memory/scripts
+      - name: Verify published skill matches source
+        run: |
+          python3 landing/scripts/package_skill.py
+          git diff --exit-code -- landing/dist/skills landing/dist/downloads
       - run: uv run pytest -q
       - run: uv build
       - name: Verify wheel contains the self-hosted console

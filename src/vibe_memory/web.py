@@ -19,6 +19,15 @@ def mount_web(app, configured=None):
         if not (directory / "index.html").is_file():
             return
 
+    @app.middleware("http")
+    async def fresh_skills(request, call_next):
+        response = await call_next(request)
+        if (request.url.path.startswith("/skills/")
+                or request.url.path == "/downloads/vibe-memory-skill.zip"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     def page(filename):
         def response():
             return FileResponse(directory / filename, headers={"Cache-Control": "no-store"})

@@ -123,3 +123,22 @@ The public `vibememory.io` deployment uses a Worker and a private Tunnel/VPC bin
 To configure your own deployment, copy `landing/wrangler.example.jsonc` to `landing/wrangler.jsonc`, set your own account/domain configuration, authenticate Wrangler, then run `python3 ops/cloudflare_origin.py setup`. The setup helper reuses or creates only the dedicated `vibe-memory-api` tunnel and adds the private binding. `run` reads a tunnel execution token through native Cloudflare auth without printing it. Those operations need the relevant account permissions and a continuously running API host.
 
 For most self-hosters, the single container plus an HTTPS reverse proxy is sufficient.
+
+### Live skill distribution
+
+Every installation serves its current skill at `/skills/vibe-memory/SKILL.md`,
+its SHA-256 revision manifest at `/skills/vibe-memory/manifest.json`, and the
+install ZIP at `/downloads/vibe-memory-skill.zip`. These public endpoints send
+`Cache-Control: no-store`; they contain no account data or credentials.
+
+Agents run `python3 scripts/memory.py sync` at the beginning of each task and
+reread the instructions after an update. Every helper operation also checks for
+updates and stops before the operation if instructions changed. A failed update
+check stops the operation. Updating the service deployment publishes the skill
+immediately; existing agent installations pick it up on their next check.
+Self-hosted installations distribute their own deployed version, without
+fetching instructions from the hosted service or GitHub at runtime.
+
+After editing `skills/vibe-memory`, run `python3 landing/scripts/package_skill.py`
+and commit the generated web files with the source. CI rejects stale artifacts.
+`npm --prefix landing run deploy` regenerates these artifacts before publishing.

@@ -10,3 +10,7 @@
 
 /downloads/*
   Content-Disposition: attachment
+/skills/*
+  Cache-Control: no-store
+/downloads/vibe-memory-skill.zip
+  Cache-Control: no-store

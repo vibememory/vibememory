@@ -131,13 +131,17 @@ its SHA-256 revision manifest at `/skills/vibe-memory/manifest.json`, and the
 install ZIP at `/downloads/vibe-memory-skill.zip`. These public endpoints send
 `Cache-Control: no-store`; they contain no account data or credentials.
 
-Agents run `python3 scripts/memory.py sync` at the beginning of each task and
-reread the instructions after an update. Every helper operation also checks for
-updates and stops before the operation if instructions changed. A failed update
-check stops the operation. Updating the service deployment publishes the skill
-immediately; existing agent installations pick it up on their next check.
+Agents run `./bin/vibe-memory sync` at the beginning of each task and reread the
+instructions after an update. The compact CLI wraps API details and emits compact
+JSON by default. Every data operation also checks the instructions and CLI for
+updates and stops before the operation if they changed. A failed update check
+stops the operation. Updating the service deployment publishes the skill and CLI
+immediately; existing agent installations pick them up on their next check.
 Self-hosted installations distribute their own deployed version, without
 fetching instructions from the hosted service or GitHub at runtime.
+
+`python3 scripts/memory.py ...` remains a compatibility launcher. It downloads
+the content-addressed CLI, verifies its SHA-256 digest, and forwards the command.
 
 After editing `skills/vibe-memory`, run `python3 landing/scripts/package_skill.py`
 and commit the generated web files with the source. CI rejects stale artifacts.
@@ -145,7 +149,7 @@ and commit the generated web files with the source. CI rejects stale artifacts.
 
 ### Browser approval for agent authentication
 
-The agent runs `python3 scripts/memory.py login --no-browser --url https://YOUR_HOST
+The agent runs `./bin/vibe-memory login --no-browser --url https://YOUR_HOST
 --name "Agent name"` in a background tool process and presents the generated link
 and code to the user. The user signs in on the web, returns to the approval page,
 and explicitly approves. The waiting CLI receives and saves a one-time agent key;

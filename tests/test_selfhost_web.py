@@ -56,6 +56,7 @@ def test_console_and_api_share_one_origin(settings):
         with zipfile.ZipFile(io.BytesIO(archive.content)) as skill:
             assert set(skill.namelist()) == {
                 "vibe-memory/SKILL.md",
+                "vibe-memory/bin/vibe-memory",
                 "vibe-memory/scripts/memory.py",
             }
 

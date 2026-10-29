@@ -123,7 +123,7 @@ The stream sends heartbeats, disables buffering/caching, checks authentication
 while connected and closes access after key revocation or session expiration.
 The current single-process service polls its event journal every 0.5 seconds.
 
-Agents use `python3 scripts/memory.py watch --seconds 3600 --cursor-file PATH`.
+Agents use `./bin/vibe-memory watch --seconds 3600 --cursor-file PATH`.
 The helper prints JSON lines, reconnects and persists the last printed ID. Use a
 separate private cursor path for each service/account/workspace. The skill directs
 agents to inspect background output at work checkpoints; SSE cannot wake a stopped

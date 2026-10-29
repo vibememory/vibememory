@@ -13,7 +13,7 @@ from pathlib import Path
 from conftest import KEY_A
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = ROOT / "skills/vibe-memory/scripts/memory.py"
+HELPER = ROOT / "skills/vibe-memory/bin/vibe-memory"
 
 
 def test_agent_helper_roundtrip(tmp_path):

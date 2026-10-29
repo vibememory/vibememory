@@ -1,9 +1,14 @@
 {
   "schema_version": 1,
-  "revision": "e73bde03aa409284b9c5bd905abf021da5b36d80de35691e6f25e2911c284d15",
+  "revision": "8817cd876889acc2d6ad4c02f775759e6b4bdd24f5926fcfc4f8ed899bb82bd9",
   "files": {
-    "SKILL.md": "439ceabfd7de35f07521b1a2a6bfde1bd93137b7d71e077e2be3f928f5a8b0f7",
-    "scripts/memory.py": "b5f52b12616c685c81aacc2f288d8f857e4938f98b00cc906cd2ee7f0d8f79d3"
+    "SKILL.md": "cc66508de0674c018ee6fa230a8880d7fc92d1608191d68510b7a678ebc07bb0",
+    "scripts/memory.py": "7ac276b44f8ca37b2060045a0524da7ac42ae206ccfc8e7eb5339bc411794f3d"
+  },
+  "cli": {
+    "path": "bin/vibe-memory",
+    "sha256": "3b63ccadfdde76a6af0c2de4389f23af8ef181fe3f03f8d63989ed0f3482b126",
+    "url": "/skills/vibe-memory/cli/3b63ccadfdde76a6af0c2de4389f23af8ef181fe3f03f8d63989ed0f3482b126/vibe-memory"
   },
   "archive": "/downloads/vibe-memory-skill.zip"
 }

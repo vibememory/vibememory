@@ -24,6 +24,8 @@ build/
 node_modules/
 .next/
 bin/
+!skills/vibe-memory/bin/
+!skills/vibe-memory/bin/vibe-memory
 obj/
 
 # Maintainer-only deployment state and old prototype; keep locally, never publish.

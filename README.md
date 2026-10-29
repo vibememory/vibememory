@@ -54,14 +54,14 @@ Copy [`skills/vibe-memory`](skills/vibe-memory) into your agent's skill director
 export MEMORY_URL=http://localhost:8080
 export MEMORY_API_KEY='your-console-generated-key'
 
-python3 skills/vibe-memory/scripts/memory.py remember 'I prefer Python examples' \
+skills/vibe-memory/bin/vibe-memory remember 'I prefer Python examples' \
   --kind preference --keyword Python --keyword 'code examples' --source coding-agent
 
 # The agent extracts these keywords before sending the request.
-python3 skills/vibe-memory/scripts/memory.py recall Python 'code examples'
+skills/vibe-memory/bin/vibe-memory recall Python 'code examples'
 ```
 
-The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
+The compact CLI wraps authentication, storage, search, byte-stream files, live events, and skill updates so agents do not need to load API schemas into context. The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
 ## Run from source
 
@@ -97,7 +97,7 @@ Use `/docs` and `/openapi.json` on your own server for exact schemas. See the [A
 
 ```sh
 uv sync --frozen
-uv run ruff check src ops tests scripts skills/vibe-memory/scripts
+uv run ruff check src ops tests scripts skills/vibe-memory/bin/vibe-memory skills/vibe-memory/scripts
 uv run pytest -q
 uv build
 ```

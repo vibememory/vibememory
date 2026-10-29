@@ -26,7 +26,7 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/agent-messages/stream` | Recipient-filtered bounded SSE message stream |
 | GET | `/v1/agent-messages/{id}` | Read a message as its sender or recipient |
 | POST | `/v1/agent-messages/{id}/ack` | Advance incoming status to delivered/read/acked |
-| GET | `/v1/stats` | Owner-scoped console counts |
+| GET | `/v1/stats` | Owner-scoped console counts and logical storage usage (`memory_bytes`, `file_bytes`, `storage_bytes`; usage includes archived records) |
 | POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata/provenance |
 | POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata/provenance |
 | POST | `/v1/documents` | title, keywords; optional content/file_id/source/tags/metadata/provenance |

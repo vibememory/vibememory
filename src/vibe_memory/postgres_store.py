@@ -1112,7 +1112,36 @@ class PostgresStore:
                 "SELECT count(*) AS count FROM relations WHERE owner=%s AND status='active'",
                 (owner,),
             ).fetchone()["count"]
+            usage = connection.execute(
+                """SELECT COALESCE(sum(
+                    octet_length(subtype) + octet_length(title) + octet_length(content)
+                    + octet_length(source) + octet_length(to_jsonb(tags)::text)
+                    + octet_length(to_jsonb(keywords)::text) + octet_length(metadata::text)
+                    + octet_length(COALESCE(file_id,'')) + octet_length(provenance::text)
+                    + octet_length(to_jsonb(security_warnings)::text)
+                    + octet_length(security_history::text)
+                ),0)::bigint AS memory_bytes,
+                COALESCE(sum(CASE
+                    WHEN kind='file' AND metadata->>'size_bytes' ~ '^[0-9]+$'
+                    THEN (metadata->>'size_bytes')::numeric ELSE 0
+                END),0)::bigint AS file_bytes
+                FROM records WHERE owner=%s""",
+                (owner,),
+            ).fetchone()
+            relation_bytes = connection.execute(
+                """SELECT COALESCE(sum(
+                    octet_length(source_id) + octet_length(target_id)
+                    + octet_length(relation) + octet_length(reason) + octet_length(status)
+                    + octet_length(history::text)
+                ),0)::bigint AS bytes FROM relations WHERE owner=%s""",
+                (owner,),
+            ).fetchone()["bytes"]
         result = {"memory": 0, "document": 0, "entity": 0, "file": 0}
         result.update({row["kind"]: row["count"] for row in rows})
         result["relations"] = relation_count
+        memory_bytes = usage["memory_bytes"] + relation_bytes
+        file_bytes = usage["file_bytes"]
+        result["memory_bytes"] = memory_bytes
+        result["file_bytes"] = file_bytes
+        result["storage_bytes"] = memory_bytes + file_bytes
         return result

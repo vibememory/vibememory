@@ -78,11 +78,11 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261029-proactive-memory-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261029-proactive-memory-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261029-proactive-memory-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-proactive-memory-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261029-proactive-memory-1" defer="">' in console
+        assert '<script src="/assets/i18n.js?v=20261029-memory-capacity-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261029-memory-capacity-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261029-memory-capacity-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-memory-capacity-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261029-memory-capacity-1" defer="">' in console
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -128,6 +128,9 @@ def test_console_and_api_share_one_origin(settings):
         assert "localStorage.setItem(dashboardGuideKey, '1')" in console_script.text
         assert 'data-action="dismiss-dashboard-guide"' in console_script.text
         assert "Dashboard console: operational data first" in console_styles.text
+        assert "내 기억 용량" in console_script.text
+        assert "formatBytes(stats.storage_bytes)" in console_script.text
+        assert ".storage-usage-card" in console_styles.text
         assert "Console UI refresh" in console_styles.text
         assert ".console-page{\n  --sidebar-width:280px" in console_styles.text
         assert ".welcome-panel{grid-template-columns:minmax(0,1fr);gap:22px" in console_styles.text
@@ -158,7 +161,9 @@ def test_console_and_api_share_one_origin(settings):
             },
         )
         assert signup.status_code == 200, signup.text
-        assert client.get("/v1/stats").json()["memory"] == 0
+        stats = client.get("/v1/stats").json()
+        assert stats["memory"] == 0
+        assert stats["storage_bytes"] == 0
         key = client.post(
             "/auth/api-keys",
             headers={"Origin": "http://testserver"},

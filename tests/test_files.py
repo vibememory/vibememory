@@ -32,6 +32,10 @@ def test_raw_byte_roundtrip_metadata_and_no_embeddings(client, embedder):
     assert response.headers["content-disposition"].startswith("attachment;")
     assert not embedder.calls
     assert client.get("/v1/records/" + record["id"]).status_code == 200
+    stats = client.get("/v1/stats").json()
+    assert stats["file_bytes"] == len(data)
+    assert stats["memory_bytes"] > 0
+    assert stats["storage_bytes"] == stats["memory_bytes"] + len(data)
     schema = client.get("/openapi.json").json()
     content = schema["paths"]["/v1/files"]["post"]["requestBody"]["content"]
     assert set(content) == {"application/octet-stream"}

@@ -14,6 +14,7 @@ from .security import (
     record_fingerprint,
     record_is_retrievable,
 )
+from .storage_usage import RECORD_FIELDS, RELATION_FIELDS, file_payload_bytes, payload_bytes
 
 
 def now():
@@ -1032,4 +1033,28 @@ class Store:
             result = {"memory": 0, "document": 0, "entity": 0, "file": 0}
             result.update({row["kind"]: row["count"] for row in counts})
             result["relations"] = len(self.relations(owner))
+            records = self.query(
+                """MATCH (n:Item {owner: $owner})
+                WHERE n.kind <> 'keyword' AND n.kind <> 'chunk' RETURN n""",
+                {"owner": owner},
+            )
+            relation_payloads = self.query(
+                """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
+                WHERE r.relation <> 'CHUNK_OF' AND r.relation <> 'KEYWORD_OF'
+                RETURN a.id AS source_id, b.id AS target_id, r.relation AS relation,
+                    r.reason AS reason, r.status AS status, r.history AS history""",
+                {"owner": owner},
+            )
+            memory_bytes = sum(payload_bytes(row["n"], RECORD_FIELDS) for row in records)
+            memory_bytes += sum(
+                payload_bytes(row, RELATION_FIELDS) for row in relation_payloads
+            )
+            file_bytes = sum(
+                file_payload_bytes(row["n"].get("metadata"))
+                for row in records
+                if row["n"].get("kind") == "file"
+            )
+            result["memory_bytes"] = memory_bytes
+            result["file_bytes"] = file_bytes
+            result["storage_bytes"] = memory_bytes + file_bytes
             return result

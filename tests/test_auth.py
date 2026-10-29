@@ -44,10 +44,17 @@ def test_signup_cookie_session_user_and_logout(web, web_settings):
         "entity": 0,
         "file": 0,
         "relations": 0,
+        "memory_bytes": 0,
+        "file_bytes": 0,
+        "storage_bytes": 0,
     }
     saved = web.post("/v1/memories", json={"content": "차를 선호한다", "keywords": ["차"]})
     assert saved.status_code == 201
-    assert web.get("/v1/stats").json()["memory"] == 1
+    stats = web.get("/v1/stats").json()
+    assert stats["memory"] == 1
+    assert stats["memory_bytes"] >= len("차를 선호한다".encode())
+    assert stats["file_bytes"] == 0
+    assert stats["storage_bytes"] == stats["memory_bytes"]
     token = web.cookies.get(COOKIE)
     assert web.post("/auth/logout").status_code == 204
     assert web.get("/auth/me").status_code == 401

@@ -1,14 +1,9 @@
 import hashlib
-import importlib.machinery
 import importlib.util
+import io
 import json
-import os
 import shutil
-import subprocess
-import sys
-import threading
-from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -16,30 +11,43 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_cli(path, name):
-    loader = importlib.machinery.SourceFileLoader(name, str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
+def load_launcher(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
+    spec.loader.exec_module(module)
     return module
 
 
-def test_public_distribution_matches_sources_and_zip(client):
-    import io
-    import zipfile
-
+def test_public_distribution_matches_sources_and_native_manifest(client):
     client.headers.pop("Authorization")
     response = client.get("/skills/vibe-memory/manifest.json")
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     manifest = response.json()
-    with zipfile.ZipFile(io.BytesIO(client.get(manifest["archive"]).content)) as archive:
-        cli = manifest["cli"]
-        cli_data = client.get(cli["url"]).content
-        assert hashlib.sha256(cli_data).hexdigest() == cli["sha256"]
-        assert cli_data == (ROOT / "skills/vibe-memory" / cli["path"]).read_bytes()
-        assert archive.read("vibe-memory/" + cli["path"]) == cli_data
-        assert archive.getinfo("vibe-memory/" + cli["path"]).external_attr >> 16 & 0o111
+    assert set(manifest["files"]) == {"SKILL.md", "scripts/memory.py"}
+    assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
+    assert set(manifest["native_cli"]["targets"]) == {
+        "linux-x86_64",
+        "macos-aarch64",
+        "macos-x86_64",
+        "windows-x86_64",
+    }
+    for target in manifest["native_cli"]["targets"].values():
+        assert len(target["sha256"]) == 64
+        assert target["url"].startswith(
+            "https://github.com/vibememory/cli/releases/download/v"
+            + manifest["native_cli"]["version"]
+            + "/vibe-memory-"
+        )
+
+    archive_response = client.get(manifest["archive"])
+    with zipfile.ZipFile(io.BytesIO(archive_response.content)) as archive:
+        assert set(archive.namelist()) == {
+            "vibe-memory/SKILL.md",
+            "vibe-memory/scripts/memory.py",
+        }
+        assert b"native Rust" in archive.read("vibe-memory/SKILL.md")
+        assert b"native_cli" in archive.read("vibe-memory/scripts/memory.py")
         for name, digest in manifest["files"].items():
             release = client.get(
                 "/skills/vibe-memory/releases/" + manifest["revision"] + "/" + name
@@ -49,90 +57,91 @@ def test_public_distribution_matches_sources_and_zip(client):
             assert release.content == (ROOT / "skills/vibe-memory" / name).read_bytes()
             assert archive.read("vibe-memory/" + name) == release.content
 
+    legacy = client.get(manifest["cli"]["url"])
+    assert legacy.status_code == 200
+    assert hashlib.sha256(legacy.content).hexdigest() == manifest["cli"]["sha256"]
 
-def test_updater_refreshes_and_rejects_tampered_release(tmp_path, monkeypatch):
+
+def test_bootstrap_selects_and_verifies_native_binary(tmp_path, monkeypatch):
+    installed = tmp_path / "installed"
+    (installed / "scripts").mkdir(parents=True)
+    shutil.copyfile(ROOT / "skills/vibe-memory/scripts/memory.py", installed / "scripts/memory.py")
+    launcher = load_launcher(installed / "scripts/memory.py", "native_bootstrap")
+    binary = b"native-rust-binary-for-test"
+    digest = hashlib.sha256(binary).hexdigest()
+    target_name = launcher.platform_target()
+    manifest = {
+        "native_cli": {
+            "version": "3.0.0",
+            "repository": "https://github.com/vibememory/cli",
+            "targets": {
+                target_name: {
+                    "sha256": digest,
+                    "url": "https://github.com/vibememory/cli/releases/download/v3.0.0/"
+                    + (
+                        "vibe-memory-windows-x86_64.exe"
+                        if target_name.startswith("windows")
+                        else "vibe-memory-test"
+                    ),
+                }
+            },
+        }
+    }
+    monkeypatch.setattr(launcher, "fetch_manifest", lambda base: manifest)
+    monkeypatch.setattr(launcher, "fetch_release", lambda url: binary)
+    monkeypatch.setattr(launcher, "origin", lambda: "https://vibememory.io")
+    target = launcher.ensure_cli()
+    assert target.read_bytes() == binary
+    assert hashlib.sha256(target.read_bytes()).hexdigest() == digest
+    if launcher.os.name != "nt":
+        assert target.stat().st_mode & 0o100
+
+    monkeypatch.setattr(
+        launcher,
+        "fetch_release",
+        lambda url: (_ for _ in ()).throw(AssertionError("current binary was redownloaded")),
+    )
+    assert launcher.ensure_cli() == target
+
+
+def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monkeypatch):
+    installed = tmp_path / "installed"
+    (installed / "scripts").mkdir(parents=True)
+    shutil.copyfile(ROOT / "skills/vibe-memory/scripts/memory.py", installed / "scripts/memory.py")
+    launcher = load_launcher(installed / "scripts/memory.py", "tampered_bootstrap")
+    target_name = launcher.platform_target()
+    manifest = {
+        "native_cli": {
+            "version": "3.0.0",
+            "repository": "https://github.com/vibememory/cli",
+            "targets": {
+                target_name: {
+                    "sha256": "a" * 64,
+                    "url": "https://github.com/vibememory/cli/releases/download/v3.0.0/vibe-memory-test",
+                }
+            },
+        }
+    }
+    monkeypatch.setattr(launcher, "fetch_manifest", lambda base: manifest)
+    monkeypatch.setattr(launcher, "fetch_release", lambda url: b"tampered")
+    monkeypatch.setattr(launcher, "origin", lambda: "https://vibememory.io")
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        launcher.ensure_cli()
+    assert not launcher.executable_path().exists()
+    launcher = load_launcher(installed / "scripts/memory.py", "untrusted_bootstrap")
+    monkeypatch.setenv("MEMORY_URL", "http://untrusted.example")
+    with pytest.raises(ValueError, match="HTTPS"):
+        launcher.origin()
+
+
+def test_published_revision_is_reproducible_and_releases_are_immutable(tmp_path):
     public = tmp_path / "public"
     shutil.copytree(ROOT / "landing/dist/skills", public / "skills")
-    installed = tmp_path / "installed"
-    shutil.copytree(ROOT / "skills/vibe-memory", installed)
-    adapter = load_cli(installed / "bin/vibe-memory", "skill_adapter")
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(public))
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    monkeypatch.setenv("MEMORY_URL", f"http://127.0.0.1:{server.server_port}")
-    monkeypatch.delenv("MEMORY_API_KEY", raising=False)
-    try:
-        assert adapter.sync_skill()["updated"] is False
-        (installed / "SKILL.md").write_text("old instructions")
-        assert adapter.sync_skill()["updated"] is True
-        assert (installed / "SKILL.md").read_bytes() == (
-            ROOT / "skills/vibe-memory/SKILL.md"
-        ).read_bytes()
-        assert adapter.sync_skill()["updated"] is False
-        manifest = json.loads((public / "skills/vibe-memory/manifest.json").read_text())
-        (installed / "bin/vibe-memory").write_text("old cli")
-        assert adapter.sync_skill()["updated"] is True
-        assert (
-            hashlib.sha256((installed / "bin/vibe-memory").read_bytes()).hexdigest()
-            == (manifest["cli"]["sha256"])
-        )
-        assert adapter.sync_skill()["updated"] is False
-        (installed / "SKILL.md").write_text("old instructions")
-        release = public / "skills/vibe-memory/releases" / manifest["revision"]
-        (release / "SKILL.md").write_text("tampered")
-        with pytest.raises(ValueError, match="checksum mismatch"):
-            adapter.sync_skill()
-        assert (installed / "SKILL.md").read_text() == "old instructions"
-        monkeypatch.setenv("MEMORY_URL", "http://untrusted.example")
-        with pytest.raises(ValueError, match="HTTPS"):
-            adapter.sync_skill()
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
-
-
-def test_changed_instructions_stop_before_api(monkeypatch):
-    adapter = load_cli(ROOT / "skills/vibe-memory/bin/vibe-memory", "skill_cli")
-    monkeypatch.setattr(adapter, "sync_skill", lambda: {"updated": True})
-    calls = []
-    monkeypatch.setattr(adapter, "call", lambda *args: calls.append(args))
-    monkeypatch.setattr("sys.argv", ["memory.py", "recall", "tea"])
-    with pytest.raises(RuntimeError, match="Read SKILL.md again"):
-        adapter.main()
-    assert calls == []
-
-
-def test_compatibility_launcher_bootstraps_verified_cli(tmp_path, monkeypatch):
-    public = tmp_path / "public"
-    shutil.copytree(ROOT / "landing/dist/skills", public / "skills")
-    installed = tmp_path / "installed"
-    shutil.copytree(ROOT / "skills/vibe-memory", installed)
-    (installed / "bin/vibe-memory").unlink()
-    server = ThreadingHTTPServer(
-        ("127.0.0.1", 0), partial(SimpleHTTPRequestHandler, directory=str(public))
-    )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        env = {**os.environ, "MEMORY_URL": f"http://127.0.0.1:{server.server_port}"}
-        result = subprocess.run(
-            [sys.executable, str(installed / "scripts/memory.py"), "--help"],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        assert result.returncode == 0, result.stderr
-        assert "Vibe Memory CLI" in result.stdout
-        manifest = json.loads((public / "skills/vibe-memory/manifest.json").read_text())
-        assert (
-            hashlib.sha256((installed / "bin/vibe-memory").read_bytes()).hexdigest()
-            == (manifest["cli"]["sha256"])
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
+    manifest = json.loads((public / "skills/vibe-memory/manifest.json").read_text())
+    revision = hashlib.sha256(
+        json.dumps(manifest["files"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert revision == manifest["revision"]
+    release = public / "skills/vibe-memory/releases" / revision
+    for name, digest in manifest["files"].items():
+        assert hashlib.sha256((release / name).read_bytes()).hexdigest() == digest

@@ -22,7 +22,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
 - **Agent keys:** independently revocable keys share the same account's memory; keys are shown once and stored as hashes.
 - **Byte streams:** upload originals as `application/octet-stream`, then attach agent-prepared JSON using `file_id`.
-- **Portable skill:** a `SKILL.md` and Python standard-library REST helper, with no vendor SDK requirement.
+- **Portable skill:** a compact `SKILL.md`, native Rust CLI, and verified compatibility bootstrap, with no vendor SDK requirement.
 
 ## Quick start: Docker Compose
 
@@ -54,6 +54,9 @@ Copy [`skills/vibe-memory`](skills/vibe-memory) into your agent's skill director
 export MEMORY_URL=http://localhost:8080
 export MEMORY_API_KEY='your-console-generated-key'
 
+# Download and verify the current native Rust CLI, then refresh the Skill.
+python3 skills/vibe-memory/scripts/memory.py sync
+
 skills/vibe-memory/bin/vibe-memory remember 'I prefer Python examples' \
   --kind preference --keyword Python --keyword 'code examples' --source coding-agent
 
@@ -61,7 +64,7 @@ skills/vibe-memory/bin/vibe-memory remember 'I prefer Python examples' \
 skills/vibe-memory/bin/vibe-memory recall Python 'code examples'
 ```
 
-The compact CLI wraps authentication, storage, search, byte-stream files, live events, and skill updates so agents do not need to load API schemas into context. Its standalone source and releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the bundled distribution snapshot used by the Skill. The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
+The native Rust CLI wraps authentication, storage, search, byte-stream files, live events, and Skill updates so agents do not need to load API schemas into context. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
 ## Run from source
 
@@ -97,7 +100,7 @@ Use `/docs` and `/openapi.json` on your own server for exact schemas. See the [A
 
 ```sh
 uv sync --frozen
-uv run ruff check src ops tests scripts skills/vibe-memory/bin/vibe-memory skills/vibe-memory/scripts
+uv run ruff check src ops tests scripts skills/vibe-memory/scripts
 uv run pytest -q
 uv build
 ```

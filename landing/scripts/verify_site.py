@@ -50,10 +50,10 @@ with sync_playwright() as p:
     with zipfile.ZipFile(target) as archive:
         assert set(archive.namelist()) == {
             "vibe-memory/SKILL.md",
-            "vibe-memory/bin/vibe-memory",
             "vibe-memory/scripts/memory.py",
         }
-        assert b"/v1/files" in archive.read("vibe-memory/bin/vibe-memory")
+        assert b"native Rust" in archive.read("vibe-memory/SKILL.md")
+        assert b"native_cli" in archive.read("vibe-memory/scripts/memory.py")
     page.locator('[data-demo="memory"]').click()
     page.evaluate(
         "document.querySelector('#toast').classList.remove('visible'); window.scrollTo(0,0)"

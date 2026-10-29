@@ -131,20 +131,25 @@ its SHA-256 revision manifest at `/skills/vibe-memory/manifest.json`, and the
 install ZIP at `/downloads/vibe-memory-skill.zip`. These public endpoints send
 `Cache-Control: no-store`; they contain no account data or credentials.
 
-Agents run `./bin/vibe-memory sync` at the beginning of each task and reread the
-instructions after an update. The compact CLI wraps API details and emits compact
-JSON by default. Every data operation also checks the instructions and CLI for
-updates and stops before the operation if they changed. A failed update check
-stops the operation. Updating the service deployment publishes the skill and CLI
-immediately; existing agent installations pick them up on their next check.
-Self-hosted installations distribute their own deployed version, without
-fetching instructions from the hosted service or GitHub at runtime.
+Agents run `python3 scripts/memory.py sync` at the beginning of each task. This
+small compatibility bootstrap selects and verifies the current native Rust binary,
+then executes its `sync` command. Agents reread the instructions after an update.
+The compact CLI wraps API details and emits compact JSON by default. Every data
+operation checks the Skill revision and stops before the operation if instructions
+changed. A failed update check stops the operation. Updating the service deployment
+publishes the Skill manifest immediately; existing installations pick it up on
+their next check.
+Self-hosted installations serve their own deployed Skill rather than fetching
+instructions from the hosted service. The default manifest pins native binaries
+to the public GitHub release; operators can replace those `native_cli` targets
+with their own HTTPS release mirror before packaging.
 
-`python3 scripts/memory.py ...` remains a compatibility launcher. It downloads
-the content-addressed CLI, verifies its SHA-256 digest, and forwards the command.
+`python3 scripts/memory.py ...` remains a compatibility bootstrap. It downloads
+the matching Linux, macOS or Windows release binary, verifies its SHA-256 digest,
+and forwards the command. All data API operations execute in Rust.
 Standalone CLI source and releases are published at
 [`vibememory/cli`](https://github.com/vibememory/cli); the server repository
-retains the exact snapshot bundled in its live Skill distribution.
+retains the Skill instructions, compatibility bootstrap and pinned release hashes.
 
 After editing `skills/vibe-memory`, run `python3 landing/scripts/package_skill.py`
 and commit the generated web files with the source. CI rejects stale artifacts.

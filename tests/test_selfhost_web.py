@@ -20,7 +20,12 @@ def test_console_and_api_share_one_origin(settings):
             response = client.get(route)
             assert response.status_code == 200
             assert phrase in response.text
-        assert client.get("/assets/console.js").status_code == 200
+        console_script = client.get("/assets/console.js")
+        assert console_script.status_code == 200
+        assert "설치 프롬프트 복사하기" in console_script.text
+        assert "location.origin" in console_script.text
+        assert "/downloads/vibe-memory-skill.zip" in console_script.text
+        assert "login --no-browser" in console_script.text
         console = client.get("/console").text
         assert "topbar-search" in console
         assert "sidebar-backdrop" in console

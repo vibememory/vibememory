@@ -21,6 +21,34 @@ function toast(message) {
   $('#toast').textContent = message; $('#toast').classList.add('visible');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2800);
 }
+function installPromptCard() {
+  return `<section class="install-prompt-card" aria-labelledby="install-prompt-title"><div class="install-prompt-copy"><span>RECOMMENDED · NO KEY COPY</span><h2 id="install-prompt-title">대화 한 번으로 에이전트를 연결하세요.</h2><p id="install-prompt-description">설치 프롬프트를 Claude Code, Codex, OpenClaw 또는 Hermes에 붙여넣으면 Skill 설치부터 웹 승인까지 에이전트가 진행합니다.</p></div><button class="button primary" type="button" data-action="copy-install-prompt" aria-describedby="install-prompt-description">설치 프롬프트 복사하기 <span aria-hidden="true">⧉</span></button></section>`;
+}
+function installPrompt() {
+  const base = location.origin;
+  return `Vibe Memory를 이 에이전트에 설치하고 내 계정에 연결해줘.
+
+서비스 URL: ${base}
+Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
+최신 지침: ${base}/skills/vibe-memory/SKILL.md
+
+진행 방법:
+1. Skill ZIP을 내려받아 이 에이전트의 Skill 디렉터리에 설치하고 SKILL.md 전체를 읽어.
+2. 설치된 vibe-memory 디렉터리에서 호환 부트스트랩을 실행해 현재 플랫폼의 Rust CLI를 SHA-256 검증과 함께 설치해. Linux/macOS에서는 MEMORY_URL="${base}" python3 scripts/memory.py sync를 사용하고, Windows에서는 현재 셸 문법에 맞게 MEMORY_URL을 설정한 뒤 py scripts\\memory.py sync를 사용해.
+3. 브라우저 승인 연결을 login --no-browser --name "현재 에이전트 이름"으로 시작하고 서비스 URL은 ${base}로 지정해.
+4. 출력된 승인 URL과 확인 코드를 클릭 가능한 링크로 나에게 보여줘. 비밀번호나 API 키를 요청하거나 채팅에 노출하지 말고, 연결 프로세스를 유지한 채 내가 웹에서 승인할 때까지 기다려.
+5. 승인 후 status로 연결을 확인해. 이후 작업부터 SKILL.md 지침에 따라 Vibe Memory를 적극 사용하고, API 요청을 직접 조립하지 말고 Rust CLI를 사용해.`;
+}
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(value); return; } catch { /* Use the selection fallback below. */ }
+  }
+  const field = document.createElement('textarea');
+  field.value = value; field.setAttribute('readonly', ''); field.style.position = 'fixed'; field.style.opacity = '0';
+  document.body.append(field); field.select();
+  const copied = document.execCommand('copy'); field.remove();
+  if (!copied) throw new Error('copy failed');
+}
 function empty(title, description, action = '') {
   return `<div class="empty-state"><span class="empty-icon">◈</span><h3>${h(title)}</h3><p>${h(description)}</p>${action}</div>`;
 }
@@ -93,6 +121,7 @@ async function navigate(view, reset = true) {
     }
     if (ticket !== generation) return;
     $('#view-content').innerHTML = html;
+    if (view === 'keys') $('#view-content').insertAdjacentHTML('afterbegin', installPromptCard());
     const filter = $('#kind-filter');
     if (filter) filter.addEventListener('change', () => { recordKind = filter.value; pageOffset = 0; navigate(view, false); });
     const search = $('#search-records');
@@ -169,6 +198,12 @@ document.addEventListener('click', async event => {
     }
     if (action === 'add-memory') { await navigate('memories'); return primaryAction(); }
     if (action === 'upload-file') { await navigate('documents'); return primaryAction(); }
+    if (action === 'copy-install-prompt') {
+      const prompt = installPrompt();
+      try { await copyText(prompt); toast('설치 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.'); }
+      catch { detail('에이전트 설치 프롬프트', `<p class="dialog-help">자동 복사가 차단됐습니다. 아래 내용을 선택해 복사하세요.</p><pre class="detail-pre">${h(prompt)}</pre>`); }
+      return;
+    }
     if (action === 'create-key') return createKey();
     if (action === 'reload') return navigate(currentView, false);
     if (action === 'next') { pageOffset += 50; return navigate(currentView, false); }

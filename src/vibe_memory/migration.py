@@ -368,10 +368,16 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                 connection.execute(
                     """INSERT INTO feature_requests(
                         owner,id,title,description,agent_name,use_case,priority,source,
-                        client_request_id,status,created_at
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        client_request_id,status,result,result_url,created_at,updated_at,resolved_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     tuple(
-                        request.get(key)
+                        (
+                            request.get("created_at")
+                            if key == "updated_at" and not request.get("updated_at")
+                            else ""
+                            if key in {"result", "result_url"} and not request.get(key)
+                            else request.get(key)
+                        )
                         for key in (
                             "owner",
                             "id",
@@ -383,7 +389,11 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                             "source",
                             "client_request_id",
                             "status",
+                            "result",
+                            "result_url",
                             "created_at",
+                            "updated_at",
+                            "resolved_at",
                         )
                     ),
                 )

@@ -1036,6 +1036,10 @@ class PostgresStore:
         result = dict(row)
         result.pop("owner", None)
         result["created_at"] = iso(result["created_at"])
+        result["updated_at"] = iso(result.get("updated_at") or result["created_at"])
+        result["resolved_at"] = iso(result.get("resolved_at")) if result.get("resolved_at") else None
+        result["result"] = result.get("result") or ""
+        result["result_url"] = result.get("result_url") or ""
         return result
 
     def get_feature_request(self, owner, id):
@@ -1075,13 +1079,17 @@ class PostgresStore:
                 "id": uid(),
                 "owner": owner,
                 "status": "received",
+                "result": "",
+                "result_url": "",
                 "created_at": now(),
             }
+            record["updated_at"] = record["created_at"]
+            record["resolved_at"] = None
             connection.execute(
                 """INSERT INTO feature_requests(
                     owner,id,title,description,agent_name,use_case,priority,source,
-                    client_request_id,status,created_at
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    client_request_id,status,result,result_url,created_at,updated_at,resolved_at
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 tuple(
                     record[key]
                     for key in (
@@ -1095,11 +1103,45 @@ class PostgresStore:
                         "source",
                         "client_request_id",
                         "status",
+                        "result",
+                        "result_url",
                         "created_at",
+                        "updated_at",
+                        "resolved_at",
                     )
                 ),
             )
         return self.get_feature_request(owner, record["id"]), True
+
+    def update_feature_request(self, owner, id, data):
+        with self.transaction(), self._connection() as connection:
+            row = connection.execute(
+                "SELECT * FROM feature_requests WHERE owner=%s AND id=%s FOR UPDATE",
+                (owner, id),
+            ).fetchone()
+            if not row:
+                raise NotFound()
+            current = self._feature(row)
+            changes = data.model_dump(exclude_unset=True)
+            status = changes.get("status", current["status"])
+            updated_at = now()
+            if status in {"completed", "declined"}:
+                resolved_at = current.get("resolved_at") or updated_at
+            else:
+                resolved_at = None
+            result = changes.get("result", current["result"])
+            result_url = changes.get("result_url", current["result_url"])
+            connection.execute(
+                """UPDATE feature_requests SET status=%s,result=%s,result_url=%s,
+                updated_at=%s,resolved_at=%s WHERE owner=%s AND id=%s""",
+                (status, result, result_url, updated_at, resolved_at, owner, id),
+            )
+            self._event(
+                owner,
+                "feature_request.updated",
+                {"feature_request_id": id, "status": status, "updated_at": updated_at},
+            )
+        return self.get_feature_request(owner, id)
 
     def stats(self, owner):
         with self._connection() as connection:

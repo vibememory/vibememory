@@ -242,7 +242,8 @@ TOOLS = [
     _tool(
         "feature_requests_list",
         "List submitted product feedback",
-        "Check existing owner-scoped requests before submitting overlapping product feedback.",
+        "Check existing owner-scoped requests before submitting overlapping product feedback. "
+        "Returned items include processing status, result, result URL, and UTC result timestamps.",
         FeatureRequestListInput,
         "memory:read",
         read_only=True,

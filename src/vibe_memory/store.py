@@ -60,7 +60,8 @@ class Store:
         self.query("""CREATE NODE TABLE IF NOT EXISTS FeatureRequest(
             id STRING PRIMARY KEY, owner STRING, title STRING, description STRING,
             agent_name STRING, use_case STRING, priority STRING, source STRING,
-            client_request_id STRING, status STRING, created_at STRING)""")
+            client_request_id STRING, status STRING, result STRING, result_url STRING,
+            created_at STRING, updated_at STRING, resolved_at STRING)""")
         self.query("""CREATE NODE TABLE IF NOT EXISTS ChangeEvent(
             id INT64 PRIMARY KEY, owner STRING, event STRING, payload STRING)""")
         self.query("""CREATE NODE TABLE IF NOT EXISTS Agent(
@@ -109,6 +110,12 @@ class Store:
             self.query("ALTER TABLE Item ADD security_warnings STRING[] DEFAULT []")
         if "security_history" not in columns:
             self.query("ALTER TABLE Item ADD security_history STRING DEFAULT '[]'")
+        feature_columns = {
+            row["name"] for row in self.query("CALL table_info('FeatureRequest') RETURN *")
+        }
+        for name in ("result", "result_url", "updated_at", "resolved_at"):
+            if name not in feature_columns:
+                self.query(f"ALTER TABLE FeatureRequest ADD {name} STRING DEFAULT ''")
         # Old full-text/chunk vectors cannot be repurposed as agent keyword vectors.
         # Preserve source records and semantic relationships, but leave them unindexed.
         with self.transaction():
@@ -972,9 +979,14 @@ class Store:
 
     @staticmethod
     def feature_request_record(node):
-        return {
+        record = {
             key: value for key, value in node.items() if not key.startswith("_") and key != "owner"
         }
+        record["result"] = record.get("result") or ""
+        record["result_url"] = record.get("result_url") or ""
+        record["updated_at"] = record.get("updated_at") or record["created_at"]
+        record["resolved_at"] = record.get("resolved_at") or None
+        return record
 
     def get_feature_request(self, owner, id):
         rows = self.query(
@@ -1011,16 +1023,55 @@ class Store:
                 "id": uid(),
                 "owner": owner,
                 "status": "received",
+                "result": "",
+                "result_url": "",
                 "created_at": now(),
             }
+            record["updated_at"] = record["created_at"]
+            record["resolved_at"] = ""
             self.query(
                 """CREATE (:FeatureRequest {id: $id, owner: $owner, title: $title,
                 description: $description, agent_name: $agent_name, use_case: $use_case,
                 priority: $priority, source: $source, client_request_id: $client_request_id,
-                status: $status, created_at: $created_at})""",
+                status: $status, result: $result, result_url: $result_url,
+                created_at: $created_at, updated_at: $updated_at,
+                resolved_at: $resolved_at})""",
                 record,
             )
             return self.get_feature_request(owner, record["id"]), True
+
+    def update_feature_request(self, owner, id, data):
+        with self.transaction():
+            current = self.get_feature_request(owner, id)
+            changes = data.model_dump(exclude_unset=True)
+            status = changes.get("status", current["status"])
+            updated_at = now()
+            if status in {"completed", "declined"}:
+                resolved_at = current.get("resolved_at") or updated_at
+            else:
+                resolved_at = ""
+            result = changes.get("result", current["result"])
+            result_url = changes.get("result_url", current["result_url"])
+            self.query(
+                """MATCH (r:FeatureRequest {owner: $owner, id: $id})
+                SET r.status = $status, r.result = $result, r.result_url = $result_url,
+                    r.updated_at = $updated_at, r.resolved_at = $resolved_at""",
+                {
+                    "owner": owner,
+                    "id": id,
+                    "status": status,
+                    "result": result,
+                    "result_url": result_url,
+                    "updated_at": updated_at,
+                    "resolved_at": resolved_at,
+                },
+            )
+            self._event(
+                owner,
+                "feature_request.updated",
+                {"feature_request_id": id, "status": status, "updated_at": updated_at},
+            )
+            return self.get_feature_request(owner, id)
 
     def stats(self, owner):
         with self.transaction():

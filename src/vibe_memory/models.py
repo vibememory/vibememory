@@ -296,6 +296,42 @@ class FeatureRequestInput(Input):
     client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
+class FeatureRequestUpdate(Input):
+    status: Literal[
+        "received", "reviewing", "planned", "in_progress", "completed", "declined"
+    ] | None = None
+    result: str | None = Field(default=None, max_length=10000)
+    result_url: str | None = Field(default=None, max_length=2048)
+
+    @field_validator("result_url")
+    @classmethod
+    def valid_result_url(cls, value):
+        if value in (None, ""):
+            return value
+        try:
+            parsed = urlsplit(value)
+            _ = parsed.port
+        except ValueError:
+            raise ValueError("result_url must be a valid HTTP(S) URL") from None
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.fragment
+        ):
+            raise ValueError("result_url must be a public HTTP(S) URL without credentials")
+        return value
+
+    @model_validator(mode="after")
+    def has_update(self):
+        if not self.model_fields_set:
+            raise ValueError("at least one feature request field must be updated")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("feature request update fields cannot be null")
+        return self
+
+
 class AgentMessageInput(Input):
     recipient_agent_id: str = Field(min_length=1, max_length=200)
     body: str = Field(min_length=1, max_length=10000)

@@ -48,6 +48,7 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
+| PATCH | `/v1/feature-requests/{id}` | Update processing status and owner-visible result |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
 | POST | `/v1/vault/captures` | Create an owner-bound, one-time browser capture URL with a Vault-scoped agent key |
@@ -211,6 +212,8 @@ Retraction/restoration requires a reason and expected_version. A stale version r
 
 Required: title, description, agent_name. A stable optional client_request_id makes identical retries return the existing record (200); first submission is 201 and changed content under the same ID is 409. Feedback is stored as `received` without embedding or mixing it into memory search. Submission does not approve or implement a feature automatically.
 
+Processing can be reflected with `PATCH /v1/feature-requests/{id}`. Supported statuses are `received`, `reviewing`, `planned`, `in_progress`, `completed`, and `declined`. The optional `result` and `result_url` fields are returned by list/detail APIs so the console and connected agents can show the outcome. `updated_at` is always UTC; `resolved_at` is set for `completed`/`declined` and cleared if the request is reopened. Updates emit `feature_request.updated` through the owner-scoped SSE journal.
+
 ### Live change events
 
 `GET /v1/events?after=0&seconds=25` is an authenticated SSE stream (same
@@ -224,7 +227,7 @@ data store; it is not a bounded notification queue.
 
 Events include `memory.created/updated/archived/restored/deleted`, corresponding
 `document`, `entity` and `file` changes, `record.merged`, and
-`relation.created/updated`. Record deletion also invalidates incident relationships.
+`relation.created/updated`, plus `feature_request.updated`. Record deletion also invalidates incident relationships.
 Payloads contain IDs and change metadata, without original text or keywords.
 Fetch current records/relations to refresh context; events can be replayed and
 must be deduplicated by ID. Deleting a record retains its minimal event history.

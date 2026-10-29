@@ -266,9 +266,19 @@ class PostgresDatabase:
             source TEXT NOT NULL DEFAULT '',
             client_request_id TEXT,
             status TEXT NOT NULL,
+            result TEXT NOT NULL DEFAULT '',
+            result_url TEXT NOT NULL DEFAULT '',
             created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            resolved_at TIMESTAMPTZ,
             PRIMARY KEY(owner, id)
         );
+        ALTER TABLE feature_requests ADD COLUMN IF NOT EXISTS result TEXT NOT NULL DEFAULT '';
+        ALTER TABLE feature_requests ADD COLUMN IF NOT EXISTS result_url TEXT NOT NULL DEFAULT '';
+        ALTER TABLE feature_requests ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+        ALTER TABLE feature_requests ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+        UPDATE feature_requests SET updated_at=created_at WHERE updated_at IS NULL;
+        ALTER TABLE feature_requests ALTER COLUMN updated_at SET NOT NULL;
         CREATE UNIQUE INDEX IF NOT EXISTS feature_request_idempotency_idx
             ON feature_requests(owner, client_request_id) WHERE client_request_id IS NOT NULL;
 

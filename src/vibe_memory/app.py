@@ -42,6 +42,7 @@ from .models import (
     DocumentInput,
     EntityInput,
     FeatureRequestInput,
+    FeatureRequestUpdate,
     KeywordUpdate,
     MemoryInput,
     RecordArchive,
@@ -1133,6 +1134,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.get("/v1/feature-requests/{id}", tags=["feature requests"])
     def feature_request(id: str, user=Depends(owner), db=Depends(store)):
         return db.get_feature_request(user, id)
+
+    @app.patch("/v1/feature-requests/{id}", tags=["feature requests"])
+    def update_feature_request(
+        id: str, data: FeatureRequestUpdate, user=Depends(owner), db=Depends(store)
+    ):
+        return db.update_feature_request(user, id, data)
 
     @app.post("/v1/memories", status_code=201, tags=["memories"])
     def add_memory(data: MemoryInput, user=Depends(owner), db=Depends(store)):

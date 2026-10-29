@@ -27,6 +27,8 @@ def test_submit_read_list_without_embedding_or_memory_pollution(client, embedder
     assert response.status_code == 201
     record = response.json()
     assert record["status"] == "received" and record["id"] and record["created_at"]
+    assert record["result"] == "" and record["result_url"] == ""
+    assert record["updated_at"] == record["created_at"] and record["resolved_at"] is None
     assert all(record[key] == value for key, value in PAYLOAD.items())
     assert "owner" not in record
     assert client.get(response.headers["location"]).json() == record
@@ -34,6 +36,49 @@ def test_submit_read_list_without_embedding_or_memory_pollution(client, embedder
     assert client.get("/v1/records").json()["items"] == []
     assert client.app.state.store.candidates("alice", "all", []) == []
     assert not embedder.calls
+
+
+def test_processing_status_result_and_owner_scoping(client):
+    record = submit(client).json()
+    reviewing = client.patch(
+        "/v1/feature-requests/" + record["id"],
+        json={
+            "status": "reviewing",
+            "result": "기술 검토를 시작했습니다.",
+            "result_url": "https://github.com/vibememory/vibememory/issues/1",
+        },
+    )
+    assert reviewing.status_code == 200, reviewing.text
+    reviewing = reviewing.json()
+    assert reviewing["status"] == "reviewing"
+    assert reviewing["result"] == "기술 검토를 시작했습니다."
+    assert reviewing["result_url"].endswith("/issues/1")
+    assert reviewing["updated_at"] >= record["updated_at"]
+    assert reviewing["resolved_at"] is None
+
+    completed = client.patch(
+        "/v1/feature-requests/" + record["id"],
+        json={"status": "completed", "result": "일괄 관계 등록을 구현했습니다."},
+    ).json()
+    assert completed["status"] == "completed"
+    assert completed["result"] == "일괄 관계 등록을 구현했습니다."
+    assert completed["resolved_at"] is not None
+    assert completed["result_url"] == reviewing["result_url"]
+
+    reopened = client.patch(
+        "/v1/feature-requests/" + record["id"], json={"status": "in_progress"}
+    ).json()
+    assert reopened["resolved_at"] is None
+    assert client.app.state.store.events("alice")[-1]["event"] == "feature_request.updated"
+
+    client.headers["Authorization"] = "Bearer " + KEY_B
+    assert (
+        client.patch(
+            "/v1/feature-requests/" + record["id"],
+            json={"status": "declined", "result": "not mine"},
+        ).status_code
+        == 404
+    )
 
 
 def test_same_user_agents_share_requests_other_users_cannot_read(client):
@@ -91,6 +136,20 @@ def test_validation_and_pagination(client, embedder):
     assert {page[0]["id"] for page in pages} == set(ids)
     assert client.get("/v1/feature-requests?limit=0").status_code == 422
     assert client.get("/v1/feature-requests?offset=-1").status_code == 422
+    record = client.get("/v1/feature-requests").json()["items"][0]
+    for payload in (
+        {},
+        {"status": "done"},
+        {"status": None},
+        {"result": None},
+        {"result_url": "javascript:alert(1)"},
+        {"result_url": "https://user:secret@example.com/result"},
+        {"result": "x" * 10001},
+    ):
+        assert (
+            client.patch("/v1/feature-requests/" + record["id"], json=payload).status_code
+            == 422
+        )
 
 
 def test_persistence_and_available_when_embedding_unavailable(settings):

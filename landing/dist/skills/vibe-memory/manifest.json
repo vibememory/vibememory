@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "revision": "5a7097308a0cc5a6c3360d733144395e121d98112d466d6412daf6f0729d6134",
+  "revision": "a979efeb6780bb92abeb3d4c6bcf3a4eb2273066f36af7780801bf54243771cf",
   "files": {
-    "SKILL.md": "15e8a5d4856f93d4a8a6295592e64e21bedc55e36294a19cb1d567e5c3317801",
+    "SKILL.md": "f3fb78e8c824b35cc672bd7113bd8a30a7c1e6525d153233c2e931705c8797a8",
     "scripts/memory.py": "8a02fb389f62f8d86e3a7f3036d8c50cc31ddd82ff93679567a8cf7354f8b249"
   },
   "cli": {

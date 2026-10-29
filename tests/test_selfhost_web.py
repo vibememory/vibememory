@@ -78,11 +78,11 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261029-vault-security-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261029-vault-security-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261029-vault-security-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-vault-security-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261029-vault-security-1" defer="">' in console
+        assert '<script src="/assets/i18n.js?v=20261029-proactive-memory-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261029-proactive-memory-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261029-proactive-memory-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-proactive-memory-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261029-proactive-memory-1" defer="">' in console
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -98,6 +98,10 @@ def test_console_and_api_share_one_origin(settings):
         assert "/downloads/vibe-memory-skill.zip" in install_script.text
         assert "login --url" in install_script.text
         assert "--vault-access --no-browser" in install_script.text
+        assert "기본 맥락 계층으로 적극 사용해" in install_script.text
+        assert "default continuity layer, not an optional command" in install_script.text
+        assert "Do not wait for me to repeat" in install_script.text
+        assert install_script.text.count("vault capture") == 7
         assert "canonical time basis is UTC" in install_script.text
         assert "标准时间为 UTC" in install_script.text
         assert "基準時刻はUTC" in install_script.text

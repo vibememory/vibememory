@@ -32,7 +32,7 @@ function toast(message) {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2800);
 }
 function installPromptCard() {
-  return `<section class="install-prompt-card" aria-labelledby="install-prompt-title"><div class="install-prompt-copy"><span>RECOMMENDED · NO KEY COPY</span><h2 id="install-prompt-title">대화 한 번으로 설치·최신화하고 연결하세요.</h2><p id="install-prompt-description">프롬프트를 Claude Code, Codex, OpenClaw 또는 Hermes에 붙여넣으면 오래된 Skill 교체부터 웹 승인까지 에이전트가 진행합니다.</p></div><button class="button primary" type="button" data-action="copy-install-prompt" aria-describedby="install-prompt-description">설치·최신화 프롬프트 복사 <span aria-hidden="true">⧉</span></button></section>`;
+  return `<section class="install-prompt-card" aria-labelledby="install-prompt-title"><div class="install-prompt-copy"><span>RECOMMENDED · PROACTIVE CONTEXT</span><h2 id="install-prompt-title">한 번 연결하고, 다음 대화부터 이어가세요.</h2><p id="install-prompt-description">프롬프트를 Claude Code, Codex, OpenClaw 또는 Hermes에 붙여넣으면 설치·웹 승인 후 별도 요청 없이 관련 기억을 조회하고 중요한 맥락을 체크포인트로 이어갑니다.</p></div><button class="button primary" type="button" data-action="copy-install-prompt" aria-describedby="install-prompt-description">설치·최신화 프롬프트 복사 <span aria-hidden="true">⧉</span></button></section>`;
 }
 async function copyText(value) {
   if (navigator.clipboard?.writeText) {

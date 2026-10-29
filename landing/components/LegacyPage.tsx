@@ -5,7 +5,7 @@ type Props = {
   scripts?: string[];
 };
 
-const assetVersion = "20261029-vault-security-1";
+const assetVersion = "20261029-proactive-memory-1";
 const versioned = (path: string) => `${path}?v=${assetVersion}`;
 
 export function LegacyPage({ body, bodyClass = "", pageStylesheet, scripts = [] }: Props) {

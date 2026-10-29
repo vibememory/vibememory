@@ -117,6 +117,9 @@ def test_skill_commands_are_anchored_to_the_loaded_skill_directory():
     assert '$VmCli = Join-Path $VmSkillDir "bin\\vibe-memory.exe"' in skill
     assert "canonical time basis for Vibe Memory is UTC" in skill
     assert "Never guess a missing UTC offset or time zone" in skill
+    assert "Do not wait for the user to repeat" in skill
+    assert "Do not repeatedly ask whether to perform ordinary recall or checkpointing" in skill
+    assert "automatically checkpoint meaningful state changes" in skill
     assert "run `python3 scripts/memory.py" not in skill
     assert "execute `./bin/vibe-memory`" not in skill
 

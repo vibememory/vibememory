@@ -31,7 +31,7 @@ skills/vibe-memory/bin/vibe-memory remember '나는 녹차를 선호한다' \
 skills/vibe-memory/bin/vibe-memory recall 녹차 음료
 ```
 
-간결한 CLI가 인증·저장·검색·바이트 스트림 파일·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다.
+간결한 CLI가 인증·저장·검색·바이트 스트림 파일·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. 독립 CLI 소스와 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리하며, 이 저장소에는 Skill 배포용 스냅샷을 함께 둡니다.
 
 - 기억·엔티티·문서·관계는 그래프 DB에 저장합니다.
 - 문서는 서버에서 파싱하지 않습니다. 원본은 byte stream으로 올리고 에이전트가 분석한 JSON을 file_id로 연결합니다.

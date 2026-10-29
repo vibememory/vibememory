@@ -61,7 +61,7 @@ skills/vibe-memory/bin/vibe-memory remember 'I prefer Python examples' \
 skills/vibe-memory/bin/vibe-memory recall Python 'code examples'
 ```
 
-The compact CLI wraps authentication, storage, search, byte-stream files, live events, and skill updates so agents do not need to load API schemas into context. The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
+The compact CLI wraps authentication, storage, search, byte-stream files, live events, and skill updates so agents do not need to load API schemas into context. Its standalone source and releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the bundled distribution snapshot used by the Skill. The skill explains entity resolution, relationship inference, file metadata extraction, feature feedback, and evidence handling. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
 ## Run from source
 

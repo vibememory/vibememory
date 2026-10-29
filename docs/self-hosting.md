@@ -142,6 +142,9 @@ fetching instructions from the hosted service or GitHub at runtime.
 
 `python3 scripts/memory.py ...` remains a compatibility launcher. It downloads
 the content-addressed CLI, verifies its SHA-256 digest, and forwards the command.
+Standalone CLI source and releases are published at
+[`vibememory/cli`](https://github.com/vibememory/cli); the server repository
+retains the exact snapshot bundled in its live Skill distribution.
 
 After editing `skills/vibe-memory`, run `python3 landing/scripts/package_skill.py`
 and commit the generated web files with the source. CI rejects stale artifacts.

@@ -169,6 +169,13 @@ class PostgresDatabase:
             last_used_at BIGINT NOT NULL,
             PRIMARY KEY(client_id, user_id)
         );
+        CREATE TABLE IF NOT EXISTS oauth_vault_grants (
+            client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            created_at BIGINT NOT NULL,
+            PRIMARY KEY(client_id, user_id, name)
+        );
 
         CREATE TABLE IF NOT EXISTS records (
             owner TEXT NOT NULL,
@@ -237,6 +244,12 @@ class PostgresDatabase:
             version BIGINT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL,
             history JSONB NOT NULL,
+            creator_agent_id TEXT NOT NULL DEFAULT 'unknown',
+            creator_agent_name TEXT NOT NULL DEFAULT 'Unknown agent',
+            confidence DOUBLE PRECISION CHECK (confidence >= 0 AND confidence <= 1),
+            evidence_record_ids TEXT[] NOT NULL DEFAULT '{{}}',
+            extraction_method TEXT NOT NULL DEFAULT '',
+            extraction_version TEXT NOT NULL DEFAULT '',
             PRIMARY KEY(owner, id),
             FOREIGN KEY(owner, source_id) REFERENCES records(owner, id) ON DELETE CASCADE,
             FOREIGN KEY(owner, target_id) REFERENCES records(owner, id) ON DELETE CASCADE,
@@ -246,6 +259,12 @@ class PostgresDatabase:
             ON relations(owner, source_id, status);
         CREATE INDEX IF NOT EXISTS relations_owner_target_idx
             ON relations(owner, target_id, status);
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS creator_agent_id TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS creator_agent_name TEXT NOT NULL DEFAULT 'Unknown agent';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION;
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence_record_ids TEXT[] NOT NULL DEFAULT '{{}}';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_method TEXT NOT NULL DEFAULT '';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_version TEXT NOT NULL DEFAULT '';
 
         CREATE TABLE IF NOT EXISTS change_events (
             id BIGSERIAL PRIMARY KEY,
@@ -355,6 +374,16 @@ class PostgresDatabase:
         );
         CREATE INDEX IF NOT EXISTS vault_captures_owner_idx
             ON vault_captures(user_id, created_at DESC);
+        CREATE TABLE IF NOT EXISTS vault_access_audit (
+            id BIGSERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            client_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            accessed_at BIGINT NOT NULL,
+            outcome TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS vault_access_audit_owner_idx
+            ON vault_access_audit(user_id, accessed_at DESC, id DESC);
         """
         with self.pool.connection() as connection:
             for statement in (part.strip() for part in schema.split(";") if part.strip()):

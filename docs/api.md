@@ -8,7 +8,7 @@ Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/
 
 Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
 
-Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. Vault is not an MCP scope.
+Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. `vault:read` is an optional sensitive MCP scope and still exposes no entry until the user grants individual Vault names to that connection.
 
 ## Endpoints
 
@@ -42,7 +42,7 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/records/merge` | Rewire relationships and archive version-checked duplicates |
 | POST | `/v1/files` | Raw application/octet-stream body; optional filename query |
 | GET/DELETE | `/v1/files/{id}` | Original bytes / delete unreferenced original |
-| POST/GET | `/v1/relations` | Store agent-inferred relationships / list with status filter |
+| POST/GET | `/v1/relations` | Store agent-inferred relationship claims / filter by status, creator, confidence, extraction method, or relation |
 | PATCH | `/v1/relations/{id}` | Retract/restore using reason and expected_version |
 | GET | `/v1/graph/{id}` | Explicit 0–2 hop active-edge traversal |
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
@@ -50,8 +50,11 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
 | GET | `/v1/admin/feature-requests` | Admin-browser processing queue across workspaces |
 | PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser status and public-result update |
+| GET | `/v1/admin/users` | Admin-browser safe user list and usage/connection counts; no auth secrets |
+| GET/PUT | `/auth/mcp-connections/{client_id}/vault` | Browser-only list/replace of per-entry Vault grants for one owned MCP connection |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
+| GET | `/v1/vault-access-audit` | Browser-only Vault access audit for the current owner |
 | POST | `/v1/vault/captures` | Create an owner-bound, one-time browser capture URL with a Vault-scoped agent key |
 | GET | `/v1/vault/captures/{token}` | Inspect an unexpired capture as the signed-in owner; never returns a value |
 | PUT | `/v1/vault/captures/{token}` | Store a value from the signed-in browser and consume the link |
@@ -88,6 +91,14 @@ capture audit metadata records the requesting agent and UTC lifecycle timestamps
 The CLI intentionally has no command that prints a value. `vault exec` injects it
 only into the selected child process; that process remains capable of logging its
 own environment, so choose commands carefully.
+
+An MCP connection may request `vault:read`, but the user must separately select
+the exact Vault names it can access in **Console → Agent connections**. `vault_list`
+returns metadata only for those names. `vault_get` returns one granted value to the
+MCP client, which means it enters client/model context and may be retained there;
+the consent screen and grant editor display this warning. Every allowed and denied
+MCP Vault attempt is owner-visible in the audit log. Revoking the connection removes
+its item grants. The server only retrieves the value and never calls an external API.
 
 ## Keyword-only retrieval
 
@@ -192,11 +203,17 @@ Agent-defined relation names use uppercase identifiers, such as `WORKS_ON`, `PRE
   "source_id": "person-record-id",
   "target_id": "project-record-id",
   "relation": "WORKS_ON",
-  "reason": "Explicitly stated by the user"
+  "reason": "Explicitly stated by the user",
+  "confidence": 0.98,
+  "evidence_record_ids": ["source-note-id"],
+  "extraction_method": "agent-explicit-statement",
+  "extraction_version": "1"
 }
 ```
 
-Retraction/restoration requires a reason and expected_version. A stale version returns 409. A `SUPERSEDES` edge records meaning; it does not automatically hide/delete old facts. The agent interprets evidence and resolves contradictions.
+The server derives `creator_agent_id` and `creator_agent_name` from the authenticated connection; callers cannot impersonate another creator. Evidence IDs must be existing records owned by the same account. Parallel or conflicting claims are kept as separate edges and expose `claim_group` and `parallel_claim_ids` rather than being silently merged. Relation lists and graph traversal can filter by creator, minimum confidence, extraction method, and relation name.
+
+Retraction/restoration requires a reason and expected_version. A stale version returns 409. A `SUPERSEDES` edge records meaning; it does not automatically hide/delete old facts. Confidence and provenance are agent-supplied claims, not server inference or truth scores. The agent interprets evidence and resolves contradictions.
 
 ## Feature feedback
 

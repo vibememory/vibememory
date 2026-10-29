@@ -17,7 +17,8 @@
             "defaultScopes": [
               "memory:read",
               "memory:write",
-              "feature:write"
+              "feature:write",
+              "vault:read"
             ]
           }
         }

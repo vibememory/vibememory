@@ -97,6 +97,12 @@ class PostgresStore:
         result.pop("owner", None)
         result["created_at"] = iso(result["created_at"])
         result["history"] = result.get("history") or []
+        result["creator_agent_id"] = result.get("creator_agent_id") or "unknown"
+        result["creator_agent_name"] = result.get("creator_agent_name") or "Unknown agent"
+        result["evidence_record_ids"] = result.get("evidence_record_ids") or []
+        result["extraction_method"] = result.get("extraction_method") or ""
+        result["extraction_version"] = result.get("extraction_version") or ""
+        result["claim_group"] = f"{result['source_id']}:{result['target_id']}"
         return result
 
     def _event(self, owner, event, payload):
@@ -782,18 +788,37 @@ class PostgresStore:
             "archived_records_recoverable": True,
         }
 
-    def link(self, owner, data):
+    def link(
+        self,
+        owner,
+        data,
+        creator_agent_id="unknown",
+        creator_agent_name="Unknown agent",
+    ):
         with self.transaction(), self._connection() as connection:
             self.get(owner, data.source_id)
             self.get(owner, data.target_id)
+            for evidence_id in data.evidence_record_ids:
+                self.get(owner, evidence_id)
             if data.source_id == data.target_id:
                 raise ValueError("A relationship must connect two distinct records")
             id, created = uid(), now()
-            history = [dict(status="active", reason=data.reason, at=created, version=1)]
+            history = [
+                dict(
+                    status="active",
+                    reason=data.reason,
+                    at=created,
+                    version=1,
+                    creator_agent_id=creator_agent_id,
+                    confidence=data.confidence,
+                )
+            ]
             connection.execute(
                 """INSERT INTO relations(
-                    owner,id,source_id,target_id,relation,reason,status,version,created_at,history
-                ) VALUES(%s,%s,%s,%s,%s,%s,'active',1,%s,%s)""",
+                    owner,id,source_id,target_id,relation,reason,status,version,created_at,history,
+                    creator_agent_id,creator_agent_name,confidence,evidence_record_ids,
+                    extraction_method,extraction_version
+                ) VALUES(%s,%s,%s,%s,%s,%s,'active',1,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     owner,
                     id,
@@ -803,6 +828,12 @@ class PostgresStore:
                     data.reason,
                     created,
                     Jsonb(history),
+                    creator_agent_id,
+                    creator_agent_name,
+                    data.confidence,
+                    data.evidence_record_ids,
+                    data.extraction_method,
+                    data.extraction_version,
                 ),
             )
             self._event(
@@ -812,25 +843,60 @@ class PostgresStore:
                     "relation_id": id,
                     "source_id": data.source_id,
                     "target_id": data.target_id,
+                    "creator_agent_id": creator_agent_id,
+                    "confidence": data.confidence,
                     "version": 1,
                 },
             )
         return next(row for row in self.relations(owner, "all") if row["id"] == id)
 
-    def relations(self, owner, status="active"):
+    def relations(
+        self,
+        owner,
+        status="active",
+        creator_agent_id="",
+        min_confidence=None,
+        extraction_method="",
+        relation="",
+    ):
         with self._connection() as connection:
             rows = connection.execute(
                 """SELECT e.source_id,e.target_id,e.id,e.relation,e.reason,e.status,
-                e.version,e.created_at,e.history
+                e.version,e.created_at,e.history,e.creator_agent_id,e.creator_agent_name,
+                e.confidence,e.evidence_record_ids,e.extraction_method,e.extraction_version
                 FROM relations e
                 JOIN records a ON a.owner=e.owner AND a.id=e.source_id
                 JOIN records b ON b.owner=e.owner AND b.id=e.target_id
                 WHERE e.owner=%s AND a.archived_at IS NULL AND b.archived_at IS NULL
                 AND (%s='all' OR e.status=%s)
+                AND (%s='' OR e.creator_agent_id=%s)
+                AND (%s::double precision IS NULL OR e.confidence >= %s)
+                AND (%s='' OR e.extraction_method=%s)
+                AND (%s='' OR e.relation=%s)
                 ORDER BY e.created_at,e.id""",
-                (owner, status, status),
+                (
+                    owner,
+                    status,
+                    status,
+                    creator_agent_id,
+                    creator_agent_id,
+                    min_confidence,
+                    min_confidence,
+                    extraction_method,
+                    extraction_method,
+                    relation,
+                    relation,
+                ),
             ).fetchall()
-        return [self._relation(row) for row in rows]
+        result = [self._relation(row) for row in rows]
+        groups = {}
+        for edge in result:
+            groups.setdefault(edge["claim_group"], []).append(edge["id"])
+        for edge in result:
+            edge["parallel_claim_ids"] = [
+                claim_id for claim_id in groups[edge["claim_group"]] if claim_id != edge["id"]
+            ]
+        return result
 
     def update_link(self, owner, id, data):
         with self.transaction(), self._connection() as connection:
@@ -999,8 +1065,18 @@ class PostgresStore:
         depth,
         include_untrusted=False,
         include_quarantined=False,
+        creator_agent_id="",
+        min_confidence=None,
+        extraction_method="",
+        relation="",
     ):
-        edges = self.relations(owner)
+        edges = self.relations(
+            owner,
+            creator_agent_id=creator_agent_id,
+            min_confidence=min_confidence,
+            extraction_method=extraction_method,
+            relation=relation,
+        )
         visited, frontier, selected = set(seeds), set(seeds), {}
         allowed = {id: True for id in seeds}
 
@@ -1195,7 +1271,11 @@ class PostgresStore:
                 """SELECT COALESCE(sum(
                     octet_length(source_id) + octet_length(target_id)
                     + octet_length(relation) + octet_length(reason) + octet_length(status)
-                    + octet_length(history::text)
+                    + octet_length(history::text) + octet_length(creator_agent_id)
+                    + octet_length(creator_agent_name)
+                    + octet_length(COALESCE(confidence::text,''))
+                    + octet_length(to_jsonb(evidence_record_ids)::text)
+                    + octet_length(extraction_method) + octet_length(extraction_version)
                 ),0)::bigint AS bytes FROM relations WHERE owner=%s""",
                 (owner,),
             ).fetchone()["bytes"]

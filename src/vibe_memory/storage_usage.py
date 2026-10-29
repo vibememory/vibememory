@@ -29,6 +29,12 @@ RELATION_FIELDS = (
     "reason",
     "status",
     "history",
+    "creator_agent_id",
+    "creator_agent_name",
+    "confidence",
+    "evidence_record_ids",
+    "extraction_method",
+    "extraction_version",
 )
 
 JSON_FIELDS = {"metadata", "provenance", "security_history", "history"}

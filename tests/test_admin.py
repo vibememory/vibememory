@@ -110,3 +110,35 @@ def test_admin_feature_request_queue_permissions_and_results(admin_web):
     visible = admin_web.get("/v1/feature-requests/" + request["id"]).json()
     assert visible["status"] == "completed"
     assert visible["result"] == "요청한 기능을 구현했습니다."
+
+
+def test_admin_user_directory_exposes_operational_counts_without_credentials(admin_web):
+    person = signup(admin_web, "person2@example.com", "사용자 둘")
+    owner_id = person["user"]["id"]
+    key = admin_web.post(
+        "/auth/api-keys", json={"name": "Agent", "vault_access": False}
+    )
+    assert key.status_code == 201
+    assert admin_web.post(
+        "/v1/memories", json={"content": "admin listing", "keywords": ["admin"]}
+    ).status_code == 201
+    assert admin_web.get("/v1/admin/users").status_code == 403
+    admin_web.post("/auth/logout")
+
+    signup(admin_web, "admin@example.com", "운영자")
+    response = admin_web.get("/v1/admin/users?q=person2")
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["total"] == 1
+    user = payload["items"][0]
+    assert user["id"] == owner_id
+    assert user["name"] == "사용자 둘"
+    assert user["email"] == "person2@example.com"
+    assert user["is_admin"] is False
+    assert user["api_key_count"] == 1
+    assert user["active_session_count"] == 0
+    assert user["record_count"] == 1
+    assert user["storage_bytes"] >= user["memory_bytes"] > 0
+    assert "password_hash" not in str(payload)
+    assert "salt" not in str(payload)
+    assert "hash" not in str(payload)

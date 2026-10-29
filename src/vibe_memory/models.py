@@ -117,6 +117,12 @@ class RelationInput(Input):
     target_id: str = Field(min_length=1, max_length=100)
     relation: str = Field(min_length=1, max_length=80, pattern=r"^[A-Z][A-Z0-9_]*$")
     reason: str = Field(min_length=1, max_length=1000)
+    confidence: float | None = Field(default=None, ge=0, le=1)
+    evidence_record_ids: list[
+        Annotated[str, Field(min_length=1, max_length=100)]
+    ] = Field(default_factory=list, max_length=50)
+    extraction_method: str = Field(default="", max_length=100)
+    extraction_version: str = Field(default="", max_length=100)
 
     @field_validator("relation")
     @classmethod
@@ -124,6 +130,26 @@ class RelationInput(Input):
         if value in {"CHUNK_OF", "KEYWORD_OF"}:
             raise ValueError("reserved internal relationship")
         return value
+
+    @field_validator("evidence_record_ids")
+    @classmethod
+    def unique_evidence(cls, values):
+        if len(values) != len(set(values)):
+            raise ValueError("evidence_record_ids must be unique")
+        return values
+
+
+class VaultGrantUpdate(Input):
+    names: list[
+        Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")]
+    ] = Field(default_factory=list, max_length=100)
+
+    @field_validator("names")
+    @classmethod
+    def unique_names(cls, values):
+        if len(values) != len(set(values)):
+            raise ValueError("Vault grant names must be unique")
+        return values
 
 
 class RelationUpdate(Input):

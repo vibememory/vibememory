@@ -176,6 +176,61 @@ def test_reject_raw_questions_missing_keywords_and_reserved_relations(client, em
     )
 
 
+def test_relation_claims_preserve_authenticated_origin_evidence_and_filters(client):
+    source = memory(client, "source", keywords=["source"])
+    target = memory(client, "target", keywords=["target"])
+    evidence = memory(client, "evidence", keywords=["evidence"])
+    payload = {
+        "source_id": source["id"],
+        "target_id": target["id"],
+        "relation": "PREFERS",
+        "reason": "Agent extracted an explicit preference",
+        "confidence": 0.82,
+        "evidence_record_ids": [evidence["id"]],
+        "extraction_method": "structured-output",
+        "extraction_version": "agent-v2",
+    }
+    created = client.post("/v1/relations", json=payload)
+    assert created.status_code == 201, created.text
+    edge = created.json()
+    assert edge["creator_agent_id"].startswith("legacy:")
+    assert edge["creator_agent_name"] == "Legacy API agent"
+    assert edge["confidence"] == 0.82
+    assert edge["evidence_record_ids"] == [evidence["id"]]
+    assert edge["extraction_method"] == "structured-output"
+    assert edge["extraction_version"] == "agent-v2"
+    assert edge["parallel_claim_ids"] == []
+
+    parallel = client.post(
+        "/v1/relations",
+        json={**payload, "relation": "DISLIKES", "reason": "Conflicting agent claim"},
+    ).json()
+    claims = client.get("/v1/relations").json()["items"]
+    first = next(item for item in claims if item["id"] == edge["id"])
+    assert first["parallel_claim_ids"] == [parallel["id"]]
+    assert parallel["id"] != edge["id"]
+    assert len(client.get("/v1/relations?min_confidence=0.9").json()["items"]) == 0
+    filtered = client.get(
+        "/v1/relations?relation=PREFERS&extraction_method=structured-output"
+    ).json()["items"]
+    assert [item["id"] for item in filtered] == [edge["id"]]
+    graph = client.get(
+        f"/v1/graph/{source['id']}?depth=1&relation=PREFERS&min_confidence=0.8"
+    ).json()
+    assert [item["id"] for item in graph["relations"]] == [edge["id"]]
+
+    forged = client.post(
+        "/v1/relations",
+        json={**payload, "creator_agent_id": "forged-agent"},
+    )
+    assert forged.status_code == 422
+    missing_evidence = client.post(
+        "/v1/relations",
+        json={**payload, "evidence_record_ids": ["missing-record"]},
+    )
+    assert missing_evidence.status_code == 404
+
+
 def test_restart(settings):
     for index in range(2):
         with TestClient(create_app(settings, SpyEmbedder())) as c:

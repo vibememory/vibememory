@@ -55,7 +55,9 @@ class Store:
             embedding DOUBLE[], parent_id STRING, start_offset INT64, end_offset INT64)""")
         self.query("""CREATE REL TABLE IF NOT EXISTS Link(FROM Item TO Item,
             id STRING, relation STRING, reason STRING, status STRING, version INT64,
-            created_at STRING, history STRING)""")
+            created_at STRING, history STRING, creator_agent_id STRING,
+            creator_agent_name STRING, confidence DOUBLE, evidence_record_ids STRING[],
+            extraction_method STRING, extraction_version STRING)""")
         self.query("CREATE NODE TABLE IF NOT EXISTS Meta(key STRING PRIMARY KEY, value STRING)")
         self.query("""CREATE NODE TABLE IF NOT EXISTS FeatureRequest(
             id STRING PRIMARY KEY, owner STRING, title STRING, description STRING,
@@ -116,6 +118,20 @@ class Store:
         for name in ("result", "result_url", "updated_at", "resolved_at"):
             if name not in feature_columns:
                 self.query(f"ALTER TABLE FeatureRequest ADD {name} STRING DEFAULT ''")
+        relation_columns = {
+            row["name"] for row in self.query("CALL table_info('Link') RETURN *")
+        }
+        relation_defaults = {
+            "creator_agent_id": ("STRING", "'unknown'"),
+            "creator_agent_name": ("STRING", "'Unknown agent'"),
+            "confidence": ("DOUBLE", "NULL"),
+            "evidence_record_ids": ("STRING[]", "[]"),
+            "extraction_method": ("STRING", "''"),
+            "extraction_version": ("STRING", "''"),
+        }
+        for name, (kind, default) in relation_defaults.items():
+            if name not in relation_columns:
+                self.query(f"ALTER TABLE Link ADD {name} {kind} DEFAULT {default}")
         # Old full-text/chunk vectors cannot be repurposed as agent keyword vectors.
         # Preserve source records and semantic relationships, but leave them unindexed.
         with self.transaction():
@@ -802,7 +818,19 @@ class Store:
                     WHERE r.id = $id DELETE r""",
                     {"owner": owner, "id": edge["id"]},
                 )
-                new_id = self._link(owner, source, target, edge["relation"], change_reason)
+                new_id = self._link(
+                    owner,
+                    source,
+                    target,
+                    edge["relation"],
+                    change_reason,
+                    creator_agent_id=edge["creator_agent_id"],
+                    creator_agent_name=edge["creator_agent_name"],
+                    confidence=edge["confidence"],
+                    evidence_record_ids=edge["evidence_record_ids"],
+                    extraction_method=edge["extraction_method"],
+                    extraction_version=edge["extraction_version"],
+                )
                 self.query(
                     """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
                     WHERE r.id = $id SET r.status = $status, r.version = $version,
@@ -839,14 +867,42 @@ class Store:
                 "archived_records_recoverable": True,
             }
 
-    def _link(self, owner, source, target, relation, reason):
+    def _link(
+        self,
+        owner,
+        source,
+        target,
+        relation,
+        reason,
+        creator_agent_id="unknown",
+        creator_agent_name="Unknown agent",
+        confidence=None,
+        evidence_record_ids=None,
+        extraction_method="",
+        extraction_version="",
+    ):
         id, created = uid(), now()
-        history = json.dumps([dict(status="active", reason=reason, at=created, version=1)])
+        history = json.dumps(
+            [
+                dict(
+                    status="active",
+                    reason=reason,
+                    at=created,
+                    version=1,
+                    creator_agent_id=creator_agent_id,
+                    confidence=confidence,
+                )
+            ]
+        )
         self.query(
             """MATCH (a:Item {owner: $owner, id: $source}),
             (b:Item {owner: $owner, id: $target})
             CREATE (a)-[:Link {id: $id, relation: $relation, reason: $reason, status: 'active',
-                version: 1, created_at: $created, history: $history}]->(b)""",
+                version: 1, created_at: $created, history: $history,
+                creator_agent_id: $creator_agent_id, creator_agent_name: $creator_agent_name,
+                confidence: $confidence, evidence_record_ids: $evidence_record_ids,
+                extraction_method: $extraction_method,
+                extraction_version: $extraction_version}]->(b)""",
             dict(
                 owner=owner,
                 source=source,
@@ -856,34 +912,101 @@ class Store:
                 reason=reason,
                 created=created,
                 history=history,
+                creator_agent_id=creator_agent_id,
+                creator_agent_name=creator_agent_name,
+                confidence=confidence,
+                evidence_record_ids=evidence_record_ids or [],
+                extraction_method=extraction_method,
+                extraction_version=extraction_version,
             ),
         )
         return id
 
-    def link(self, owner, data):
+    def link(
+        self,
+        owner,
+        data,
+        creator_agent_id="unknown",
+        creator_agent_name="Unknown agent",
+    ):
         with self.transaction():
             self.get(owner, data.source_id)
             self.get(owner, data.target_id)
+            for evidence_id in data.evidence_record_ids:
+                self.get(owner, evidence_id)
             if data.source_id == data.target_id:
                 raise ValueError("A relationship must connect two distinct records")
-            id = self._link(owner, data.source_id, data.target_id, data.relation, data.reason)
+            id = self._link(
+                owner,
+                data.source_id,
+                data.target_id,
+                data.relation,
+                data.reason,
+                creator_agent_id,
+                creator_agent_name,
+                data.confidence,
+                data.evidence_record_ids,
+                data.extraction_method,
+                data.extraction_version,
+            )
             self._event(owner, "relation.created", {"relation_id": id,
-                        "source_id": data.source_id, "target_id": data.target_id, "version": 1})
+                        "source_id": data.source_id, "target_id": data.target_id,
+                        "creator_agent_id": creator_agent_id,
+                        "confidence": data.confidence, "version": 1})
             return next(r for r in self.relations(owner, "all") if r["id"] == id)
 
-    def relations(self, owner, status="active"):
+    def relations(
+        self,
+        owner,
+        status="active",
+        creator_agent_id="",
+        min_confidence=None,
+        extraction_method="",
+        relation="",
+    ):
         rows = self.query(
             """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
             WHERE r.relation <> 'CHUNK_OF' AND r.relation <> 'KEYWORD_OF' AND ($status = 'all' OR r.status = $status)
             AND a.archived_at = '' AND b.archived_at = ''
             RETURN a.id AS source_id, b.id AS target_id, r.id AS id, r.relation AS relation,
                 r.reason AS reason, r.status AS status, r.version AS version,
-                r.created_at AS created_at, r.history AS history""",
+                r.created_at AS created_at, r.history AS history,
+                r.creator_agent_id AS creator_agent_id,
+                r.creator_agent_name AS creator_agent_name,
+                r.confidence AS confidence,
+                r.evidence_record_ids AS evidence_record_ids,
+                r.extraction_method AS extraction_method,
+                r.extraction_version AS extraction_version""",
             {"owner": owner, "status": status},
         )
+        result = []
         for row in rows:
             row["history"] = json.loads(row["history"])
-        return rows
+            row["creator_agent_id"] = row.get("creator_agent_id") or "unknown"
+            row["creator_agent_name"] = row.get("creator_agent_name") or "Unknown agent"
+            row["evidence_record_ids"] = row.get("evidence_record_ids") or []
+            row["extraction_method"] = row.get("extraction_method") or ""
+            row["extraction_version"] = row.get("extraction_version") or ""
+            if creator_agent_id and row["creator_agent_id"] != creator_agent_id:
+                continue
+            if min_confidence is not None and (
+                row["confidence"] is None or row["confidence"] < min_confidence
+            ):
+                continue
+            if extraction_method and row["extraction_method"] != extraction_method:
+                continue
+            if relation and row["relation"] != relation:
+                continue
+            row["claim_group"] = f"{row['source_id']}:{row['target_id']}"
+            result.append(row)
+        groups = {}
+        for edge in result:
+            groups.setdefault(edge["claim_group"], []).append(edge["id"])
+        for edge in result:
+            edge["parallel_claim_ids"] = [
+                claim_id for claim_id in groups[edge["claim_group"]] if claim_id != edge["id"]
+            ]
+        return result
 
     def update_link(self, owner, id, data):
         with self.transaction():
@@ -948,9 +1071,19 @@ class Store:
         depth,
         include_untrusted=False,
         include_quarantined=False,
+        creator_agent_id="",
+        min_confidence=None,
+        extraction_method="",
+        relation="",
     ):
         # Bounded BFS over real stored graph edges; retracted links never enter retrieval.
-        edges = self.relations(owner)
+        edges = self.relations(
+            owner,
+            creator_agent_id=creator_agent_id,
+            min_confidence=min_confidence,
+            extraction_method=extraction_method,
+            relation=relation,
+        )
         visited, frontier, selected = set(seeds), set(seeds), {}
         allowed = {id: True for id in seeds}
 
@@ -1114,7 +1247,13 @@ class Store:
                 """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
                 WHERE r.relation <> 'CHUNK_OF' AND r.relation <> 'KEYWORD_OF'
                 RETURN a.id AS source_id, b.id AS target_id, r.relation AS relation,
-                    r.reason AS reason, r.status AS status, r.history AS history""",
+                    r.reason AS reason, r.status AS status, r.history AS history,
+                    r.creator_agent_id AS creator_agent_id,
+                    r.creator_agent_name AS creator_agent_name,
+                    r.confidence AS confidence,
+                    r.evidence_record_ids AS evidence_record_ids,
+                    r.extraction_method AS extraction_method,
+                    r.extraction_version AS extraction_version""",
                 {"owner": owner},
             )
             memory_bytes = sum(payload_bytes(row["n"], RECORD_FIELDS) for row in records)

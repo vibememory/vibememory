@@ -3,7 +3,6 @@ from pathlib import Path
 
 import yaml
 
-
 ROOT = Path(__file__).parents[1]
 PLUGIN = ROOT / "plugins" / "vibe-memory"
 
@@ -22,7 +21,12 @@ def test_chatgpt_work_plugin_package():
     auth = server["extensions"]["com.openai"]["auth"]
     assert auth["type"] == "oauth"
     assert auth["client"] == {"mode": "dcr"}
-    assert set(auth["defaultScopes"]) == {"memory:read", "memory:write", "feature:write"}
+    assert set(auth["defaultScopes"]) == {
+        "memory:read",
+        "memory:write",
+        "feature:write",
+        "vault:read",
+    }
 
     skill = (PLUGIN / "skills" / "vibe-memory" / "SKILL.md").read_text()
     _, frontmatter, body = skill.split("---", 2)

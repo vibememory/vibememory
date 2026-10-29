@@ -54,6 +54,7 @@ from .models import (
     SearchInput,
     VaultCaptureRequest,
     VaultCaptureSubmit,
+    VaultGrantUpdate,
     VaultInput,
 )
 from .oauth import OAuthError, OAuthStore
@@ -137,20 +138,22 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.12.0",
+        version="0.13.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
     auth = HTTPBearer(auto_error=False)
-    mcp_handler = MCPHandler(embedder)
+    mcp_handler = MCPHandler(embedder, vault)
     public_origin = settings.public_origin.rstrip("/")
     oauth_issuer = public_origin
     mcp_resource = public_origin + "/mcp"
-    oauth_scopes = {"memory:read", "memory:write", "feature:write"}
+    oauth_scopes = {"memory:read", "memory:write", "feature:write", "vault:read"}
+    default_oauth_scopes = {"memory:read", "memory:write", "feature:write"}
     scope_labels = {
         "memory:read": "기억·문서·관계 조회",
         "memory:write": "기억·엔티티·문서·관계 저장",
         "feature:write": "기능 요청 제출",
+        "vault:read": "별도로 허용한 Vault 항목의 값 조회 (모델 문맥에 노출될 수 있음)",
     }
     key_hashes = [
         (hashlib.sha256(key.encode()).digest(), owner) for key, owner in settings.api_keys.items()
@@ -264,7 +267,7 @@ def create_app(settings=None, embedder=None):
         return {key: values[-1] for key, values in parsed.items()}
 
     def normalize_scopes(value):
-        scopes = set((value or " ".join(sorted(oauth_scopes))).split())
+        scopes = set((value or " ".join(sorted(default_oauth_scopes))).split())
         if not scopes or not scopes.issubset(oauth_scopes):
             raise OAuthError("invalid_scope", "Requested OAuth scope is not supported")
         return " ".join(sorted(scopes))
@@ -335,7 +338,7 @@ def create_app(settings=None, embedder=None):
         return {
             "WWW-Authenticate": (
                 f'Bearer resource_metadata="{metadata}", '
-                f'scope="{" ".join(sorted(oauth_scopes))}"'
+                f'scope="{" ".join(sorted(default_oauth_scopes))}"'
             ),
             "Cache-Control": "no-store",
         }
@@ -530,6 +533,13 @@ def create_app(settings=None, embedder=None):
         )
         client_name = html.escape(params["client"]["client_name"])
         account = html.escape(user["email"])
+        vault_notice = (
+            "Vault 값 조회가 요청되었습니다. 연결 후 콘솔에서 허용한 특정 항목만 "
+            "조회할 수 있지만, 조회한 원문은 MCP 클라이언트와 모델 문맥·기록에 "
+            "들어갈 수 있습니다. Vibe Memory 서버는 외부 API를 실행하지 않습니다."
+            if "vault:read" in params["scope"].split()
+            else "Vault 비밀값은 이 연결에 포함되지 않습니다."
+        )
         redirect = urlsplit(params["redirect_uri"])
         redirect_origin = urlunsplit((redirect.scheme, redirect.netloc, "", "", ""))
         page = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
@@ -553,8 +563,9 @@ src="/assets/favicon.svg" alt="">vibememory</a><p class="eyebrow">CONNECT REMOTE
 수행할 수 있습니다.</p><ul>{permissions}</ul><p class="account">연결 계정 · <strong>{account}</strong></p>
 <form method="post" action="/oauth/authorize">{hidden}<div class="actions"><button class="deny"
 name="decision" value="deny" type="submit">거절</button><button class="approve" name="decision"
-value="approve" type="submit">연결 승인</button></div></form><small>원본 파일 업로드와 Vault 비밀값은
-이 연결에 포함되지 않습니다. 연결은 콘솔에서 언제든 철회할 수 있습니다.</small></main></body></html>"""
+value="approve" type="submit">연결 승인</button></div></form><small>원본 파일 업로드는
+이 연결에 포함되지 않습니다. {html.escape(vault_notice)} 연결과 Vault 항목 권한은 콘솔에서
+언제든 철회할 수 있습니다.</small></main></body></html>"""
         return HTMLResponse(
             page,
             headers={
@@ -652,6 +663,36 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def mcp_connections(user=Depends(browser_user)):
         return {"items": oauth.list_connections(user["id"]), "server_url": mcp_resource}
 
+    @app.get("/auth/mcp-connections/{client_id}/vault", tags=["account"])
+    def mcp_vault_grants(client_id: str, user=Depends(browser_user)):
+        try:
+            granted = set(oauth.vault_grants(user["id"], client_id))
+        except OAuthError:
+            raise HTTPException(404, "MCP 연결을 찾을 수 없습니다.") from None
+        return {
+            "client_id": client_id,
+            "items": [
+                {**item, "granted": item["name"] in granted}
+                for item in vault.list(user["id"])
+            ],
+        }
+
+    @app.put("/auth/mcp-connections/{client_id}/vault", tags=["account"])
+    def update_mcp_vault_grants(
+        client_id: str,
+        data: VaultGrantUpdate,
+        user=Depends(browser_user),
+    ):
+        available = {item["name"] for item in vault.list(user["id"])}
+        if not set(data.names).issubset(available):
+            raise HTTPException(422, "존재하지 않는 Vault 항목은 허용할 수 없습니다.")
+        try:
+            names = oauth.replace_vault_grants(user["id"], client_id, data.names)
+        except OAuthError as error:
+            status = 422 if error.code == "invalid_scope" else 404
+            raise HTTPException(status, error.description) from None
+        return {"client_id": client_id, "names": names}
+
     @app.delete("/auth/mcp-connections/{client_id}", status_code=204, tags=["account"])
     def revoke_mcp_connection(
         client_id: str, user=Depends(browser_user), db=Depends(store)
@@ -673,6 +714,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             )
         principal["agent_id"] = "oauth:" + principal["client_id"]
         principal["agent_name"] = principal["client_name"]
+        try:
+            principal["vault_names"] = oauth.vault_grants(
+                principal["user_id"], principal["client_id"]
+            )
+        except OAuthError:
+            principal["vault_names"] = []
         request.app.state.store.register_agent(
             principal["user_id"], principal["agent_id"], principal["agent_name"], "oauth"
         )
@@ -803,6 +850,13 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.get("/v1/vault", tags=["vault"])
     def vault_entries(user=Depends(vault_user)):
         return {"items": vault.list(user)}
+
+    @app.get("/v1/vault-access-audit", tags=["vault"])
+    def vault_access_audit(
+        limit: int = Query(default=100, ge=1, le=500),
+        user=Depends(browser_user),
+    ):
+        return {"items": vault.access_audit(user["id"], limit), "limit": limit}
 
     @app.get("/v1/vault/{name}", tags=["vault"])
     def read_vault_entry(
@@ -1154,6 +1208,40 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             ),
         }
 
+    @app.get("/v1/admin/users", tags=["admin"])
+    def admin_users(
+        q: str = Query(default="", max_length=200),
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        _admin=Depends(admin_user),
+        db=Depends(store),
+    ):
+        page = accounts.admin_users(q, limit, offset)
+        items = []
+        for account in page["items"]:
+            usage = db.stats(account["id"])
+            items.append(
+                {
+                    **account,
+                    "is_admin": is_admin(account),
+                    "mcp_connection_count": len(oauth.list_connections(account["id"])),
+                    "vault_entry_count": len(vault.list(account["id"])),
+                    "record_count": sum(
+                        usage[name] for name in ("memory", "document", "entity", "file")
+                    ),
+                    "relation_count": usage["relations"],
+                    "memory_bytes": usage["memory_bytes"],
+                    "file_bytes": usage["file_bytes"],
+                    "storage_bytes": usage["storage_bytes"],
+                }
+            )
+        return {
+            "items": items,
+            "total": page["total"],
+            "limit": limit,
+            "offset": offset,
+        }
+
     @app.get("/v1/admin/feature-requests", tags=["admin"])
     def admin_feature_requests(
         status: Literal[
@@ -1295,19 +1383,42 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         remove_record(db, user, id)
 
     @app.post("/v1/relations", status_code=201, tags=["graph"])
-    def add_relation(data: RelationInput, user=Depends(owner), db=Depends(store)):
+    def add_relation(
+        data: RelationInput,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
         try:
-            return db.link(user, data)
+            return db.link(
+                user,
+                data,
+                request.state.agent_id,
+                request.state.agent_name,
+            )
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
 
     @app.get("/v1/relations", tags=["graph"])
     def relations(
         status: Literal["active", "retracted", "all"] = "active",
+        creator_agent_id: str = Query(default="", max_length=200),
+        min_confidence: float | None = Query(default=None, ge=0, le=1),
+        extraction_method: str = Query(default="", max_length=100),
+        relation: str = Query(default="", max_length=80, pattern=r"^$|^[A-Z][A-Z0-9_]*$"),
         user=Depends(owner),
         db=Depends(store),
     ):
-        return {"items": db.relations(user, status)}
+        return {
+            "items": db.relations(
+                user,
+                status,
+                creator_agent_id,
+                min_confidence,
+                extraction_method,
+                relation,
+            )
+        }
 
     @app.patch("/v1/relations/{id}", tags=["graph"])
     def update_relation(id: str, data: RelationUpdate, user=Depends(owner), db=Depends(store)):
@@ -1319,6 +1430,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         depth: int = Query(default=1, ge=0, le=2),
         include_untrusted: bool = False,
         include_quarantined: bool = False,
+        creator_agent_id: str = Query(default="", max_length=200),
+        min_confidence: float | None = Query(default=None, ge=0, le=1),
+        extraction_method: str = Query(default="", max_length=100),
+        relation: str = Query(default="", max_length=80, pattern=r"^$|^[A-Z][A-Z0-9_]*$"),
         user=Depends(owner),
         db=Depends(store),
     ):
@@ -1326,7 +1441,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             raise HTTPException(422, "include_quarantined requires include_untrusted")
         seed = db.get(user, id)
         result = db.neighborhood(
-            user, [id], depth, include_untrusted, include_quarantined
+            user,
+            [id],
+            depth,
+            include_untrusted,
+            include_quarantined,
+            creator_agent_id,
+            min_confidence,
+            extraction_method,
+            relation,
         )
         result["nodes"].insert(0, seed)
         return result

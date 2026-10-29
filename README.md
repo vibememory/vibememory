@@ -81,7 +81,7 @@ Add your deployment's public MCP URL as a custom MCP server or custom connector:
 https://memory.example.com/mcp
 ```
 
-The client discovers OAuth metadata, dynamically registers as a public client, and redirects the user to Vibe Memory for login and explicit consent. Authorization code + PKCE tokens are user-scoped, stored only as hashes, refresh-token rotation is enabled, and connections can be revoked from **Console → Agent connections**. The MCP tool set supports keyword search, record/graph/event reads, persistent same-account agent messages, agent-authored memory/entity/document/relation writes, and feature requests. It deliberately excludes Vault, deletion, and base64 file uploads; original files keep using the raw byte-stream endpoint.
+The client discovers OAuth metadata, dynamically registers as a public client, and redirects the user to Vibe Memory for login and explicit consent. Authorization code + PKCE tokens are user-scoped, stored only as hashes, refresh-token rotation is enabled, and connections can be revoked from **Console → Agent connections**. The MCP tool set supports keyword search, record/graph/event reads, persistent same-account agent messages, agent-authored memory/entity/document/relation writes, feature requests, and optional Vault reads. Vault requires both the sensitive `vault:read` scope and explicit per-entry browser grants; returned values enter client/model context, are audited, and are never used by the server to execute external calls. MCP deliberately excludes deletion and base64 file uploads; original files keep using the raw byte-stream endpoint.
 
 ## Run from source
 

@@ -196,6 +196,27 @@ class AuthStore:
             ).fetchone()
         return dict(row) if row else None
 
+    def admin_users(self, query="", limit=50, offset=0):
+        needle = f"%{query.strip().casefold()}%"
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            total = db.execute(
+                """SELECT count(*) FROM users
+                WHERE ?='' OR lower(email) LIKE ? OR lower(name) LIKE ?""",
+                (query.strip(), needle, needle),
+            ).fetchone()[0]
+            rows = db.execute(
+                """SELECT u.id,u.email,u.name,u.created_at,
+                (SELECT count(*) FROM api_keys k WHERE k.user_id=u.id) AS api_key_count,
+                (SELECT count(*) FROM sessions s
+                 WHERE s.user_id=u.id AND s.expires_at>?) AS active_session_count
+                FROM users u
+                WHERE ?='' OR lower(u.email) LIKE ? OR lower(u.name) LIKE ?
+                ORDER BY u.created_at DESC,u.id LIMIT ? OFFSET ?""",
+                (now, query.strip(), needle, needle, limit, offset),
+            ).fetchall()
+        return {"items": [dict(row) for row in rows], "total": total}
+
     def logout(self, token):
         with self.connection() as db:
             db.execute("DELETE FROM sessions WHERE hash=?", (digest(token or ""),))

@@ -457,3 +457,116 @@ def test_mcp_read_only_scope_and_oauth_validation(settings):
             },
         )
         assert replay.status_code == 400
+
+
+def test_mcp_vault_requires_scope_and_per_entry_grant(settings):
+    settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
+    with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
+        client.headers["Origin"] = ORIGIN
+        signup(client, "vault-mcp@example.invalid")
+        assert client.put(
+            "/v1/vault/MOLTBOOK_API_KEY",
+            json={"value": "moltbook-secret", "description": "Moltbook posting"},
+        ).status_code == 200
+        assert client.put(
+            "/v1/vault/OTHER_TOKEN",
+            json={"value": "other-secret", "description": "Not granted"},
+        ).status_code == 200
+
+        registration = register(client, "Vault client")
+        code, verifier = authorize(client, registration, "memory:read vault:read")
+        credentials = token(client, registration, code, verifier)
+        tools = mcp(client, credentials["access_token"], 1, "tools/list")["result"]["tools"]
+        assert {"vault_list", "vault_get"}.issubset({tool["name"] for tool in tools})
+
+        empty = mcp(
+            client,
+            credentials["access_token"],
+            2,
+            "tools/call",
+            {"name": "vault_list", "arguments": {}},
+        )["result"]["structuredContent"]
+        assert empty == {"items": []}
+        denied = mcp(
+            client,
+            credentials["access_token"],
+            3,
+            "tools/call",
+            {"name": "vault_get", "arguments": {"name": "MOLTBOOK_API_KEY"}},
+        )["result"]
+        assert denied["isError"] is True
+
+        grants_path = f"/auth/mcp-connections/{registration['client_id']}/vault"
+        available = client.get(grants_path).json()["items"]
+        assert {item["name"] for item in available} == {"MOLTBOOK_API_KEY", "OTHER_TOKEN"}
+        assert all("value" not in item for item in available)
+        granted = client.put(grants_path, json={"names": ["MOLTBOOK_API_KEY"]})
+        assert granted.status_code == 200, granted.text
+
+        listed = mcp(
+            client,
+            credentials["access_token"],
+            4,
+            "tools/call",
+            {"name": "vault_list", "arguments": {}},
+        )["result"]["structuredContent"]["items"]
+        assert [item["name"] for item in listed] == ["MOLTBOOK_API_KEY"]
+        assert "value" not in listed[0]
+        secret = mcp(
+            client,
+            credentials["access_token"],
+            5,
+            "tools/call",
+            {"name": "vault_get", "arguments": {"name": "MOLTBOOK_API_KEY"}},
+        )["result"]["structuredContent"]["secret"]
+        assert secret == {"name": "MOLTBOOK_API_KEY", "value": "moltbook-secret"}
+        denied_other = mcp(
+            client,
+            credentials["access_token"],
+            6,
+            "tools/call",
+            {"name": "vault_get", "arguments": {"name": "OTHER_TOKEN"}},
+        )["result"]
+        assert denied_other["isError"] is True
+
+        audit = client.get("/v1/vault-access-audit").json()["items"]
+        assert {item["outcome"] for item in audit} >= {
+            "success",
+            "denied_grant",
+            "list_success",
+        }
+        assert all("moltbook-secret" not in str(item) for item in audit)
+
+        assert client.put(grants_path, json={"names": []}).status_code == 200
+        revoked = mcp(
+            client,
+            credentials["access_token"],
+            7,
+            "tools/call",
+            {"name": "vault_get", "arguments": {"name": "MOLTBOOK_API_KEY"}},
+        )["result"]
+        assert revoked["isError"] is True
+
+        client.post("/auth/logout")
+        signup(client, "vault-other@example.invalid")
+        assert client.get(grants_path).status_code == 404
+
+
+def test_mcp_vault_grants_reject_connection_without_scope(settings):
+    settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
+    with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
+        client.headers["Origin"] = ORIGIN
+        signup(client, "vault-scope@example.invalid")
+        assert client.put(
+            "/v1/vault/API_TOKEN", json={"value": "secret", "description": "API"}
+        ).status_code == 200
+        registration = register(client, "Read only")
+        code, verifier = authorize(client, registration, "memory:read")
+        credentials = token(client, registration, code, verifier)
+        tools = mcp(client, credentials["access_token"], 1, "tools/list")["result"]["tools"]
+        assert "vault_get" not in {tool["name"] for tool in tools}
+        response = client.put(
+            f"/auth/mcp-connections/{registration['client_id']}/vault",
+            json={"names": ["API_TOKEN"]},
+        )
+        assert response.status_code == 422

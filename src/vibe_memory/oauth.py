@@ -87,6 +87,13 @@ class OAuthStore:
                     last_used_at INTEGER NOT NULL,
                     PRIMARY KEY(client_id, user_id)
                 );
+                CREATE TABLE IF NOT EXISTS oauth_vault_grants (
+                    client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    PRIMARY KEY(client_id, user_id, name)
+                );
                 """
             )
         path.chmod(0o600)
@@ -124,6 +131,14 @@ class OAuthStore:
                 AND r.user_id=oauth_connections.user_id AND r.expires_at>?
             )""",
             (now, now),
+        )
+        db.execute(
+            """DELETE FROM oauth_vault_grants
+            WHERE NOT EXISTS (
+                SELECT 1 FROM oauth_connections x
+                WHERE x.client_id=oauth_vault_grants.client_id
+                AND x.user_id=oauth_vault_grants.user_id
+            )"""
         )
 
     def register_client(self, client_name, redirect_uris):
@@ -343,8 +358,52 @@ class OAuthStore:
             for row in rows
         ]
 
+    def vault_grants(self, user_id, client_id):
+        with self.connection() as db:
+            connection = db.execute(
+                """SELECT 1 FROM oauth_connections
+                WHERE user_id=? AND client_id=?""",
+                (user_id, client_id),
+            ).fetchone()
+            if not connection:
+                raise OAuthError("not_found", "MCP connection not found")
+            rows = db.execute(
+                """SELECT name FROM oauth_vault_grants
+                WHERE user_id=? AND client_id=? ORDER BY name""",
+                (user_id, client_id),
+            ).fetchall()
+        return [row["name"] for row in rows]
+
+    def replace_vault_grants(self, user_id, client_id, names):
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            connection = db.execute(
+                """SELECT scope FROM oauth_connections
+                WHERE user_id=? AND client_id=?""",
+                (user_id, client_id),
+            ).fetchone()
+            if not connection:
+                raise OAuthError("not_found", "MCP connection not found")
+            if "vault:read" not in set(connection["scope"].split()):
+                raise OAuthError("invalid_scope", "MCP connection does not have vault:read")
+            db.execute(
+                "DELETE FROM oauth_vault_grants WHERE user_id=? AND client_id=?",
+                (user_id, client_id),
+            )
+            for name in names:
+                db.execute(
+                    """INSERT INTO oauth_vault_grants(client_id,user_id,name,created_at)
+                    VALUES(?,?,?,?)""",
+                    (client_id, user_id, name, now),
+                )
+        return list(names)
+
     def revoke_connection(self, user_id, client_id):
         with self.connection() as db:
+            db.execute(
+                "DELETE FROM oauth_vault_grants WHERE user_id=? AND client_id=?",
+                (user_id, client_id),
+            )
             result = db.execute(
                 "DELETE FROM oauth_connections WHERE user_id=? AND client_id=?",
                 (user_id, client_id),

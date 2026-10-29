@@ -108,6 +108,16 @@ class VaultStore:
                 );
                 CREATE INDEX IF NOT EXISTS vault_captures_owner_idx
                     ON vault_captures(user_id, created_at DESC);
+                CREATE TABLE IF NOT EXISTS vault_access_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    client_id TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    accessed_at INTEGER NOT NULL,
+                    outcome TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS vault_access_audit_owner_idx
+                    ON vault_access_audit(user_id, accessed_at DESC, id DESC);
                 """
             )
         path.chmod(0o600)
@@ -205,6 +215,25 @@ class VaultStore:
                 (utc_epoch_seconds(), user_id, name),
             )
         return {"name": name, "value": value}
+
+    def audit_access(self, user_id: str, client_id: str, name: str, outcome: str):
+        with self.connection() as db:
+            db.execute(
+                """INSERT INTO vault_access_audit(
+                    user_id,client_id,name,accessed_at,outcome
+                ) VALUES(?,?,?,?,?)""",
+                (user_id, client_id, name, utc_epoch_seconds(), outcome),
+            )
+
+    def access_audit(self, user_id: str, limit: int = 100):
+        with self.connection() as db:
+            rows = db.execute(
+                """SELECT client_id,name,accessed_at,outcome
+                FROM vault_access_audit WHERE user_id=?
+                ORDER BY accessed_at DESC,id DESC LIMIT ?""",
+                (user_id, limit),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def delete(self, user_id: str, name: str):
         with self.connection() as db:

@@ -31,7 +31,7 @@ with sync_playwright() as p:
     expect(page.locator('.stat-card')).to_have_count(4)
     assert not context.storage_state()['origins'], 'Secrets must not enter localStorage'
     session = next(cookie for cookie in context.cookies() if cookie['name']=='vm_session')
-    assert session['httpOnly'] and session['secure'] and session['sameSite']=='Lax'
+    assert session['httpOnly'] and session['secure'] == base.startswith('https://') and session['sameSite']=='Lax'
     page.locator('.sidebar [data-view="memories"]').click()
     page.locator('#primary-action').click()
     page.locator('#editor [name="content"]').fill('검증용 기억: Python을 선호한다')

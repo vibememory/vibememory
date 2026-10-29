@@ -37,7 +37,8 @@ Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
 2. 설치된 vibe-memory 디렉터리에서 호환 설치기를 실행해 서비스 매니페스트가 지정한 현재 플랫폼용 배포 바이너리를 내려받고 SHA-256을 검증해. 작업 중 Rust를 직접 컴파일하지 마. Linux/macOS에서는 MEMORY_URL="${base}" python3 scripts/memory.py sync를 사용하고, Windows에서는 현재 셸 문법에 맞게 MEMORY_URL을 설정한 뒤 py scripts\\memory.py sync를 사용해.
 3. 브라우저 승인 연결을 login --no-browser --name "현재 에이전트 이름"으로 시작하고 서비스 URL은 ${base}로 지정해.
 4. 출력된 승인 URL과 확인 코드를 클릭 가능한 링크로 나에게 보여줘. 비밀번호나 API 키를 요청하거나 채팅에 노출하지 말고, 연결 프로세스를 유지한 채 내가 웹에서 승인할 때까지 기다려.
-5. 승인 후 status로 연결을 확인해. 이후 작업부터 SKILL.md 지침에 따라 Vibe Memory를 적극 사용하고, API 요청을 직접 조립하지 말고 Rust CLI를 사용해.`;
+5. 승인 후 status로 연결을 확인해. 이후 작업부터 SKILL.md 지침에 따라 Vibe Memory를 적극 사용하고, API 요청을 직접 조립하지 말고 Rust CLI를 사용해.
+6. 각 대화에서 관련 프로젝트 기억을 먼저 조회하고, 결정·수정·검증 완료·블로커·다음 작업이 바뀌면 전체 대화 대신 짧은 session checkpoint를 저장해. 인계, 컨텍스트 압축 또는 종료 전에는 아직 저장하지 않은 변경분을 체크포인트로 남기고, 이전 체크포인트와 달라진 내용이 없으면 중복 저장하지 마.`;
 }
 async function copyText(value) {
   if (navigator.clipboard?.writeText) {

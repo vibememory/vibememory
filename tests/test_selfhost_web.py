@@ -21,6 +21,9 @@ def test_console_and_api_share_one_origin(settings):
             assert response.status_code == 200
             assert phrase in response.text
         assert client.get("/assets/console.js").status_code == 200
+        console = client.get("/console").text
+        assert "topbar-search" in console
+        assert "sidebar-backdrop" in console
         assert client.get("/assets/brands/openclaw.svg").status_code == 200
         assert client.get("/v1/records").status_code == 401
         assert client.get("/.env").status_code == 404

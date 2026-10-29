@@ -27,12 +27,16 @@ with sync_playwright() as p:
     page.locator('#password').fill(password)
     page.locator('#auth-submit').click()
     page.wait_for_url('**/console',timeout=30000)
-    expect(page.locator('#view-title')).to_have_text('나의 기억, 한눈에.')
+    expect(page.locator('#view-title')).to_have_text('대시보드')
+    expect(page.locator('.welcome-panel')).to_be_visible()
+    expect(page.locator('.setup-panel')).to_be_visible()
     expect(page.locator('.stat-card')).to_have_count(4)
+    page.locator('.topbar-search').click()
+    expect(page.locator('#view-title')).to_have_text('기억')
+    expect(page.locator('#search-records [name="keywords"]')).to_be_focused()
     assert not context.storage_state()['origins'], 'Secrets must not enter localStorage'
     session = next(cookie for cookie in context.cookies() if cookie['name']=='vm_session')
     assert session['httpOnly'] and session['secure'] == base.startswith('https://') and session['sameSite']=='Lax'
-    page.locator('.sidebar [data-view="memories"]').click()
     page.locator('#primary-action').click()
     page.locator('#editor [name="content"]').fill('검증용 기억: Python을 선호한다')
     page.locator('#editor [name="keywords"]').fill('Python, 개발 언어')
@@ -91,6 +95,7 @@ with sync_playwright() as p:
     # Screenshot real populated console, with no API key left in the DOM.
     page.locator('.sidebar [data-view="overview"]').click()
     expect(page.locator('.stat-card')).to_have_count(4)
+    expect(page.locator('.agent-brand-grid img')).to_have_count(4)
     assert not page.locator('#detail-content').inner_text()
     page.evaluate("document.querySelector('#toast').classList.remove('visible')")
     page.screenshot(path=str(artifacts/'desktop.png'),full_page=True,animations='disabled')
@@ -98,7 +103,7 @@ with sync_playwright() as p:
         page.set_viewport_size({'width':width,'height':900})
         assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth'),width
         if width==390:
-            expect(page.locator('.sidebar')).to_have_css('transform', 'matrix(1, 0, 0, 1, -238, 0)')
+            expect(page.locator('.sidebar')).to_have_css('transform', 'matrix(1, 0, 0, 1, -250, 0)')
             page.screenshot(path=str(artifacts/'mobile.png'),full_page=True,animations='disabled')
             page.locator('#menu-toggle').click()
             expect(page.locator('.sidebar')).to_have_class('sidebar open')
@@ -113,13 +118,14 @@ with sync_playwright() as p:
     page.locator('[data-action="revoke"]').click()
     expect(page.locator('[data-action="revoke"]')).to_have_count(0)
     assert agent.get('/v1/records').status == 401
+    page.locator('#account-menu').click()
     page.locator('#logout').click()
     page.wait_for_url('**/login')
     assert context.request.get(base+'/auth/me').status == 401
     page.locator('#email').fill(email);page.locator('#password').fill(password)
     page.locator('#auth-submit').click();page.wait_for_url('**/console')
     expect(page.locator('#user-name')).to_have_text('콘솔 검증')
-    page.locator('#logout').click();page.wait_for_url('**/login')
+    page.locator('#account-menu').click();page.locator('#logout').click();page.wait_for_url('**/login')
     page.screenshot(path=str(artifacts/'login.png'),full_page=True)
     assert not errors,errors
     agent.dispose();context.close();browser.close()

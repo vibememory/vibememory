@@ -129,3 +129,22 @@ separate private cursor path for each service/account/workspace. The skill direc
 agents to inspect background output at work checkpoints; SSE cannot wake a stopped
 agent or inject context into an unsupported host. Network interruptions retry
 within the configured duration; HTTP rejection stops the listener.
+
+
+### Browser-approved agent login
+
+`POST /auth/device/start` with `{ "name": "Agent name" }` creates a 5-minute
+request, returning a private `device_code`, public `user_code`, approval URL and
+poll interval. The agent must keep the private code secret and show the approval
+link and public confirmation code to the user. Start requests are rate-limited.
+The authenticated browser reads `GET /auth/device?code=...` and explicitly sends
+`POST /auth/device/approve` with `{ "user_code": "...", "approved": true }`.
+Cookie authentication and same-origin checks protect approval; login redirects
+only to a validated local `/connect?code=...` path.
+
+The initiating CLI polls `POST /auth/device/poll` with `{ "device_code": "..." }`
+at the returned interval. Pending returns `{ "state": "pending" }`. Approval
+allows a single atomic exchange for `{ "state": "connected", "key": "...",
+"key_id": "..." }`; the browser never receives this key. Denial returns 403,
+expiry or a consumed request 410, excessive polling 429. Only hashed codes and
+keys are stored. The resulting key is a normal revocable full-access agent key.

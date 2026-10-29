@@ -1,5 +1,7 @@
 'use strict';
 let mode = 'login';
+const requestedNext = new URLSearchParams(location.search).get('next') || '';
+const destination = /^\/connect\?code=[A-Fa-f0-9]{10}$/.test(requestedNext) ? requestedNext : '/console';
 const form = document.querySelector('#auth-form');
 const errorBox = document.querySelector('#auth-error');
 function selectMode(next) {
@@ -43,11 +45,11 @@ form.addEventListener('submit', async event => {
     const data = await response.json();
     if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : '입력한 내용을 다시 확인해주세요.');
     document.querySelector('#password').value = '';
-    window.location.replace('/console');
+    window.location.replace(destination);
   } catch (error) {
     errorBox.textContent = error instanceof TypeError ? '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.' : error.message;
     errorBox.hidden = false;
     button.disabled = false; button.textContent = mode === 'signup' ? '계정 만들고 시작하기 ↗' : '로그인 ↗';
   }
 });
-fetch('/auth/me').then(response => { if (response.ok) window.location.replace('/console'); }).catch(() => {});
+fetch('/auth/me').then(response => { if (response.ok) window.location.replace(destination); }).catch(() => {});

@@ -37,6 +37,7 @@ def mount_web(app, configured=None):
     for route, filename in [
         ("/", "index.html"),
         ("/login", "login.html"),
+        ("/connect", "connect.html"),
         ("/console", "console.html"),
         ("/guide", "guide.html"),
     ]:

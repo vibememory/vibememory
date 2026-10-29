@@ -72,6 +72,10 @@ class AuthStore:
                     id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, prefix TEXT NOT NULL,
                     created_at INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS device_logins (
+                    device_hash TEXT PRIMARY KEY, user_hash TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL,
+                    user_id TEXT REFERENCES users(id) ON DELETE CASCADE, polled_at INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS auth_attempts (
                     key TEXT PRIMARY KEY, count INTEGER NOT NULL, resets_at INTEGER NOT NULL);
             """)
@@ -203,6 +207,60 @@ class AuthStore:
                 ),
             )
         return {**record, "key": token}
+
+    def start_device(self, name):
+        device = secrets.token_urlsafe(36)
+        code = secrets.token_hex(5).upper()
+        expires = int(time.time()) + 300
+        with self.connection() as db:
+            db.execute("DELETE FROM device_logins WHERE expires_at <= ?", (int(time.time()),))
+            db.execute("INSERT INTO device_logins VALUES(?,?,?,?,?,?,?)",
+                       (digest(device), digest(code), name, expires, "pending", None, 0))
+        return {"device_code": device, "user_code": code, "expires_in": 300, "interval": 3}
+
+    def device_info(self, code):
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT name,expires_at,state FROM device_logins WHERE user_hash=?",
+                (digest(code.upper()),),
+            ).fetchone()
+        if not row or row["expires_at"] <= int(time.time()):
+            raise HTTPException(410, "연결 요청이 만료되었거나 존재하지 않습니다.")
+        return dict(row)
+
+    def approve_device(self, user_id, code, approved):
+        with self.connection() as db:
+            result = db.execute(
+                """UPDATE device_logins SET state=?,user_id=? WHERE user_hash=?
+                AND state='pending' AND expires_at>?""",
+                ("approved" if approved else "denied", user_id, digest(code.upper()), int(time.time())),
+            )
+            if not result.rowcount:
+                raise HTTPException(410, "이미 처리되었거나 만료된 연결 요청입니다.")
+        return {"state": "approved" if approved else "denied"}
+
+    def poll_device(self, device):
+        now = int(time.time())
+        with self.connection() as db:
+            row = db.execute("SELECT * FROM device_logins WHERE device_hash=?",
+                             (digest(device),)).fetchone()
+            if not row or row["expires_at"] <= now or row["state"] == "used":
+                raise HTTPException(410, "Connection request expired or already consumed")
+            if row["state"] == "denied":
+                raise HTTPException(403, "Connection request denied")
+            if now - row["polled_at"] < 2:
+                raise HTTPException(429, "Poll no more than once every 3 seconds")
+            db.execute("UPDATE device_logins SET polled_at=? WHERE device_hash=?", (now, digest(device)))
+            if row["state"] == "pending":
+                return {"state": "pending"}
+            if db.execute("SELECT count(*) FROM api_keys WHERE user_id=?", (row["user_id"],)).fetchone()[0] >= 30:
+                raise HTTPException(422, "Too many agent keys; revoke an unused key in the console")
+            token = "vm_" + secrets.token_urlsafe(36)
+            key_id = str(uuid4())
+            db.execute("INSERT INTO api_keys VALUES(?,?,?,?,?,?)",
+                       (key_id, row["user_id"], digest(token), row["name"], token[:10] + "…", now))
+            db.execute("UPDATE device_logins SET state='used' WHERE device_hash=?", (digest(device),))
+        return {"state": "connected", "key": token, "key_id": key_id}
 
     def revoke_key(self, user_id, id):
         with self.connection() as db:

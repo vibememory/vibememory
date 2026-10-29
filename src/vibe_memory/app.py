@@ -11,6 +11,7 @@ import anyio
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import COOKIE, SESSION_SECONDS, AuthStore, Credentials, KeyInput, Signup
 from .config import Settings
@@ -31,6 +32,17 @@ from .store import Conflict, DuplicateRequestConflict, FileInUse, NotFound, Stor
 from .web import mount_web
 
 log = logging.getLogger(__name__)
+
+
+class DevicePoll(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    device_code: str = Field(min_length=40, max_length=100)
+
+
+class DeviceApproval(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_code: str = Field(pattern=r"^[A-Fa-f0-9]{10}$")
+    approved: bool
 
 
 def create_app(settings=None, embedder=None):
@@ -112,6 +124,27 @@ def create_app(settings=None, embedder=None):
             path="/",
         )
         return response
+
+    @app.post("/auth/device/start", tags=["account"])
+    def start_device(data: KeyInput, request: Request):
+        accounts.throttle("device:" + (request.client.host if request.client else "unknown"), 20)
+        result = accounts.start_device(data.name)
+        result["verification_uri_complete"] = (
+            settings.public_origin.rstrip("/") + "/connect?code=" + result["user_code"]
+        )
+        return result
+
+    @app.post("/auth/device/poll", tags=["account"])
+    def poll_device(data: DevicePoll):
+        return accounts.poll_device(data.device_code)
+
+    @app.get("/auth/device", tags=["account"])
+    def device_info(code: str = Query(pattern=r"^[A-Fa-f0-9]{10}$"), user=Depends(browser_user)):
+        return accounts.device_info(code)
+
+    @app.post("/auth/device/approve", tags=["account"])
+    def approve_device(data: DeviceApproval, user=Depends(browser_user)):
+        return accounts.approve_device(user["id"], data.user_code, data.approved)
 
     @app.post("/auth/signup", tags=["account"])
     def signup(data: Signup, request: Request):

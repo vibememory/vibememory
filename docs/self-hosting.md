@@ -143,19 +143,22 @@ After editing `skills/vibe-memory`, run `python3 landing/scripts/package_skill.p
 and commit the generated web files with the source. CI rejects stale artifacts.
 `npm --prefix landing run deploy` regenerates these artifacts before publishing.
 
-### Agent CLI authentication
+### Browser approval for agent authentication
 
-The skill ZIP bundles a standalone standard-library Python CLI. Run
-`python3 scripts/memory.py configure` in your interactive terminal, enter this
-installation's origin and paste the API key into the hidden prompt. It verifies
-`/v1/me` before saving credentials outside the skill directory. Run `status` to
-verify access, `sync` to refresh the skill, and `logout` to remove local settings.
-On Windows use `py scripts/memory.py` if appropriate. Server dependencies and
-embedding models are not needed on the agent machine.
+The agent runs `python3 scripts/memory.py login --no-browser --url https://YOUR_HOST
+--name "Agent name"` in a background tool process and presents the generated link
+and code to the user. The user signs in on the web, returns to the approval page,
+and explicitly approves. The waiting CLI receives and saves a one-time agent key;
+users do not copy keys or run terminal commands. On a local machine `login` can
+open a browser automatically. The authorization request expires after 5 minutes.
+Only the CLI holds the private polling code; the browser URL contains a separate
+public confirmation code. Denial/expiry stops login. No arbitrary callback URLs
+are accepted. This polling flow also works when the agent is on a remote host.
 
-Configuration is plaintext JSON at `$XDG_CONFIG_HOME/vibe-memory/client.json`
+Client configuration is plaintext JSON at `$XDG_CONFIG_HOME/vibe-memory/client.json`
 (default `~/.config/vibe-memory/client.json`) or `%APPDATA%/vibe-memory/client.json`
-on Windows; Unix files have mode 0600. Use environment-injected credentials if
-local persistence is unsuitable. Environment variables override saved settings;
-a saved key is never sent to a different origin selected by `MEMORY_URL` alone.
-Local logout does not revoke a server key or remove environment variables.
+on Windows; Unix files have mode 0600. Run `status` to verify and `sync` to update
+the skill. Environment variables override saved settings; a saved key is never
+sent to another origin selected by `MEMORY_URL` alone. `logout` removes local
+settings; revoke keys in the console to terminate server access. `configure` is
+an optional manual-key fallback, not required for browser approval.

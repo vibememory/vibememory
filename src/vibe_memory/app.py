@@ -37,6 +37,8 @@ from .embeddings import Embedder
 from .files import FileStorage
 from .mcp import LATEST_PROTOCOL, MCPHandler
 from .models import (
+    AgentMessageAck,
+    AgentMessageInput,
     DocumentInput,
     EntityInput,
     FeatureRequestInput,
@@ -123,7 +125,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.9.0",
+        version="0.10.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -141,6 +143,13 @@ def create_app(settings=None, embedder=None):
     key_hashes = [
         (hashlib.sha256(key.encode()).digest(), owner) for key, owner in settings.api_keys.items()
     ]
+
+    def bind_agent(request, user, agent_id, name, transport):
+        request.state.agent_id = agent_id
+        request.state.agent_name = name
+        request.state.agent_transport = transport
+        request.app.state.store.register_agent(user, agent_id, name, transport)
+        return user
 
     def check_origin(request):
         if request.headers.get("origin") != settings.public_origin.rstrip("/"):
@@ -162,13 +171,19 @@ def create_app(settings=None, embedder=None):
             for expected, user in key_hashes:
                 if hmac.compare_digest(expected, supplied):
                     request.state.auth_kind = "legacy-key"
-                    return user
+                    return bind_agent(
+                        request, user, "legacy:" + expected.hex()[:24],
+                        "Legacy API agent", "legacy-key"
+                    )
             principal = accounts.principal_for_key(credentials.credentials)
             if principal:
                 request.state.vault_access = principal["vault_access"]
                 request.state.auth_kind = "agent-key"
                 request.state.key_id = principal["key_id"]
-                return principal["user_id"]
+                return bind_agent(
+                    request, principal["user_id"], "key:" + principal["key_id"],
+                    principal["name"], "api-key"
+                )
         elif not request.headers.get("Authorization"):
             session_user = accounts.user_for_session(request.cookies.get(COOKIE))
             if session_user:
@@ -176,7 +191,10 @@ def create_app(settings=None, embedder=None):
                     check_origin(request)
                 request.state.vault_access = True
                 request.state.auth_kind = "browser-session"
-                return session_user["id"]
+                return bind_agent(
+                    request, session_user["id"], "browser:" + session_user["id"],
+                    session_user["name"], "browser"
+                )
         raise HTTPException(
             401, "Invalid or missing API key", headers={"WWW-Authenticate": "Bearer"}
         )
@@ -397,8 +415,9 @@ def create_app(settings=None, embedder=None):
         return accounts.set_key_vault_access(user["id"], id, data.vault_access)
 
     @app.delete("/auth/api-keys/{id}", status_code=204, tags=["account"])
-    def revoke_api_key(id: str, user=Depends(browser_user)):
+    def revoke_api_key(id: str, user=Depends(browser_user), db=Depends(store)):
         accounts.revoke_key(user["id"], id)
+        db.deactivate_agent(user["id"], "key:" + id)
 
     @app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
     @app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
@@ -614,9 +633,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return {"items": oauth.list_connections(user["id"]), "server_url": mcp_resource}
 
     @app.delete("/auth/mcp-connections/{client_id}", status_code=204, tags=["account"])
-    def revoke_mcp_connection(client_id: str, user=Depends(browser_user)):
+    def revoke_mcp_connection(
+        client_id: str, user=Depends(browser_user), db=Depends(store)
+    ):
         try:
             oauth.revoke_connection(user["id"], client_id)
+            db.deactivate_agent(user["id"], "oauth:" + client_id)
         except OAuthError:
             raise HTTPException(404, "MCP 연결을 찾을 수 없습니다.") from None
 
@@ -629,6 +651,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 status_code=401,
                 headers=mcp_challenge(),
             )
+        principal["agent_id"] = "oauth:" + principal["client_id"]
+        principal["agent_name"] = principal["client_name"]
+        request.app.state.store.register_agent(
+            principal["user_id"], principal["agent_id"], principal["agent_name"], "oauth"
+        )
         body = await request.body()
         if len(body) > 1024 * 1024:
             return JSONResponse(
@@ -835,7 +862,145 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             "user_id": user,
             "embedding_model": embedder.model_name,
             "vault_access": bool(request.state.vault_access),
+            "agent": {
+                "id": request.state.agent_id,
+                "name": request.state.agent_name,
+                "transport": request.state.agent_transport,
+            },
         }
+
+    @app.get("/v1/agents", tags=["agent messages"])
+    def agents(request: Request, user=Depends(owner), db=Depends(store)):
+        return {
+            "self": {
+                "id": request.state.agent_id,
+                "name": request.state.agent_name,
+                "transport": request.state.agent_transport,
+            },
+            "items": db.list_agents(user),
+        }
+
+    @app.post(
+        "/v1/agent-messages",
+        status_code=201,
+        tags=["agent messages"],
+        responses={
+            200: {"description": "Previously queued message (idempotent retry)"},
+            409: {"description": "Client request ID reused with different content"},
+        },
+    )
+    def send_agent_message(
+        data: AgentMessageInput,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        try:
+            message, created = db.send_message(
+                user, request.state.agent_id, request.state.agent_name, data
+            )
+        except DuplicateRequestConflict:
+            raise HTTPException(
+                409, "client_request_id already used with different content"
+            ) from None
+        return JSONResponse(
+            status_code=201 if created else 200,
+            content=message,
+            headers={"Location": f"/v1/agent-messages/{message['id']}"},
+        )
+
+    @app.get("/v1/agent-messages/inbox", tags=["agent messages"])
+    def agent_message_inbox(
+        request: Request,
+        after: int = Query(default=0, ge=0, le=9223372036854775807),
+        limit: int = Query(default=50, ge=1, le=100),
+        status: Literal["queued", "delivered", "read", "acked"] | None = None,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        items = db.inbox_messages(user, request.state.agent_id, after, limit, status)
+        cursor = items[-1]["sequence"] if items else after
+        return {"items": items, "cursor": cursor, "limit": limit}
+
+    @app.get("/v1/agent-messages/sent", tags=["agent messages"])
+    def agent_message_sent(
+        request: Request,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        return {
+            "items": db.sent_messages(user, request.state.agent_id, limit, offset),
+            "limit": limit,
+            "offset": offset,
+        }
+
+    @app.get("/v1/agent-messages/stream", tags=["agent messages"])
+    async def agent_message_stream(
+        request: Request,
+        after: int = Query(default=0, ge=0, le=9223372036854775807),
+        seconds: int = Query(default=25, ge=1, le=60),
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        last_id = request.headers.get("Last-Event-ID")
+        if last_id is not None:
+            try:
+                after = int(last_id)
+                if not 0 <= after <= 9223372036854775807:
+                    raise ValueError()
+            except ValueError:
+                raise HTTPException(422, "Last-Event-ID must be a nonnegative integer") from None
+        recipient = request.state.agent_id
+
+        async def stream_messages():
+            cursor = after
+            deadline = time.monotonic() + seconds
+            heartbeat = 0
+            yield "retry: 1000\n\n"
+            while time.monotonic() < deadline:
+                if await request.is_disconnected():
+                    return
+                credentials = await auth(request)
+                try:
+                    current = await anyio.to_thread.run_sync(owner, request, credentials)
+                except HTTPException:
+                    return
+                if current != user or request.state.agent_id != recipient:
+                    return
+                batch = await anyio.to_thread.run_sync(
+                    db.inbox_messages, user, recipient, cursor, 100, None
+                )
+                for message in batch:
+                    cursor = message["sequence"]
+                    payload = json.dumps(message, ensure_ascii=False)
+                    yield f"id: {cursor}\nevent: agent.message\ndata: {payload}\n\n"
+                if time.monotonic() >= heartbeat:
+                    yield ": heartbeat\n\n"
+                    heartbeat = time.monotonic() + 10
+                if not batch:
+                    await asyncio.sleep(0.5)
+
+        return StreamingResponse(
+            stream_messages(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/v1/agent-messages/{id}", tags=["agent messages"])
+    def agent_message(id: str, request: Request, user=Depends(owner), db=Depends(store)):
+        return db.get_message(user, request.state.agent_id, id)
+
+    @app.post("/v1/agent-messages/{id}/ack", tags=["agent messages"])
+    def acknowledge_agent_message(
+        id: str,
+        data: AgentMessageAck,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        return db.ack_message(user, request.state.agent_id, id, data.status)
 
     def vectors_for(keywords):
         try:

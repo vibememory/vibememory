@@ -232,6 +232,12 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "events_poll",
             "feature_requests_list",
             "feature_request_submit",
+            "agents_list",
+            "message_inbox",
+            "message_sent",
+            "message_get",
+            "message_send",
+            "message_ack",
         }.issubset(names)
         assert "vault_get" not in names and "file_upload" not in names
 
@@ -277,6 +283,48 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "kind": "memory",
         }
 
+        agent_data = mcp(
+            client,
+            credentials["access_token"],
+            6,
+            "tools/call",
+            {"name": "agents_list", "arguments": {}},
+        )["result"]["structuredContent"]
+        assert agent_data["self"]["id"].startswith("oauth:")
+        queued = mcp(
+            client,
+            credentials["access_token"],
+            7,
+            "tools/call",
+            {
+                "name": "message_send",
+                "arguments": {
+                    "recipient_agent_id": agent_data["self"]["id"],
+                    "body": "MCP handoff",
+                    "kind": "notification",
+                },
+            },
+        )["result"]["structuredContent"]["message"]
+        inbox = mcp(
+            client,
+            credentials["access_token"],
+            8,
+            "tools/call",
+            {"name": "message_inbox", "arguments": {"after": 0}},
+        )["result"]["structuredContent"]
+        assert inbox["items"][0]["id"] == queued["id"]
+        acknowledged = mcp(
+            client,
+            credentials["access_token"],
+            9,
+            "tools/call",
+            {
+                "name": "message_ack",
+                "arguments": {"id": queued["id"], "status": "acked"},
+            },
+        )["result"]["structuredContent"]["message"]
+        assert acknowledged["status"] == "acked"
+
         connections = client.get("/auth/mcp-connections").json()
         assert connections["server_url"] == RESOURCE
         assert connections["items"][0]["client_name"] == "Claude"
@@ -285,6 +333,7 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             headers={"Origin": ORIGIN},
         )
         assert revoked.status_code == 204
+        assert client.get("/v1/agents").json()["items"] == []
         assert (
             client.post(
                 "/mcp",

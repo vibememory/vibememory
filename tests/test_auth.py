@@ -124,10 +124,12 @@ def test_revocable_agent_keys_separate_from_browser_auth(web, web_settings):
         "/v1/memories", headers=headers, json={"content": "agent memory", "keywords": ["차"]}
     )
     assert result.status_code == 201, result.text
+    assert web.get("/v1/agents").json()["items"][0]["id"] == "key:" + key["id"]
     assert web.get("/v1/records").json()["items"][0]["id"] == result.json()["id"]
     # Invalid explicit keys must not silently fall back to an existing browser session.
     assert web.get("/v1/records", headers={"Authorization": "Bearer invalid"}).status_code == 401
     assert web.delete("/auth/api-keys/" + key["id"]).status_code == 204
+    assert web.get("/v1/agents").json()["items"] == []
     assert web.get("/v1/records", headers=headers).status_code == 401
     assert web.get("/v1/records").status_code == 200
 

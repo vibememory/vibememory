@@ -1,6 +1,7 @@
 import json
 import threading
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import kuzu
@@ -54,8 +55,21 @@ class Store:
             client_request_id STRING, status STRING, created_at STRING)""")
         self.query("""CREATE NODE TABLE IF NOT EXISTS ChangeEvent(
             id INT64 PRIMARY KEY, owner STRING, event STRING, payload STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS Agent(
+            id STRING PRIMARY KEY, owner STRING, name STRING, transport STRING,
+            active BOOLEAN, created_at STRING, last_seen_at STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS AgentMessage(
+            id STRING PRIMARY KEY, sequence INT64, owner STRING, sender_agent_id STRING,
+            sender_name STRING, recipient_agent_id STRING, kind STRING, subject STRING,
+            body STRING, metadata STRING, thread_id STRING, reply_to STRING,
+            client_request_id STRING, request_payload STRING, status STRING,
+            created_at STRING, expires_at STRING, delivered_at STRING, read_at STRING,
+            acked_at STRING)""")
         self.event_sequence = self.query(
             "MATCH (e:ChangeEvent) RETURN max(e.id) AS latest"
+        )[0]["latest"] or 0
+        self.message_sequence = self.query(
+            "MATCH (m:AgentMessage) RETURN max(m.sequence) AS latest"
         )[0]["latest"] or 0
         rows = self.query("MATCH (m:Meta {key: 'embedding_model'}) RETURN m.value AS value")
         if rows and rows[0]["value"] != model:
@@ -99,6 +113,206 @@ class Store:
         )
         return [dict(id=row["id"], event=row["event"], data=json.loads(row["payload"]))
                 for row in rows]
+
+    @staticmethod
+    def agent_record(node):
+        return {key: value for key, value in node.items() if key != "owner"}
+
+    def register_agent(self, owner, agent_id, name, transport):
+        seen = now()
+        with self.transaction():
+            rows = self.query(
+                "MATCH (a:Agent {id: $id, owner: $owner}) RETURN a",
+                {"id": agent_id, "owner": owner},
+            )
+            if rows:
+                self.query(
+                    """MATCH (a:Agent {id: $id, owner: $owner})
+                    SET a.name=$name,a.transport=$transport,a.active=true,
+                    a.last_seen_at=$seen""",
+                    {"id": agent_id, "owner": owner, "name": name,
+                     "transport": transport, "seen": seen},
+                )
+            else:
+                self.query(
+                    """CREATE (:Agent {id: $id, owner: $owner, name: $name,
+                    transport: $transport, active: true, created_at: $seen,
+                    last_seen_at: $seen})""",
+                    {"id": agent_id, "owner": owner, "name": name,
+                     "transport": transport, "seen": seen},
+                )
+        rows = self.query(
+            "MATCH (a:Agent {id: $id, owner: $owner}) RETURN a",
+            {"id": agent_id, "owner": owner},
+        )
+        return self.agent_record(rows[0]["a"])
+
+    def list_agents(self, owner):
+        rows = self.query(
+            """MATCH (a:Agent {owner: $owner})
+            WHERE a.transport <> 'browser' AND a.active=true
+            RETURN a ORDER BY a.last_seen_at DESC,a.id""",
+            {"owner": owner},
+        )
+        return [self.agent_record(row["a"]) for row in rows]
+
+    def deactivate_agent(self, owner, agent_id):
+        self.query(
+            "MATCH (a:Agent {owner: $owner, id: $id}) SET a.active=false",
+            {"owner": owner, "id": agent_id},
+        )
+
+    @staticmethod
+    def message_record(node):
+        result = {
+            key: value
+            for key, value in node.items()
+            if key not in {"owner", "request_payload"}
+        }
+        result["metadata"] = json.loads(result.get("metadata") or "{}")
+        for field in ("reply_to", "client_request_id", "delivered_at", "read_at", "acked_at"):
+            result[field] = result.get(field) or None
+        return result
+
+    def get_message(self, owner, agent_id, id):
+        rows = self.query(
+            """MATCH (m:AgentMessage {owner: $owner, id: $id})
+            WHERE m.sender_agent_id=$agent_id OR m.recipient_agent_id=$agent_id RETURN m""",
+            {"owner": owner, "id": id, "agent_id": agent_id},
+        )
+        if not rows:
+            raise NotFound()
+        return self.message_record(rows[0]["m"])
+
+    def send_message(self, owner, sender_agent_id, sender_name, data):
+        payload = data.model_dump(mode="json")
+        payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        with self.transaction():
+            recipients = self.query(
+                """MATCH (a:Agent {owner: $owner, id: $id})
+                WHERE a.active=true RETURN a.id AS id""",
+                {"owner": owner, "id": data.recipient_agent_id},
+            )
+            if not recipients:
+                raise NotFound()
+            if data.client_request_id:
+                rows = self.query(
+                    """MATCH (m:AgentMessage {owner: $owner,
+                    sender_agent_id: $sender, client_request_id: $request_id}) RETURN m""",
+                    {"owner": owner, "sender": sender_agent_id,
+                     "request_id": data.client_request_id},
+                )
+                if rows:
+                    if rows[0]["m"]["request_payload"] != payload_json:
+                        raise DuplicateRequestConflict()
+                    return self.message_record(rows[0]["m"]), False
+            thread_id = data.thread_id or uid()
+            if data.reply_to:
+                rows = self.query(
+                    """MATCH (m:AgentMessage {owner: $owner, id: $id})
+                    WHERE m.sender_agent_id=$sender OR m.recipient_agent_id=$sender RETURN m""",
+                    {"owner": owner, "id": data.reply_to, "sender": sender_agent_id},
+                )
+                participants = (
+                    {rows[0]["m"]["sender_agent_id"], rows[0]["m"]["recipient_agent_id"]}
+                    if rows else set()
+                )
+                if (
+                    data.recipient_agent_id not in participants
+                    or len(participants) > 1
+                    and data.recipient_agent_id == sender_agent_id
+                ):
+                    raise NotFound()
+                if data.thread_id and data.thread_id != rows[0]["m"]["thread_id"]:
+                    raise ValueError("thread_id must match the replied-to message")
+                thread_id = rows[0]["m"]["thread_id"]
+            created = datetime.now(UTC)
+            self.message_sequence += 1
+            record = {
+                "id": uid(),
+                "sequence": self.message_sequence,
+                "owner": owner,
+                "sender_agent_id": sender_agent_id,
+                "sender_name": sender_name,
+                "recipient_agent_id": data.recipient_agent_id,
+                "kind": data.kind,
+                "subject": data.subject,
+                "body": data.body,
+                "metadata": json.dumps(data.metadata, ensure_ascii=False),
+                "thread_id": thread_id,
+                "reply_to": data.reply_to or "",
+                "client_request_id": data.client_request_id or "",
+                "request_payload": payload_json,
+                "status": "queued",
+                "created_at": created.isoformat(),
+                "expires_at": (created + timedelta(seconds=data.expires_in_seconds)).isoformat(),
+                "delivered_at": "",
+                "read_at": "",
+                "acked_at": "",
+            }
+            self.query(
+                """CREATE (:AgentMessage {id: $id, sequence: $sequence, owner: $owner,
+                sender_agent_id: $sender_agent_id, sender_name: $sender_name,
+                recipient_agent_id: $recipient_agent_id, kind: $kind, subject: $subject,
+                body: $body, metadata: $metadata, thread_id: $thread_id, reply_to: $reply_to,
+                client_request_id: $client_request_id, request_payload: $request_payload,
+                status: $status, created_at: $created_at, expires_at: $expires_at,
+                delivered_at: $delivered_at, read_at: $read_at, acked_at: $acked_at})""",
+                record,
+            )
+        return self.get_message(owner, sender_agent_id, record["id"]), True
+
+    def inbox_messages(self, owner, agent_id, after=0, limit=50, status=None):
+        status_filter = " AND m.status=$status" if status else ""
+        parameters = {
+            "owner": owner,
+            "agent_id": agent_id,
+            "after": after,
+            "now": now(),
+            "limit": limit,
+        }
+        if status:
+            parameters["status"] = status
+        rows = self.query(
+            """MATCH (m:AgentMessage {owner: $owner, recipient_agent_id: $agent_id})
+            WHERE m.sequence>$after AND m.expires_at>$now""" + status_filter +
+            " RETURN m ORDER BY m.sequence LIMIT $limit",
+            parameters,
+        )
+        return [self.message_record(row["m"]) for row in rows]
+
+    def sent_messages(self, owner, agent_id, limit=50, offset=0):
+        rows = self.query(
+            """MATCH (m:AgentMessage {owner: $owner, sender_agent_id: $agent_id})
+            RETURN m ORDER BY m.sequence DESC SKIP $offset LIMIT $limit""",
+            {"owner": owner, "agent_id": agent_id, "offset": offset, "limit": limit},
+        )
+        return [self.message_record(row["m"]) for row in rows]
+
+    def ack_message(self, owner, agent_id, id, status):
+        ranks = {"queued": 0, "delivered": 1, "read": 2, "acked": 3}
+        with self.transaction():
+            rows = self.query(
+                """MATCH (m:AgentMessage {owner: $owner, id: $id,
+                recipient_agent_id: $agent_id}) RETURN m""",
+                {"owner": owner, "id": id, "agent_id": agent_id},
+            )
+            if not rows:
+                raise NotFound()
+            current = rows[0]["m"]
+            if ranks[status] > ranks[current["status"]]:
+                stamp = now()
+                delivered = current["delivered_at"] or (stamp if ranks[status] >= 1 else "")
+                read = current["read_at"] or (stamp if ranks[status] >= 2 else "")
+                acked = current["acked_at"] or (stamp if ranks[status] >= 3 else "")
+                self.query(
+                    """MATCH (m:AgentMessage {owner: $owner, id: $id})
+                    SET m.status=$status,m.delivered_at=$delivered,m.read_at=$read,
+                    m.acked_at=$acked""",
+                    {"owner": owner, "id": id, "status": status,
+                     "delivered": delivered, "read": read, "acked": acked},
+                )
+        return self.get_message(owner, agent_id, id)
 
     def close(self):
         self.conn.close()

@@ -34,7 +34,7 @@ skills/vibe-memory/bin/vibe-memory vault exec \
   --env GITHUB_TOKEN=github-token -- gh api user
 ```
 
-네이티브 Rust CLI가 인증·저장·검색·바이트 스트림 파일·암호화 Vault 실행·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. `vault list`는 이름과 메타정보만 보여주고, `vault exec`는 선택한 값을 출력하지 않은 채 한 자식 프로세스에만 전달합니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리합니다.
+네이티브 Rust CLI가 인증·에이전트 메시지·저장·검색·바이트 스트림 파일·암호화 Vault 실행·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. `agents`와 `message send|inbox|ack|watch`로 같은 계정의 에이전트끼리 오프라인 메시지함과 SSE를 사용할 수 있습니다. 메시지는 기억으로 임베딩되지 않습니다. `vault list`는 이름과 메타정보만 보여주고, `vault exec`는 선택한 값을 출력하지 않은 채 한 자식 프로세스에만 전달합니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리합니다.
 
 ## GPT·Claude 원격 MCP 연결
 
@@ -44,7 +44,7 @@ HTTPS로 공개한 서버의 `/mcp` 주소를 ChatGPT 커스텀 MCP 서버 또�
 https://memory.example.com/mcp
 ```
 
-클라이언트가 OAuth 메타정보를 자동 발견하고 Vibe Memory 로그인·승인 화면으로 이동합니다. OAuth 2.1 authorization code + S256 PKCE를 사용하며 코드와 액세스·갱신 토큰은 해시만 저장합니다. 연결은 **콘솔 → 에이전트 연결**에서 철회할 수 있습니다. MCP는 키워드 검색, 기록·그래프·이벤트 조회, 에이전트가 구성한 기억·엔티티·문서 메타정보·관계 저장, 기능 요청을 제공합니다. Vault·삭제·Base64 파일 업로드는 MCP에서 제외하고 원본 파일은 기존 byte stream 경로를 유지합니다.
+클라이언트가 OAuth 메타정보를 자동 발견하고 Vibe Memory 로그인·승인 화면으로 이동합니다. OAuth 2.1 authorization code + S256 PKCE를 사용하며 코드와 액세스·갱신 토큰은 해시만 저장합니다. 연결은 **콘솔 → 에이전트 연결**에서 철회할 수 있습니다. MCP는 키워드 검색, 기록·그래프·이벤트 조회, 같은 계정 에이전트 간 메시지, 에이전트가 구성한 기억·엔티티·문서 메타정보·관계 저장, 기능 요청을 제공합니다. Vault·삭제·Base64 파일 업로드는 MCP에서 제외하고 원본 파일은 기존 byte stream 경로를 유지합니다.
 
 - 기억·엔티티·문서·관계와 인증·OAuth·기능요청·Vault 암호문은 PostgreSQL에 저장합니다.
 - 문서는 서버에서 파싱하지 않습니다. 원본은 byte stream으로 올리고 에이전트가 분석한 JSON을 file_id로 연결합니다.

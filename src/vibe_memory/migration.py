@@ -90,6 +90,8 @@ DESTINATION_TABLES = (
     "relations",
     "change_events",
     "feature_requests",
+    "agents",
+    "agent_messages",
     "vault_secrets",
 )
 
@@ -132,6 +134,8 @@ def read_legacy(data_dir: Path):
         relations=[],
         change_events=[],
         feature_requests=[],
+        agents=[],
+        agent_messages=[],
         meta={},
     )
     graph = data_dir / "graph"
@@ -145,6 +149,9 @@ def read_legacy(data_dir: Path):
         ) from error
     connection = kuzu.Connection(database)
     try:
+        graph_tables = {
+            row["name"] for row in _kuzu_rows(connection, "CALL show_tables() RETURN *")
+        }
         for row in _kuzu_rows(
             connection,
             "MATCH (n:Item) WHERE n.kind <> 'keyword' AND n.kind <> 'chunk' RETURN n",
@@ -215,6 +222,31 @@ def read_legacy(data_dir: Path):
             payload["feature_requests"].append(
                 {key: value for key, value in request.items() if not key.startswith("_")}
             )
+        if "Agent" in graph_tables:
+            for row in _kuzu_rows(connection, "MATCH (a:Agent) RETURN a"):
+                payload["agents"].append(
+                    {key: value for key, value in row["a"].items() if not key.startswith("_")}
+                )
+        if "AgentMessage" in graph_tables:
+            for row in _kuzu_rows(
+                connection, "MATCH (m:AgentMessage) RETURN m ORDER BY m.sequence"
+            ):
+                message = {
+                    key: value for key, value in row["m"].items() if not key.startswith("_")
+                }
+                message["metadata"] = json.loads(message.get("metadata") or "{}")
+                message["request_payload"] = json.loads(
+                    message.get("request_payload") or "{}"
+                )
+                for field in (
+                    "reply_to",
+                    "client_request_id",
+                    "delivered_at",
+                    "read_at",
+                    "acked_at",
+                ):
+                    message[field] = message.get(field) or None
+                payload["agent_messages"].append(message)
         payload["meta"] = {
             row["key"]: row["value"]
             for row in _kuzu_rows(connection, "MATCH (m:Meta) RETURN m.key AS key,m.value AS value")
@@ -354,6 +386,54 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                             "created_at",
                         )
                     ),
+                )
+            for agent in payload["agents"]:
+                connection.execute(
+                    """INSERT INTO agents(
+                        owner,id,name,transport,active,created_at,last_seen_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s)""",
+                    tuple(
+                        agent[key]
+                        for key in (
+                            "owner", "id", "name", "transport", "active",
+                            "created_at", "last_seen_at"
+                        )
+                    ),
+                )
+            for message in payload["agent_messages"]:
+                connection.execute(
+                    """INSERT INTO agent_messages(
+                        sequence,owner,id,sender_agent_id,sender_name,recipient_agent_id,kind,
+                        subject,body,metadata,thread_id,reply_to,client_request_id,request_payload,
+                        status,created_at,expires_at,delivered_at,read_at,acked_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        message["sequence"],
+                        message["owner"],
+                        message["id"],
+                        message["sender_agent_id"],
+                        message["sender_name"],
+                        message["recipient_agent_id"],
+                        message["kind"],
+                        message["subject"],
+                        message["body"],
+                        Jsonb(message["metadata"]),
+                        message["thread_id"],
+                        message["reply_to"],
+                        message["client_request_id"],
+                        Jsonb(message["request_payload"]),
+                        message["status"],
+                        message["created_at"],
+                        message["expires_at"],
+                        message["delivered_at"],
+                        message["read_at"],
+                        message["acked_at"],
+                    ),
+                )
+            if payload["agent_messages"]:
+                connection.execute(
+                    "SELECT setval(pg_get_serial_sequence('agent_messages','sequence'),%s,true)",
+                    (max(message["sequence"] for message in payload["agent_messages"]),),
                 )
             for event in payload["change_events"]:
                 connection.execute(

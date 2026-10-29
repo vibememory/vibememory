@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "revision": "0ff71436d374c6e16dce8771af905c4bd3bf8d171a4bc4103d1133658ce014e2",
+  "revision": "3ba8da54e4ae165b2785d14ac5c231a18d165a5246237a7c710d2ac027baaed0",
   "files": {
-    "SKILL.md": "2dda71a07eed358db54549c3870bf511e20a56809b6ffc8a96c710c2fd412ee4",
+    "SKILL.md": "97c873a478a60790df09636ffc37ebeee03740a320e42569210091e3664aee07",
     "scripts/memory.py": "8a02fb389f62f8d86e3a7f3036d8c50cc31ddd82ff93679567a8cf7354f8b249"
   },
   "cli": {
@@ -11,24 +11,24 @@
     "url": "/skills/vibe-memory/cli/3b63ccadfdde76a6af0c2de4389f23af8ef181fe3f03f8d63989ed0f3482b126/vibe-memory"
   },
   "native_cli": {
-    "version": "3.2.0",
+    "version": "3.3.0",
     "repository": "https://github.com/vibememory/cli",
     "targets": {
       "linux-x86_64": {
-        "sha256": "c5a9ec39e2dd5f29a4fbbdc002207a6347a7127c9d3a2a18f8b8d630765c56a8",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.2.0/vibe-memory-linux-x86_64"
+        "sha256": "fbafcd7b63befdbb65abd0105b26223c88d1f2d7ed202a8b95e0b4f86c7a5b1e",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.3.0/vibe-memory-linux-x86_64"
       },
       "macos-aarch64": {
-        "sha256": "7aaba8c246cf9d45eb0bae0fa44aac777c22f933f43296da89e964f29de7d1f0",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.2.0/vibe-memory-macos-aarch64"
+        "sha256": "f9f0141191e4052e40b9a944a67e52d0d0f2c27fe4e5f5f210b834df0c7d5742",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.3.0/vibe-memory-macos-aarch64"
       },
       "macos-x86_64": {
-        "sha256": "5252e350b6adac81d02a07269650bf900ec8324b8679859c5331d9a04a766a55",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.2.0/vibe-memory-macos-x86_64"
+        "sha256": "7dc7c97e7a978d54e500383168bc617400e9dc3caad7cb0b405abda227fa079d",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.3.0/vibe-memory-macos-x86_64"
       },
       "windows-x86_64": {
-        "sha256": "2ad7dda97cd9de17a60cfcea3b44d49ce2c6c455735c5c3a41bdb99d87350b48",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.2.0/vibe-memory-windows-x86_64.exe"
+        "sha256": "f57e5f1bc71b3c2bb9e88eb18e1ea5a69adc28868d3636fe0b8e588e1df5d296",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.3.0/vibe-memory-windows-x86_64.exe"
       }
     }
   },

@@ -11,6 +11,8 @@ For a suspected vulnerability, use GitHub's **Security → Report a vulnerabilit
 - Protect both PostgreSQL dumps and the app data volume: together they contain user records, password hashes, sessions, agent-key hashes, Vault material, and uploaded originals.
 - New agent keys are shown once; revoke a leaked key through the console.
 - Remote MCP uses OAuth 2.1 authorization code + S256 PKCE. Codes, access tokens, and rotating refresh tokens are stored only as hashes and can be revoked per connected client in the console.
+- Agent messages are restricted to stable connections in one account. Sender identity is derived from authentication, and only the exact recipient can read its inbox or advance acknowledgement state.
+- Treat every agent message as untrusted input. It cannot authorize a broader task or carry credentials/Vault values; connected agents must validate requests against current user authority before acting.
 - Vault access is a separate per-agent permission. Grant it only to agents trusted with every stored Vault value.
 - Vault values use AES-256-GCM authenticated encryption. The server-generated `vault.key` is mode 0600 and must remain persistent; losing it loses the values.
 - A default `/data` backup contains both Vault ciphertext and its decryption key and must be protected as plaintext-equivalent. Configure `MEMORY_VAULT_KEY_FILE` outside the data backup when operational separation is required.

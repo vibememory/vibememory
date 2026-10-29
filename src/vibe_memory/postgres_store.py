@@ -2,7 +2,7 @@
 
 import threading
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from psycopg.types.json import Jsonb
@@ -99,6 +99,196 @@ class PostgresStore:
                 (owner, after, limit),
             ).fetchall()
         return [dict(id=row["id"], event=row["event"], data=row["payload"]) for row in rows]
+
+    @staticmethod
+    def _agent(row):
+        result = dict(row)
+        result.pop("owner", None)
+        result["created_at"] = iso(result["created_at"])
+        result["last_seen_at"] = iso(result["last_seen_at"])
+        return result
+
+    def register_agent(self, owner, agent_id, name, transport):
+        seen = datetime.now(UTC)
+        with self._connection() as connection:
+            row = connection.execute(
+                """INSERT INTO agents(owner,id,name,transport,active,created_at,last_seen_at)
+                VALUES(%s,%s,%s,%s,TRUE,%s,%s)
+                ON CONFLICT(owner,id) DO UPDATE SET
+                    name=excluded.name,transport=excluded.transport,active=TRUE,
+                    last_seen_at=excluded.last_seen_at
+                RETURNING *""",
+                (owner, agent_id, name, transport, seen, seen),
+            ).fetchone()
+        return self._agent(row)
+
+    def list_agents(self, owner):
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT * FROM agents WHERE owner=%s AND transport<>'browser' AND active
+                ORDER BY last_seen_at DESC,id""",
+                (owner,),
+            ).fetchall()
+        return [self._agent(row) for row in rows]
+
+    def deactivate_agent(self, owner, agent_id):
+        with self._connection() as connection:
+            connection.execute(
+                "UPDATE agents SET active=FALSE WHERE owner=%s AND id=%s",
+                (owner, agent_id),
+            )
+
+    @staticmethod
+    def _message(row):
+        result = dict(row)
+        result.pop("owner", None)
+        result.pop("request_payload", None)
+        for field in (
+            "created_at",
+            "expires_at",
+            "delivered_at",
+            "read_at",
+            "acked_at",
+        ):
+            result[field] = iso(result[field]) if result.get(field) else None
+        result["metadata"] = result.get("metadata") or {}
+        return result
+
+    def get_message(self, owner, agent_id, id):
+        with self._connection() as connection:
+            row = connection.execute(
+                """SELECT * FROM agent_messages WHERE owner=%s AND id=%s
+                AND (sender_agent_id=%s OR recipient_agent_id=%s)""",
+                (owner, id, agent_id, agent_id),
+            ).fetchone()
+        if not row:
+            raise NotFound()
+        return self._message(row)
+
+    def send_message(self, owner, sender_agent_id, sender_name, data):
+        payload = data.model_dump(mode="json")
+        created = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            recipient = connection.execute(
+                "SELECT 1 FROM agents WHERE owner=%s AND id=%s AND active",
+                (owner, data.recipient_agent_id),
+            ).fetchone()
+            if not recipient:
+                raise NotFound()
+            if data.client_request_id:
+                existing = connection.execute(
+                    """SELECT * FROM agent_messages WHERE owner=%s AND sender_agent_id=%s
+                    AND client_request_id=%s FOR UPDATE""",
+                    (owner, sender_agent_id, data.client_request_id),
+                ).fetchone()
+                if existing:
+                    if existing["request_payload"] != payload:
+                        raise DuplicateRequestConflict()
+                    return self._message(existing), False
+            thread_id = data.thread_id or uid()
+            if data.reply_to:
+                parent = connection.execute(
+                    """SELECT * FROM agent_messages WHERE owner=%s AND id=%s
+                    AND (sender_agent_id=%s OR recipient_agent_id=%s)""",
+                    (owner, data.reply_to, sender_agent_id, sender_agent_id),
+                ).fetchone()
+                participants = (
+                    {parent["sender_agent_id"], parent["recipient_agent_id"]}
+                    if parent else set()
+                )
+                if (
+                    data.recipient_agent_id not in participants
+                    or len(participants) > 1
+                    and data.recipient_agent_id == sender_agent_id
+                ):
+                    raise NotFound()
+                if data.thread_id and data.thread_id != parent["thread_id"]:
+                    raise ValueError("thread_id must match the replied-to message")
+                thread_id = parent["thread_id"]
+            message_id = uid()
+            row = connection.execute(
+                """INSERT INTO agent_messages(
+                    owner,id,sender_agent_id,sender_name,recipient_agent_id,kind,subject,body,
+                    metadata,thread_id,reply_to,client_request_id,request_payload,status,
+                    created_at,expires_at
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'queued',%s,%s)
+                RETURNING *""",
+                (
+                    owner,
+                    message_id,
+                    sender_agent_id,
+                    sender_name,
+                    data.recipient_agent_id,
+                    data.kind,
+                    data.subject,
+                    data.body,
+                    Jsonb(data.metadata),
+                    thread_id,
+                    data.reply_to,
+                    data.client_request_id,
+                    Jsonb(payload),
+                    created,
+                    created + timedelta(seconds=data.expires_in_seconds),
+                ),
+            ).fetchone()
+        return self._message(row), True
+
+    def inbox_messages(self, owner, agent_id, after=0, limit=50, status=None):
+        filters = [
+            "owner=%s",
+            "recipient_agent_id=%s",
+            "sequence>%s",
+            "expires_at>CURRENT_TIMESTAMP",
+        ]
+        params = [owner, agent_id, after]
+        if status:
+            filters.append("status=%s")
+            params.append(status)
+        params.append(limit)
+        with self._connection() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM agent_messages WHERE {' AND '.join(filters)} "
+                "ORDER BY sequence LIMIT %s",
+                tuple(params),
+            ).fetchall()
+        return [self._message(row) for row in rows]
+
+    def sent_messages(self, owner, agent_id, limit=50, offset=0):
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT * FROM agent_messages WHERE owner=%s AND sender_agent_id=%s
+                ORDER BY sequence DESC OFFSET %s LIMIT %s""",
+                (owner, agent_id, offset, limit),
+            ).fetchall()
+        return [self._message(row) for row in rows]
+
+    def ack_message(self, owner, agent_id, id, status):
+        ranks = {"queued": 0, "delivered": 1, "read": 2, "acked": 3}
+        stamp = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            row = connection.execute(
+                """SELECT * FROM agent_messages WHERE owner=%s AND id=%s
+                AND recipient_agent_id=%s FOR UPDATE""",
+                (owner, id, agent_id),
+            ).fetchone()
+            if not row:
+                raise NotFound()
+            if ranks[status] > ranks[row["status"]]:
+                connection.execute(
+                    """UPDATE agent_messages SET status=%s,
+                    delivered_at=CASE WHEN %s>=1 THEN COALESCE(delivered_at,%s) ELSE delivered_at END,
+                    read_at=CASE WHEN %s>=2 THEN COALESCE(read_at,%s) ELSE read_at END,
+                    acked_at=CASE WHEN %s>=3 THEN COALESCE(acked_at,%s) ELSE acked_at END
+                    WHERE owner=%s AND id=%s""",
+                    (
+                        status,
+                        ranks[status], stamp,
+                        ranks[status], stamp,
+                        ranks[status], stamp,
+                        owner, id,
+                    ),
+                )
+        return self.get_message(owner, agent_id, id)
 
     def insert(
         self,

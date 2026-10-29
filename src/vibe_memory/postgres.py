@@ -253,6 +253,53 @@ class PostgresDatabase:
         CREATE UNIQUE INDEX IF NOT EXISTS feature_request_idempotency_idx
             ON feature_requests(owner, client_request_id) WHERE client_request_id IS NOT NULL;
 
+        CREATE TABLE IF NOT EXISTS agents (
+            owner TEXT NOT NULL,
+            id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            transport TEXT NOT NULL CHECK (transport IN ('api-key','oauth','legacy-key','browser')),
+            active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL,
+            last_seen_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY(owner, id)
+        );
+        CREATE INDEX IF NOT EXISTS agents_owner_seen_idx
+            ON agents(owner, last_seen_at DESC, id);
+
+        CREATE TABLE IF NOT EXISTS agent_messages (
+            sequence BIGSERIAL UNIQUE NOT NULL,
+            owner TEXT NOT NULL,
+            id TEXT NOT NULL,
+            sender_agent_id TEXT NOT NULL,
+            sender_name TEXT NOT NULL,
+            recipient_agent_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (kind IN ('message','request','response','notification')),
+            subject TEXT NOT NULL DEFAULT '',
+            body TEXT NOT NULL,
+            metadata JSONB NOT NULL DEFAULT '{{}}',
+            thread_id TEXT NOT NULL,
+            reply_to TEXT,
+            client_request_id TEXT,
+            request_payload JSONB NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('queued','delivered','read','acked')),
+            created_at TIMESTAMPTZ NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            delivered_at TIMESTAMPTZ,
+            read_at TIMESTAMPTZ,
+            acked_at TIMESTAMPTZ,
+            PRIMARY KEY(owner, id),
+            FOREIGN KEY(owner, sender_agent_id) REFERENCES agents(owner, id),
+            FOREIGN KEY(owner, recipient_agent_id) REFERENCES agents(owner, id),
+            FOREIGN KEY(owner, reply_to) REFERENCES agent_messages(owner, id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_message_idempotency_idx
+            ON agent_messages(owner, sender_agent_id, client_request_id)
+            WHERE client_request_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS agent_message_inbox_idx
+            ON agent_messages(owner, recipient_agent_id, sequence);
+        CREATE INDEX IF NOT EXISTS agent_message_sent_idx
+            ON agent_messages(owner, sender_agent_id, sequence DESC);
+
         CREATE TABLE IF NOT EXISTS vault_secrets (
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             name TEXT NOT NULL,

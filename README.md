@@ -18,6 +18,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 | Select evidence and build an answer | Provide source records and explicit graph traversal |
 
 - **Durable relationship graph:** memories, entities, documents, provenance, and relationship history in PostgreSQL.
+- **Agent mailboxes:** same-account persistent handoffs with recipient-scoped SSE and explicit acknowledgements.
 - **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
 - **Remote MCP:** one OAuth 2.1 + PKCE Streamable HTTP server for ChatGPT, Codex, Claude, and other MCP clients.
@@ -69,7 +70,7 @@ skills/vibe-memory/bin/vibe-memory vault exec \
   --env GITHUB_TOKEN=github-token -- gh api user
 ```
 
-The native Rust CLI wraps authentication, storage, search, byte-stream files, encrypted Vault execution, live events, and Skill updates so agents do not need to load API schemas into context. `vault list` exposes names and metadata only; `vault exec` fetches selected values and injects them into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
+The native Rust CLI wraps authentication, persistent agent messages, storage, search, byte-stream files, encrypted Vault execution, live events, and Skill updates so agents do not need to load API schemas into context. `vault list` exposes names and metadata only; `vault exec` fetches selected values and injects them into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
 ## Connect ChatGPT or Claude with MCP
 
@@ -79,7 +80,7 @@ Add your deployment's public MCP URL as a custom MCP server or custom connector:
 https://memory.example.com/mcp
 ```
 
-The client discovers OAuth metadata, dynamically registers as a public client, and redirects the user to Vibe Memory for login and explicit consent. Authorization code + PKCE tokens are user-scoped, stored only as hashes, refresh-token rotation is enabled, and connections can be revoked from **Console → Agent connections**. The MCP tool set supports keyword search, record/graph/event reads, agent-authored memory/entity/document/relation writes, and feature requests. It deliberately excludes Vault, deletion, and base64 file uploads; original files keep using the raw byte-stream endpoint.
+The client discovers OAuth metadata, dynamically registers as a public client, and redirects the user to Vibe Memory for login and explicit consent. Authorization code + PKCE tokens are user-scoped, stored only as hashes, refresh-token rotation is enabled, and connections can be revoked from **Console → Agent connections**. The MCP tool set supports keyword search, record/graph/event reads, persistent same-account agent messages, agent-authored memory/entity/document/relation writes, and feature requests. It deliberately excludes Vault, deletion, and base64 file uploads; original files keep using the raw byte-stream endpoint.
 
 ## Run from source
 
@@ -130,7 +131,7 @@ Browser console / REST agent / remote MCP client
             │
          FastAPI
             │
-            ├── PostgreSQL: accounts, OAuth, records, relationships, feedback, Vault ciphertext
+            ├── PostgreSQL: accounts, OAuth, records, relationships, agent mailboxes, feedback, Vault ciphertext
             ├── pgvector: agent-supplied keyword embeddings and exact cosine search
             ├── local multilingual keyword model (FastEmbed / ONNX)
             └── persistent volume: opaque byte-stream files and Vault key

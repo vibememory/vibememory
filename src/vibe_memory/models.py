@@ -208,3 +208,28 @@ class FeatureRequestInput(Input):
     priority: Literal["low", "medium", "high"] = "medium"
     source: str = Field(default="", max_length=2000)
     client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class AgentMessageInput(Input):
+    recipient_agent_id: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=10000)
+    subject: str = Field(default="", max_length=200)
+    kind: Literal["message", "request", "response", "notification"] = "message"
+    metadata: dict = Field(default_factory=dict)
+    reply_to: str | None = Field(default=None, min_length=1, max_length=100)
+    thread_id: str | None = Field(default=None, min_length=1, max_length=100)
+    expires_in_seconds: int = Field(default=604800, ge=60, le=2592000)
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator("metadata")
+    @classmethod
+    def bounded_metadata(cls, value):
+        import json
+
+        if len(json.dumps(value, ensure_ascii=False, allow_nan=False)) > 30000:
+            raise ValueError("metadata must fit within 30000 characters of JSON")
+        return value
+
+
+class AgentMessageAck(Input):
+    status: Literal["delivered", "read", "acked"]

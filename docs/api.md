@@ -19,6 +19,13 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/.well-known/oauth-protected-resource/mcp` | MCP resource and authorization-server discovery |
 | GET | `/.well-known/oauth-authorization-server` | OAuth endpoints, grants, scopes, and PKCE metadata |
 | GET | `/v1/me` | Authenticated user ID and keyword model |
+| GET | `/v1/agents` | This connection and same-account addressable agents |
+| POST | `/v1/agent-messages` | Queue an expiring message for one agent |
+| GET | `/v1/agent-messages/inbox` | This connection's non-expired inbox with sequence cursor |
+| GET | `/v1/agent-messages/sent` | Messages sent by this connection and receipt state |
+| GET | `/v1/agent-messages/stream` | Recipient-filtered bounded SSE message stream |
+| GET | `/v1/agent-messages/{id}` | Read a message as its sender or recipient |
+| POST | `/v1/agent-messages/{id}/ack` | Advance incoming status to delivered/read/acked |
 | GET | `/v1/stats` | Owner-scoped console counts |
 | POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata |
 | POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata |
@@ -95,6 +102,16 @@ Every record includes an integer `version`. `PATCH /v1/records/{id}` accepts `ex
 Archive is the recoverable-delete path used by agents. Archived records disappear from ordinary get/list/search/graph results but remain in `/v1/trash`; restoring increments the version again. Permanent `DELETE` remains available to explicitly authorized REST/console clients and removes incident relationships. Archiving a file referenced by an active document returns 409 and never removes its bytes.
 
 `POST /v1/records/merge` takes `canonical_id`, unique `duplicate_ids`, an `expected_versions` map containing every ID, and a reason. The server does not infer or combine content. The agent first updates the canonical record with the unique information and keywords it intends to retain; merge then rewires non-self relationships, retracts relationships that would become self-loops, archives duplicates, and reports counts plus the affected IDs.
+
+## Agent messages
+
+Every authenticated API key or OAuth connection receives a stable, server-derived agent ID. `GET /v1/agents` lists IDs seen in the same account; agents from another account are neither listed nor addressable. The caller cannot override its sender identity.
+
+`POST /v1/agent-messages` accepts `recipient_agent_id`, `body`, optional `subject`, `metadata`, `reply_to`, `thread_id`, and a kind of `message`, `request`, `response`, or `notification`. `expires_in_seconds` defaults to seven days and is bounded to 60 seconds–30 days. A sender-scoped `client_request_id` provides idempotency. Replies must remain between participants and inherit the parent thread.
+
+Messages begin as `queued`. Only the exact recipient connection can advance them monotonically to `delivered`, `read`, or `acked`; an older acknowledgement never regresses state. Inbox and SSE queries omit expired messages. The sender can inspect receipt state through `/sent`, but cannot read another agent's inbox. Message bodies and metadata are stored as ordinary PostgreSQL JSON/text: they are never embedded, indexed as memory, inferred over, or promoted to memory automatically.
+
+`GET /v1/agent-messages/stream?after=0&seconds=25` is a bounded SSE stream. `Last-Event-ID` overrides `after`, each event is named `agent.message`, and its ID is the persistent message sequence. The stream rechecks authentication while connected and emits only messages whose recipient is the current connection. CLI agents use `message watch`; stopped agents recover messages later with `message inbox`.
 
 ## Agent-prepared document metadata
 

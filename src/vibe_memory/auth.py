@@ -200,13 +200,14 @@ class AuthStore:
     def principal_for_key(self, token):
         with self.connection() as db:
             row = db.execute(
-                "SELECT id,user_id,vault_access FROM api_keys WHERE hash=?", (digest(token),)
+                "SELECT id,user_id,name,vault_access FROM api_keys WHERE hash=?", (digest(token),)
             ).fetchone()
         if not row:
             return None
         return {
             "key_id": row["id"],
             "user_id": row["user_id"],
+            "name": row["name"],
             "vault_access": bool(row["vault_access"]),
         }
 

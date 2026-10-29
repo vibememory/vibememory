@@ -1,9 +1,16 @@
 from datetime import datetime
 
 from .embeddings import cosine
+from .security import record_is_retrievable
 
 
 def record_matches_filters(record, stored_keywords, request):
+    if not record_is_retrievable(
+        record,
+        include_untrusted=request.include_untrusted,
+        include_quarantined=request.include_quarantined,
+    ):
+        return False
     folded = {keyword.casefold() for keyword in stored_keywords}
     if not {keyword.casefold() for keyword in request.must_keywords}.issubset(folded):
         return False
@@ -67,6 +74,10 @@ def retrieve(store, embedder, owner, request):
                 "source": record["source"],
                 "keywords": record["keywords"],
                 "metadata": record["metadata"],
+                "trust_level": record["trust_level"],
+                "security_state": record["security_state"],
+                "security_warnings": record["security_warnings"],
+                "provenance": record["provenance"],
                 "matched_keywords": matches,
                 "score": score,
             }

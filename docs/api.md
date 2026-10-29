@@ -27,16 +27,18 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/agent-messages/{id}` | Read a message as its sender or recipient |
 | POST | `/v1/agent-messages/{id}/ack` | Advance incoming status to delivered/read/acked |
 | GET | `/v1/stats` | Owner-scoped console counts |
-| POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata |
-| POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata |
-| POST | `/v1/documents` | title, keywords; optional content/file_id/source/tags/metadata |
-| GET | `/v1/records` | Owner-scoped records with kind/limit/offset |
+| POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata/provenance |
+| POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata/provenance |
+| POST | `/v1/documents` | title, keywords; optional content/file_id/source/tags/metadata/provenance |
+| GET | `/v1/records` | Owner-scoped records; untrusted and quarantined records are excluded by default |
 | GET/DELETE | `/v1/records/{id}` | Read / permanently delete a record and incident edges |
 | PATCH | `/v1/records/{id}` | Version-checked update of agent-selected record fields |
+| PATCH | `/v1/records/{id}/security` | Version-checked trust, quarantine, and scan-evidence review |
 | PUT | `/v1/records/{id}/keywords` | Replace the explicitly supplied keyword index |
 | POST | `/v1/records/{id}/archive` | Move a record to recoverable trash with expected_version/reason |
 | POST | `/v1/records/{id}/restore` | Restore an archived record with expected_version/reason |
 | GET | `/v1/trash` | List owner-scoped archived records |
+| GET | `/v1/quarantine` | List records withheld from normal retrieval |
 | POST | `/v1/records/merge` | Rewire relationships and archive version-checked duplicates |
 | POST | `/v1/files` | Raw application/octet-stream body; optional filename query |
 | GET/DELETE | `/v1/files/{id}` | Original bytes / delete unreferenced original |
@@ -48,6 +50,9 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
+| POST | `/v1/vault/captures` | Create an owner-bound, one-time browser capture URL with a Vault-scoped agent key |
+| GET | `/v1/vault/captures/{token}` | Inspect an unexpired capture as the signed-in owner; never returns a value |
+| PUT | `/v1/vault/captures/{token}` | Store a value from the signed-in browser and consume the link |
 | PUT/DELETE | `/v1/vault/{name}` | Browser-session-only create/rotate/delete with same-origin protection |
 
 ## Encrypted Vault
@@ -65,9 +70,18 @@ the value directly:
 
 ```sh
 ./bin/vibe-memory vault list
+./bin/vibe-memory vault capture MOLTBOOK_API_KEY \
+  --description "Rotated Moltbook credential" --expires-in 300
 ./bin/vibe-memory vault exec \
   --env GITHUB_TOKEN=github-token -- gh api user
 ```
+
+`vault capture` returns a random-token URL whose capability is carried in the URL
+fragment, so it is not sent in page requests, referrers, or access logs. Only the same signed-in owner can
+inspect or submit it, it expires after 60–3600 seconds, and successful submission
+consumes it once. Only SHA-256 of the token is stored. The secret value is accepted
+only in the browser request body, encrypted immediately, and never returned. The
+capture audit metadata records the requesting agent and UTC lifecycle timestamps.
 
 The CLI intentionally has no command that prints a value. `vault exec` injects it
 only into the selected child process; that process remains capable of logging its
@@ -93,7 +107,33 @@ The agent extracts search keywords before calling:
 }
 ```
 
-Scopes: `all`, `memories`, `documents`, `entities`. `match_mode` is `semantic`, `exact`, or `hybrid`; exact mode performs no embedding call, while semantic/hybrid embed only the supplied search keywords. `tags` and `must_keywords` require every value, `exclude_keywords` rejects exact stored-keyword matches, `metadata_filters` uses exact JSON scalar equality, and date bounds require offset-aware timestamps normalized to UTC. `min_score` prevents unrelated results from filling the response. The response contains record IDs, matched keywords, metadata, the chosen mode, and similarity scores. It does not build an answer, rerank raw body content, or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422).
+Scopes: `all`, `memories`, `documents`, `entities`. `match_mode` is `semantic`, `exact`, or `hybrid`; exact mode performs no embedding call, while semantic/hybrid embed only the supplied search keywords. `tags` and `must_keywords` require every value, `exclude_keywords` rejects exact stored-keyword matches, `metadata_filters` uses exact JSON scalar equality, and date bounds require offset-aware timestamps normalized to UTC. `min_score` prevents unrelated results from filling the response. The response contains record IDs, matched keywords, metadata, provenance/security fields, the chosen mode, and similarity scores. It does not build an answer, rerank raw body content, or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422).
+
+Untrusted records are omitted unless `include_untrusted` is true. Quarantined records require both `include_untrusted` and `include_quarantined`; setting only the latter is rejected. The same opt-in pair applies to record lists and graph traversal.
+
+## Provenance and quarantine
+
+Agents must label browser, scraper, message-derived, or imported text instead of presenting it as agent-authored memory:
+
+```json
+{
+  "content": "Agent-prepared summary of the external material",
+  "keywords": ["source topic"],
+  "provenance": {
+    "source_type": "external",
+    "origin_agent": "browser-agent",
+    "origin_url": "https://example.com/source",
+    "collected_at": "2026-10-29T08:00:00Z",
+    "content_type": "text/html",
+    "scan_verdict": "not_scanned",
+    "scan_evidence": []
+  }
+}
+```
+
+`source_type` is `agent-authored`, `external`, or `imported`; external/imported data requires an origin URL or agent. The server stores a SHA-256 content fingerprint and deterministically flags control characters, Unicode format controls, hidden markup, common instruction-override patterns, and agent-supplied suspicious/malicious verdicts. It does not fetch the origin, invoke an LLM, or call an external scanner.
+
+External/imported records enter `untrusted` + `quarantined` state. Normal search, lists, and graph expansion exclude them. Review with `PATCH /v1/records/{id}/security` using `expected_version`, an evidence-based `reason`, and the intended `trust_level`, `state`, `scan_verdict`, and `scan_evidence`. Activating a record requires explicit trust; suspicious/malicious verdicts cannot be activated, and deterministic high-risk warnings require a safe verdict. If external/imported content changes, prior scan evidence is cleared and the record returns to untrusted quarantine. Every transition is versioned in `security_history` and emits a content-free `*.security_updated` event.
 
 ## Record lifecycle and duplicate merge
 

@@ -185,12 +185,31 @@ class PostgresDatabase:
             file_id TEXT,
             version BIGINT NOT NULL DEFAULT 1,
             archived_at TIMESTAMPTZ,
+            trust_level TEXT NOT NULL DEFAULT 'trusted'
+                CHECK (trust_level IN ('trusted','untrusted')),
+            security_state TEXT NOT NULL DEFAULT 'active'
+                CHECK (security_state IN ('active','quarantined')),
+            provenance JSONB NOT NULL DEFAULT '{{}}',
+            content_hash TEXT NOT NULL DEFAULT '',
+            security_warnings TEXT[] NOT NULL DEFAULT '{{}}',
+            security_history JSONB NOT NULL DEFAULT '[]',
             PRIMARY KEY(owner, id)
         );
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS trust_level TEXT NOT NULL
+            DEFAULT 'trusted' CHECK (trust_level IN ('trusted','untrusted'));
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS security_state TEXT NOT NULL
+            DEFAULT 'active' CHECK (security_state IN ('active','quarantined'));
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS provenance JSONB NOT NULL DEFAULT '{{}}';
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS content_hash TEXT NOT NULL DEFAULT '';
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS security_warnings TEXT[] NOT NULL DEFAULT '{{}}';
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS security_history JSONB NOT NULL DEFAULT '[]';
         CREATE INDEX IF NOT EXISTS records_owner_kind_created_idx
             ON records(owner, kind, created_at DESC, id);
         CREATE INDEX IF NOT EXISTS records_owner_active_idx
             ON records(owner, created_at DESC, id) WHERE archived_at IS NULL;
+        CREATE INDEX IF NOT EXISTS records_owner_security_idx
+            ON records(owner, security_state, trust_level, created_at DESC, id)
+            WHERE archived_at IS NULL;
 
         CREATE TABLE IF NOT EXISTS keyword_embeddings (
             id BIGSERIAL PRIMARY KEY,
@@ -312,6 +331,20 @@ class PostgresDatabase:
             access_count BIGINT NOT NULL DEFAULT 0,
             PRIMARY KEY(user_id, name)
         );
+        CREATE TABLE IF NOT EXISTS vault_captures (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash TEXT UNIQUE NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            requester_agent_id TEXT NOT NULL,
+            requester_agent_name TEXT NOT NULL,
+            created_at BIGINT NOT NULL,
+            expires_at BIGINT NOT NULL,
+            consumed_at BIGINT
+        );
+        CREATE INDEX IF NOT EXISTS vault_captures_owner_idx
+            ON vault_captures(user_id, created_at DESC);
         """
         with self.pool.connection() as connection:
             for statement in (part.strip() for part in schema.split(";") if part.strip()):

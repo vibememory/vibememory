@@ -1,6 +1,8 @@
 """Owner-scoped encrypted secrets with no plaintext listing or storage."""
 
+import hashlib
 import os
+import secrets
 import sqlite3
 import stat
 import threading
@@ -21,6 +23,22 @@ class VaultNotFound(Exception):
 
 class VaultIntegrityError(Exception):
     pass
+
+
+class VaultCaptureNotFound(Exception):
+    pass
+
+
+class VaultCaptureExpired(Exception):
+    pass
+
+
+class VaultCaptureConsumed(Exception):
+    pass
+
+
+def _capture_digest(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _associated_data(user_id: str, name: str) -> bytes:
@@ -76,6 +94,20 @@ class VaultStore:
                     access_count INTEGER NOT NULL DEFAULT 0,
                     PRIMARY KEY(user_id, name)
                 );
+                CREATE TABLE IF NOT EXISTS vault_captures (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    token_hash TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    requester_agent_id TEXT NOT NULL,
+                    requester_agent_name TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER
+                );
+                CREATE INDEX IF NOT EXISTS vault_captures_owner_idx
+                    ON vault_captures(user_id, created_at DESC);
                 """
             )
         path.chmod(0o600)
@@ -181,3 +213,123 @@ class VaultStore:
             )
             if not result.rowcount:
                 raise VaultNotFound()
+
+    @staticmethod
+    def _capture_metadata(row):
+        return {
+            key: row[key]
+            for key in (
+                "id",
+                "name",
+                "description",
+                "requester_agent_id",
+                "requester_agent_name",
+                "created_at",
+                "expires_at",
+                "consumed_at",
+            )
+        }
+
+    def create_capture(
+        self,
+        user_id: str,
+        name: str,
+        description: str,
+        requester_agent_id: str,
+        requester_agent_name: str,
+        expires_in: int,
+    ):
+        now = utc_epoch_seconds()
+        token = secrets.token_urlsafe(32)
+        capture_id = secrets.token_hex(16)
+        with self.connection() as db:
+            db.execute(
+                "DELETE FROM vault_captures WHERE expires_at < ? AND created_at < ?",
+                (now - 86400, now - 86400),
+            )
+            active = db.execute(
+                """SELECT count(*) FROM vault_captures
+                WHERE user_id=? AND consumed_at IS NULL AND expires_at>?""",
+                (user_id, now),
+            ).fetchone()[0]
+            if active >= 20:
+                raise HTTPException(422, "Active Vault capture links are limited to 20")
+            db.execute(
+                """INSERT INTO vault_captures(
+                    id,user_id,token_hash,name,description,requester_agent_id,
+                    requester_agent_name,created_at,expires_at,consumed_at
+                ) VALUES(?,?,?,?,?,?,?,?,?,NULL)""",
+                (
+                    capture_id,
+                    user_id,
+                    _capture_digest(token),
+                    name,
+                    description,
+                    requester_agent_id,
+                    requester_agent_name,
+                    now,
+                    now + expires_in,
+                ),
+            )
+            row = db.execute(
+                """SELECT id,name,description,requester_agent_id,requester_agent_name,
+                created_at,expires_at,consumed_at FROM vault_captures WHERE id=?""",
+                (capture_id,),
+            ).fetchone()
+        return token, self._capture_metadata(row)
+
+    def inspect_capture(self, user_id: str, token: str):
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            row = db.execute(
+                """SELECT id,name,description,requester_agent_id,requester_agent_name,
+                created_at,expires_at,consumed_at FROM vault_captures
+                WHERE user_id=? AND token_hash=?""",
+                (user_id, _capture_digest(token)),
+            ).fetchone()
+        if not row:
+            raise VaultCaptureNotFound()
+        if row["consumed_at"] is not None:
+            raise VaultCaptureConsumed()
+        if row["expires_at"] <= now:
+            raise VaultCaptureExpired()
+        return self._capture_metadata(row)
+
+    def submit_capture(self, user_id: str, token: str, value: str):
+        now = utc_epoch_seconds()
+        token_hash = _capture_digest(token)
+        with self.connection() as db:
+            row = db.execute(
+                """SELECT id,name,description,requester_agent_id,requester_agent_name,
+                created_at,expires_at,consumed_at FROM vault_captures
+                WHERE user_id=? AND token_hash=?""",
+                (user_id, token_hash),
+            ).fetchone()
+            if not row:
+                raise VaultCaptureNotFound()
+            if row["consumed_at"] is not None:
+                raise VaultCaptureConsumed()
+            if row["expires_at"] <= now:
+                raise VaultCaptureExpired()
+            reserved = db.execute(
+                """UPDATE vault_captures SET consumed_at=?
+                WHERE user_id=? AND token_hash=? AND consumed_at IS NULL AND expires_at>?""",
+                (now, user_id, token_hash, now),
+            )
+            if not reserved.rowcount:
+                raise VaultCaptureConsumed()
+        try:
+            saved = self.set(user_id, row["name"], value, row["description"])
+        except Exception:
+            with self.connection() as db:
+                db.execute(
+                    """UPDATE vault_captures SET consumed_at=NULL
+                    WHERE user_id=? AND token_hash=? AND consumed_at=?""",
+                    (user_id, token_hash, now),
+                )
+            raise
+        return {
+            "name": saved["name"],
+            "captured_at": now,
+            "requester_agent_name": row["requester_agent_name"],
+        }

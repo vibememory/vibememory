@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 from typing import Annotated, Literal
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -27,12 +28,62 @@ class KeywordsInput(Input):
         return result
 
 
+class ProvenanceInput(Input):
+    source_type: Literal["agent-authored", "external", "imported"] = "agent-authored"
+    origin_agent: str = Field(default="", max_length=200)
+    origin_url: str = Field(default="", max_length=2048)
+    collected_at: datetime | None = None
+    content_type: str = Field(default="", max_length=200)
+    scan_verdict: Literal["not_scanned", "safe", "suspicious", "malicious"] = "not_scanned"
+    scan_evidence: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(
+        default_factory=list, max_length=30
+    )
+
+    @field_validator("origin_url")
+    @classmethod
+    def valid_origin_url(cls, value):
+        if not value:
+            return value
+        try:
+            parsed = urlsplit(value)
+            _ = parsed.port
+        except ValueError:
+            raise ValueError("origin_url must be a valid HTTP(S) URL") from None
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.username
+            or parsed.password
+            or parsed.fragment
+        ):
+            raise ValueError("origin_url must be a public HTTP(S) URL without credentials")
+        return value
+
+    @field_validator("collected_at")
+    @classmethod
+    def normalize_collected_at(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("collected_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def external_origin(self):
+        if self.source_type in {"external", "imported"} and not (
+            self.origin_agent or self.origin_url
+        ):
+            raise ValueError("external or imported records require origin_agent or origin_url")
+        return self
+
+
 class RecordInput(KeywordsInput):
     source: str = Field(default="", max_length=2000)
     tags: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
         default_factory=list, max_length=30
     )
     metadata: dict = Field(default_factory=dict)
+    provenance: ProvenanceInput = Field(default_factory=ProvenanceInput)
 
     @field_validator("metadata")
     @classmethod
@@ -121,6 +172,26 @@ class RecordUpdate(Input):
         return self
 
 
+class RecordSecurityUpdate(Input):
+    expected_version: int = Field(ge=1)
+    trust_level: Literal["trusted", "untrusted"] | None = None
+    state: Literal["active", "quarantined"] | None = None
+    scan_verdict: Literal["not_scanned", "safe", "suspicious", "malicious"] | None = None
+    scan_evidence: list[Annotated[str, Field(min_length=1, max_length=1000)]] | None = Field(
+        default=None, max_length=30
+    )
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def has_security_change(self):
+        if not any(
+            value is not None
+            for value in (self.trust_level, self.state, self.scan_verdict, self.scan_evidence)
+        ):
+            raise ValueError("at least one security field must be supplied")
+        return self
+
+
 class RecordArchive(Input):
     expected_version: int = Field(ge=1)
     reason: str = Field(min_length=1, max_length=1000)
@@ -154,6 +225,17 @@ class VaultInput(Input):
     description: str = Field(default="", max_length=500)
 
 
+class VaultCaptureRequest(Input):
+    name: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")
+    description: str = Field(default="", max_length=500)
+    expires_in: int = Field(default=900, ge=60, le=3600)
+
+
+class VaultCaptureSubmit(Input):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+    value: str = Field(min_length=1, max_length=65536)
+
+
 class SearchInput(KeywordsInput):
     limit: int = Field(default=8, ge=1, le=50)
     scope: Literal["all", "memories", "documents", "entities"] = "all"
@@ -167,6 +249,8 @@ class SearchInput(KeywordsInput):
     )
     created_after: datetime | None = None
     created_before: datetime | None = None
+    include_untrusted: bool = False
+    include_quarantined: bool = False
 
     @field_validator("must_keywords", "exclude_keywords")
     @classmethod
@@ -197,6 +281,8 @@ class SearchInput(KeywordsInput):
         }
         if overlap:
             raise ValueError("a keyword cannot be both required and excluded")
+        if self.include_quarantined and not self.include_untrusted:
+            raise ValueError("include_quarantined requires include_untrusted")
         return self
 
 

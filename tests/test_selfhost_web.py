@@ -16,6 +16,7 @@ def test_console_and_api_share_one_origin(settings):
             ("/login", "auth-form"),
             ("/console", "console-main"),
             ("/guide", "Vibe Memory"),
+            ("/capture", "capture-form"),
         ]:
             response = client.get(route)
             assert response.status_code == 200
@@ -27,12 +28,14 @@ def test_console_and_api_share_one_origin(settings):
         console_script = client.get("/assets/console.js")
         console_styles = client.get("/assets/console.css")
         landing_script = client.get("/assets/app.js")
+        capture_script = client.get("/assets/capture.js")
         landing_styles = client.get("/assets/style.css")
         assert install_script.status_code == 200
         assert locale_script.status_code == 200
         assert console_script.status_code == 200
         assert console_styles.status_code == 200
         assert landing_script.status_code == 200
+        assert capture_script.status_code == 200
         assert landing_styles.status_code == 200
         assert 'class="landing-page"' in landing
         assert "Readable landing typography" in landing_styles.text
@@ -75,11 +78,11 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261029-dashboard-console-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261029-dashboard-console-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261029-dashboard-console-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-dashboard-console-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261029-dashboard-console-1" defer="">' in console
+        assert '<script src="/assets/i18n.js?v=20261029-vault-security-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261029-vault-security-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261029-vault-security-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-vault-security-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261029-vault-security-1" defer="">' in console
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -88,6 +91,9 @@ def test_console_and_api_share_one_origin(settings):
         assert "vibeMemoryInstallPrompt" in landing_script.text
         assert "fetch('/auth/me', {cache:'no-store', credentials:'same-origin'})" in landing_script.text
         assert "window.location.replace('/console')" in landing_script.text
+        assert "location.hash.slice(1)" in capture_script.text
+        assert "sessionStorage.setItem('vibe-memory-vault-capture'" in capture_script.text
+        assert "history.replaceState(null, '', '/capture')" in capture_script.text
         assert "location.origin" in install_script.text
         assert "/downloads/vibe-memory-skill.zip" in install_script.text
         assert "login --url" in install_script.text

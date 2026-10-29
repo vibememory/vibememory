@@ -38,6 +38,7 @@ def mount_web(app, configured=None):
         ("/", "index.html"),
         ("/login", "login.html"),
         ("/connect", "connect.html"),
+        ("/capture", "capture.html"),
         ("/console", "console.html"),
         ("/guide", "guide.html"),
     ]:

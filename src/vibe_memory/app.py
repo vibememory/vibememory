@@ -46,18 +46,29 @@ from .models import (
     MemoryInput,
     RecordArchive,
     RecordMerge,
+    RecordSecurityUpdate,
     RecordUpdate,
     RelationInput,
     RelationUpdate,
     SearchInput,
+    VaultCaptureRequest,
+    VaultCaptureSubmit,
     VaultInput,
 )
 from .oauth import OAuthError, OAuthStore
 from .postgres import PostgresDatabase
 from .postgres_store import PostgresStore
 from .retrieval import retrieve
+from .security import SecurityPolicyError, prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, FileInUse, NotFound, Store
-from .vault import VaultIntegrityError, VaultNotFound, VaultStore
+from .vault import (
+    VaultCaptureConsumed,
+    VaultCaptureExpired,
+    VaultCaptureNotFound,
+    VaultIntegrityError,
+    VaultNotFound,
+    VaultStore,
+)
 from .web import mount_web
 
 log = logging.getLogger(__name__)
@@ -125,7 +136,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.10.0",
+        version="0.12.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -723,6 +734,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             content={"detail": "File is referenced by a document; delete the document first"},
         )
 
+    @app.exception_handler(SecurityPolicyError)
+    async def security_policy_error(request, error):
+        return JSONResponse(status_code=422, content={"detail": str(error)})
+
     @app.exception_handler(VaultNotFound)
     async def vault_missing(request, error):
         return JSONResponse(status_code=404, content={"detail": "Vault entry not found"})
@@ -731,6 +746,50 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     async def vault_integrity(request, error):
         log.error("Vault ciphertext authentication failed")
         return JSONResponse(status_code=500, content={"detail": "Vault entry cannot be decrypted"})
+
+    @app.exception_handler(VaultCaptureNotFound)
+    async def vault_capture_missing(request, error):
+        return JSONResponse(status_code=404, content={"detail": "Vault capture link not found"})
+
+    @app.exception_handler(VaultCaptureExpired)
+    async def vault_capture_expired(request, error):
+        return JSONResponse(status_code=410, content={"detail": "Vault capture link expired"})
+
+    @app.exception_handler(VaultCaptureConsumed)
+    async def vault_capture_consumed(request, error):
+        return JSONResponse(status_code=409, content={"detail": "Vault capture link already used"})
+
+    @app.post("/v1/vault/captures", status_code=201, tags=["vault"])
+    def create_vault_capture(
+        data: VaultCaptureRequest,
+        request: Request,
+        user=Depends(vault_user),
+    ):
+        user_id = user["id"] if isinstance(user, dict) else user
+        token, result = vault.create_capture(
+            user_id,
+            data.name,
+            data.description,
+            request.state.agent_id,
+            request.state.agent_name,
+            data.expires_in,
+        )
+        # Keep the short-lived capability in the URL fragment so browsers never
+        # send it in an HTTP request, referrer, or access log.
+        result["capture_url"] = public_origin + "/capture#token=" + token
+        return result
+
+    @app.get("/v1/vault/captures/{token}", tags=["vault"])
+    def inspect_vault_capture(token: str, user=Depends(browser_user)):
+        return vault.inspect_capture(user["id"], token)
+
+    @app.put("/v1/vault/captures/{token}", tags=["vault"])
+    def submit_vault_capture(
+        data: VaultCaptureSubmit,
+        token: str,
+        user=Depends(browser_user),
+    ):
+        return vault.submit_capture(user["id"], token, data.value)
 
     @app.get("/v1/vault", tags=["vault"])
     def vault_entries(user=Depends(vault_user)):
@@ -1020,6 +1079,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             content, title, subtype = data.content, data.title, "text"
         else:
             content, title, subtype = data.content, data.content[:100], data.kind
+        security = prepare_record_security(title, content, data.provenance)
         return db.insert(
             user,
             kind,
@@ -1032,6 +1092,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             data.metadata,
             vectors,
             file_id=(data.file_id or "") if kind == "document" else "",
+            security=security,
         )
 
     @app.post(
@@ -1095,6 +1156,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         vectors = vectors_for(data.keywords) if data.keywords is not None else None
         return db.update_record(user, id, data, vectors)
 
+    @app.patch("/v1/records/{id}/security", tags=["memories"])
+    def update_record_security(
+        id: str, data: RecordSecurityUpdate, user=Depends(owner), db=Depends(store)
+    ):
+        return db.update_security(user, id, data)
+
     @app.post("/v1/records/{id}/archive", tags=["memories"])
     def archive_record(id: str, data: RecordArchive, user=Depends(owner), db=Depends(store)):
         return db.archive(user, id, data.expected_version, data.reason)
@@ -1112,6 +1179,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     ):
         return {"items": db.archived(user, limit, offset), "limit": limit, "offset": offset}
 
+    @app.get("/v1/quarantine", tags=["memories"])
+    def quarantine(
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        return {"items": db.quarantined(user, limit, offset), "limit": limit, "offset": offset}
+
     @app.post("/v1/records/merge", tags=["memories"])
     def merge_records(data: RecordMerge, user=Depends(owner), db=Depends(store)):
         return db.merge(user, data)
@@ -1125,10 +1201,25 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         kind: Literal["memory", "document", "entity", "file"] | None = None,
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
+        include_untrusted: bool = False,
+        include_quarantined: bool = False,
         user=Depends(owner),
         db=Depends(store),
     ):
-        return {"items": db.list(user, kind, limit, offset), "limit": limit, "offset": offset}
+        if include_quarantined and not include_untrusted:
+            raise HTTPException(422, "include_quarantined requires include_untrusted")
+        return {
+            "items": db.list(
+                user,
+                kind,
+                limit,
+                offset,
+                include_untrusted,
+                include_quarantined,
+            ),
+            "limit": limit,
+            "offset": offset,
+        }
 
     @app.get("/v1/records/{id}", tags=["memories"])
     def get_record(id: str, user=Depends(owner), db=Depends(store)):
@@ -1159,10 +1250,19 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.get("/v1/graph/{id}", tags=["graph"])
     def graph(
-        id: str, depth: int = Query(default=1, ge=0, le=2), user=Depends(owner), db=Depends(store)
+        id: str,
+        depth: int = Query(default=1, ge=0, le=2),
+        include_untrusted: bool = False,
+        include_quarantined: bool = False,
+        user=Depends(owner),
+        db=Depends(store),
     ):
+        if include_quarantined and not include_untrusted:
+            raise HTTPException(422, "include_quarantined requires include_untrusted")
         seed = db.get(user, id)
-        result = db.neighborhood(user, [id], depth)
+        result = db.neighborhood(
+            user, [id], depth, include_untrusted, include_quarantined
+        )
         result["nodes"].insert(0, seed)
         return result
 

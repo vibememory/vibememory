@@ -34,7 +34,7 @@ skills/vibe-memory/bin/vibe-memory vault exec \
   --env GITHUB_TOKEN=github-token -- gh api user
 ```
 
-네이티브 Rust CLI가 인증·에이전트 메시지·저장·검색·바이트 스트림 파일·암호화 Vault 실행·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. `agents`와 `message send|inbox|ack|watch`로 같은 계정의 에이전트끼리 오프라인 메시지함과 SSE를 사용할 수 있습니다. 메시지는 기억으로 임베딩되지 않습니다. `vault list`는 이름과 메타정보만 보여주고, `vault exec`는 선택한 값을 출력하지 않은 채 한 자식 프로세스에만 전달합니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리합니다.
+네이티브 Rust CLI가 인증·에이전트 메시지·저장·검색·바이트 스트림 파일·안전한 Vault 수집과 실행·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. `agents`와 `message send|inbox|ack|watch`로 같은 계정의 에이전트끼리 오프라인 메시지함과 SSE를 사용할 수 있습니다. 메시지는 기억으로 임베딩되지 않습니다. `vault capture NAME`은 로그인된 웹에서 값을 직접 저장하는 1회용 만료 링크를 만들고, `vault list`는 이름과 메타정보만 보여주며, `vault exec`는 선택한 값을 출력하지 않은 채 한 자식 프로세스에만 전달합니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리합니다.
 
 ## GPT·Claude 원격 MCP 연결
 
@@ -49,6 +49,7 @@ https://memory.example.com/mcp
 - 기억·엔티티·문서·관계와 인증·OAuth·기능요청·Vault 암호문은 PostgreSQL에 저장합니다.
 - 문서는 서버에서 파싱하지 않습니다. 원본은 byte stream으로 올리고 에이전트가 분석한 JSON을 file_id로 연결합니다.
 - 검색은 에이전트가 추출한 키워드 배열만 받고 pgvector의 정확 코사인 검색을 사용합니다. 원문·제목·요약은 임베딩하지 않습니다.
+- 웹·메시지·가져오기에서 온 텍스트는 출처를 기록하고 기본 격리합니다. 에이전트가 명시적으로 검토하기 전에는 일반 검색·목록·관계 그래프에서 제외됩니다.
 - API 키는 생성 직후 한 번만 표시하고 해시로 저장합니다. 계정이 다르면 데이터도 분리됩니다.
 - Vault 값은 AES-256-GCM으로 암호화하고 에이전트 키별 별도 권한으로 보호합니다. 저장된 값은 콘솔에서 다시 표시하지 않습니다.
 - 기능 요청은 `/v1/feature-requests`로 접수할 수 있고 개인 기억 검색과 분리합니다.

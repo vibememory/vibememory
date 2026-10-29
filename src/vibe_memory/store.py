@@ -7,6 +7,13 @@ from uuid import uuid4
 import kuzu
 
 from .clock import utc_now_iso
+from .security import (
+    apply_security_update,
+    prepare_record_security,
+    reassess_record_security,
+    record_fingerprint,
+    record_is_retrievable,
+)
 
 
 def now():
@@ -89,6 +96,18 @@ class Store:
             self.query("ALTER TABLE Item ADD version INT64 DEFAULT 1")
         if "archived_at" not in columns:
             self.query("ALTER TABLE Item ADD archived_at STRING DEFAULT ''")
+        if "trust_level" not in columns:
+            self.query("ALTER TABLE Item ADD trust_level STRING DEFAULT 'trusted'")
+        if "security_state" not in columns:
+            self.query("ALTER TABLE Item ADD security_state STRING DEFAULT 'active'")
+        if "provenance" not in columns:
+            self.query("ALTER TABLE Item ADD provenance STRING DEFAULT '{}'")
+        if "content_hash" not in columns:
+            self.query("ALTER TABLE Item ADD content_hash STRING DEFAULT ''")
+        if "security_warnings" not in columns:
+            self.query("ALTER TABLE Item ADD security_warnings STRING[] DEFAULT []")
+        if "security_history" not in columns:
+            self.query("ALTER TABLE Item ADD security_history STRING DEFAULT '[]'")
         # Old full-text/chunk vectors cannot be repurposed as agent keyword vectors.
         # Preserve source records and semantic relationships, but leave them unindexed.
         with self.transaction():
@@ -349,18 +368,35 @@ class Store:
                 result.pop(key, None)
             result.pop("archived_at", None)
         result["metadata"] = json.loads(result.get("metadata") or "{}")
+        result["trust_level"] = result.get("trust_level") or "trusted"
+        result["security_state"] = result.get("security_state") or "active"
+        result["provenance"] = json.loads(result.get("provenance") or "{}")
+        result["content_hash"] = result.get("content_hash") or record_fingerprint(
+            result.get("title", ""), result.get("content", "")
+        )
+        result["security_warnings"] = result.get("security_warnings") or []
+        result["security_history"] = json.loads(result.get("security_history") or "[]")
         return result
 
     def _node(self, item):
         item.setdefault("file_id", "")
         item.setdefault("version", 1)
         item.setdefault("archived_at", "")
+        item.setdefault("trust_level", "trusted")
+        item.setdefault("security_state", "active")
+        item.setdefault("provenance", "{}")
+        item.setdefault("content_hash", "")
+        item.setdefault("security_warnings", [])
+        item.setdefault("security_history", "[]")
         self.query(
             """CREATE (:Item {id: $id, owner: $owner, kind: $kind, subtype: $subtype,
             title: $title, content: $content, source: $source, tags: $tags, created_at: $created_at,
             embedding: $embedding, parent_id: $parent_id, start_offset: $start_offset,
             end_offset: $end_offset, keywords: $keywords, metadata: $metadata, file_id: $file_id,
-            version: $version, archived_at: $archived_at})""",
+            version: $version, archived_at: $archived_at, trust_level: $trust_level,
+            security_state: $security_state, provenance: $provenance,
+            content_hash: $content_hash, security_warnings: $security_warnings,
+            security_history: $security_history})""",
             item,
         )
 
@@ -378,8 +414,10 @@ class Store:
         vectors,
         file_id="",
         record_id=None,
+        security=None,
     ):
         id, created = record_id or uid(), now()
+        security = security or prepare_record_security(title, content, None)
         with self.transaction():
             if file_id and self.get(owner, file_id)["kind"] != "file":
                 raise NotFound()
@@ -401,10 +439,31 @@ class Store:
                     keywords=keywords,
                     file_id=file_id,
                     metadata=json.dumps(metadata, ensure_ascii=False),
+                    trust_level=security["trust_level"],
+                    security_state=security["security_state"],
+                    provenance=json.dumps(security["provenance"], ensure_ascii=False),
+                    content_hash=security["content_hash"],
+                    security_warnings=security["security_warnings"],
+                    security_history=json.dumps(
+                        security["security_history"], ensure_ascii=False
+                    ),
                 )
             )
             self._index(owner, id, keywords, vectors)
             self._event(owner, kind + ".created", {"record_id": id, "kind": kind})
+            if security["security_state"] != "active" or security["security_warnings"]:
+                self._event(
+                    owner,
+                    kind + ".security_updated",
+                    {
+                        "record_id": id,
+                        "kind": kind,
+                        "trust_level": security["trust_level"],
+                        "security_state": security["security_state"],
+                        "warnings": security["security_warnings"],
+                        "version": 1,
+                    },
+                )
             return self.get(owner, id)
 
     def _index(self, owner, parent_id, keywords, vectors):
@@ -463,6 +522,28 @@ class Store:
             }
             if data.metadata is not None:
                 fields["metadata"] = json.dumps(data.metadata, ensure_ascii=False)
+            title = data.title if data.title is not None else record["title"]
+            content = data.content if data.content is not None else record["content"]
+            security = reassess_record_security(
+                record, title, content, record["version"] + 1
+            )
+            security_changed = (
+                security["security_state"] != record["security_state"]
+                or security["trust_level"] != record["trust_level"]
+                or security["security_warnings"] != record["security_warnings"]
+            )
+            fields.update(
+                {
+                    "trust_level": security["trust_level"],
+                    "security_state": security["security_state"],
+                    "provenance": json.dumps(security["provenance"], ensure_ascii=False),
+                    "content_hash": security["content_hash"],
+                    "security_warnings": security["security_warnings"],
+                    "security_history": json.dumps(
+                        security["security_history"], ensure_ascii=False
+                    ),
+                }
+            )
             assignments = [f"n.{key} = ${key}" for key in fields]
             assignments.append("n.version = n.version + 1")
             self.query(
@@ -483,6 +564,59 @@ class Store:
                 {"record_id": id, "kind": record["kind"], "change": "record",
                  "version": record["version"] + 1},
             )
+            if security_changed:
+                self._event(
+                    owner,
+                    record["kind"] + ".security_updated",
+                    {
+                        "record_id": id,
+                        "kind": record["kind"],
+                        "trust_level": security["trust_level"],
+                        "security_state": security["security_state"],
+                        "warnings": security["security_warnings"],
+                        "version": record["version"] + 1,
+                    },
+                )
+            return self.get(owner, id)
+
+    def update_security(self, owner, id, data):
+        with self.transaction():
+            record = self.get(owner, id)
+            if record["version"] != data.expected_version:
+                raise Conflict()
+            security = apply_security_update(record, data)
+            self.query(
+                """MATCH (n:Item {owner: $owner, id: $id}) SET
+                n.trust_level = $trust_level, n.security_state = $security_state,
+                n.provenance = $provenance, n.content_hash = $content_hash,
+                n.security_warnings = $security_warnings,
+                n.security_history = $security_history, n.version = n.version + 1""",
+                {
+                    "owner": owner,
+                    "id": id,
+                    "trust_level": security["trust_level"],
+                    "security_state": security["security_state"],
+                    "provenance": json.dumps(security["provenance"], ensure_ascii=False),
+                    "content_hash": security["content_hash"],
+                    "security_warnings": security["security_warnings"],
+                    "security_history": json.dumps(
+                        security["security_history"], ensure_ascii=False
+                    ),
+                },
+            )
+            self._event(
+                owner,
+                record["kind"] + ".security_updated",
+                {
+                    "record_id": id,
+                    "kind": record["kind"],
+                    "trust_level": security["trust_level"],
+                    "security_state": security["security_state"],
+                    "warnings": security["security_warnings"],
+                    "reason": data.reason,
+                    "version": record["version"] + 1,
+                },
+            )
             return self.get(owner, id)
 
     def get(self, owner, id, internal=False):
@@ -494,13 +628,40 @@ class Store:
             raise NotFound()
         return self.clean(rows[0]["n"], internal)
 
-    def list(self, owner, kind=None, limit=50, offset=0):
+    def list(
+        self,
+        owner,
+        kind=None,
+        limit=50,
+        offset=0,
+        include_untrusted=False,
+        include_quarantined=False,
+    ):
         rows = self.query(
             """MATCH (n:Item {owner: $owner})
             WHERE n.kind <> 'chunk' AND n.kind <> 'keyword' AND n.archived_at = ''
             AND ($kind = '' OR n.kind = $kind)
+            AND ($include_untrusted OR n.trust_level = 'trusted')
+            AND ($include_quarantined OR n.security_state = 'active')
             RETURN n ORDER BY n.created_at DESC, n.id SKIP $offset LIMIT $limit""",
-            {"owner": owner, "kind": kind or "", "limit": limit, "offset": offset},
+            {
+                "owner": owner,
+                "kind": kind or "",
+                "limit": limit,
+                "offset": offset,
+                "include_untrusted": include_untrusted,
+                "include_quarantined": include_quarantined,
+            },
+        )
+        return [self.clean(row["n"]) for row in rows]
+
+    def quarantined(self, owner, limit=50, offset=0):
+        rows = self.query(
+            """MATCH (n:Item {owner: $owner})
+            WHERE n.kind <> 'chunk' AND n.kind <> 'keyword' AND n.archived_at = ''
+            AND n.security_state = 'quarantined'
+            RETURN n ORDER BY n.created_at DESC, n.id SKIP $offset LIMIT $limit""",
+            {"owner": owner, "limit": limit, "offset": offset},
         )
         return [self.clean(row["n"]) for row in rows]
 
@@ -772,15 +933,33 @@ class Store:
             if not tags or all(tag in r["p"]["tags"] for tag in tags)
         ]
 
-    def neighborhood(self, owner, seeds, depth):
+    def neighborhood(
+        self,
+        owner,
+        seeds,
+        depth,
+        include_untrusted=False,
+        include_quarantined=False,
+    ):
         # Bounded BFS over real stored graph edges; retracted links never enter retrieval.
         edges = self.relations(owner)
         visited, frontier, selected = set(seeds), set(seeds), {}
+        allowed = {id: True for id in seeds}
+
+        def can_retrieve(id):
+            if id not in allowed:
+                allowed[id] = record_is_retrievable(
+                    self.get(owner, id),
+                    include_untrusted=include_untrusted,
+                    include_quarantined=include_quarantined,
+                )
+            return allowed[id]
+
         for _ in range(depth):
             following = set()
             for edge in edges:
                 a, b = edge["source_id"], edge["target_id"]
-                if a in frontier or b in frontier:
+                if (a in frontier or b in frontier) and can_retrieve(a) and can_retrieve(b):
                     selected[edge["id"]] = edge
                     following.update((a, b))
             frontier = following - visited

@@ -10,6 +10,13 @@ from psycopg.types.json import Jsonb
 from .clock import utc_now_iso
 from .postgres import vector_from_text, vector_literal
 from .retrieval import record_matches_filters
+from .security import (
+    apply_security_update,
+    prepare_record_security,
+    reassess_record_security,
+    record_fingerprint,
+    record_is_retrievable,
+)
 from .store import Conflict, DuplicateRequestConflict, FileInUse, NotFound
 
 
@@ -72,6 +79,14 @@ class PostgresStore:
         result["tags"] = result.get("tags") or []
         result["keywords"] = result.get("keywords") or []
         result["file_id"] = result.get("file_id") or ""
+        result["trust_level"] = result.get("trust_level") or "trusted"
+        result["security_state"] = result.get("security_state") or "active"
+        result["provenance"] = result.get("provenance") or {}
+        result["content_hash"] = result.get("content_hash") or record_fingerprint(
+            result.get("title", ""), result.get("content", "")
+        )
+        result["security_warnings"] = result.get("security_warnings") or []
+        result["security_history"] = result.get("security_history") or []
         result.pop("owner", None)
         result.pop("archived_at", None)
         return result
@@ -304,17 +319,21 @@ class PostgresStore:
         vectors,
         file_id="",
         record_id=None,
+        security=None,
     ):
         if len(vectors) != len(keywords):
             raise ValueError("Embedding count does not match keyword count")
         record_id, created = record_id or uid(), now()
+        security = security or prepare_record_security(title, content, None)
         with self.transaction(), self._connection() as connection:
             if file_id and self.get(owner, file_id)["kind"] != "file":
                 raise NotFound()
             connection.execute(
                 """INSERT INTO records(
-                    owner,id,kind,subtype,title,content,source,tags,created_at,keywords,metadata,file_id
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    owner,id,kind,subtype,title,content,source,tags,created_at,keywords,metadata,file_id,
+                    trust_level,security_state,provenance,content_hash,security_warnings,
+                    security_history
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     owner,
                     record_id,
@@ -328,10 +347,31 @@ class PostgresStore:
                     keywords,
                     Jsonb(metadata),
                     file_id or None,
+                    security["trust_level"],
+                    security["security_state"],
+                    Jsonb(security["provenance"]),
+                    security["content_hash"],
+                    security["security_warnings"],
+                    Jsonb(security["security_history"]),
                 ),
             )
             self._index(owner, record_id, keywords, vectors)
-            self._event(owner, kind + ".created", {"record_id": record_id, "kind": kind})
+            self._event(
+                owner, kind + ".created", {"record_id": record_id, "kind": kind}
+            )
+            if security["security_state"] != "active" or security["security_warnings"]:
+                self._event(
+                    owner,
+                    kind + ".security_updated",
+                    {
+                        "record_id": record_id,
+                        "kind": kind,
+                        "trust_level": security["trust_level"],
+                        "security_state": security["security_state"],
+                        "warnings": security["security_warnings"],
+                        "version": 1,
+                    },
+                )
         return self.get(owner, record_id)
 
     def _index(self, owner, record_id, keywords, vectors):
@@ -377,12 +417,25 @@ class PostgresStore:
                 raise NotFound()
             if row["version"] != data.expected_version:
                 raise Conflict()
+            previous = self._record(row)
+            title = data.title if data.title is not None else row["title"]
+            content = data.content if data.content is not None else row["content"]
+            security = reassess_record_security(
+                previous, title, content, row["version"] + 1
+            )
+            security_changed = (
+                security["security_state"] != previous["security_state"]
+                or security["trust_level"] != previous["trust_level"]
+                or security["security_warnings"] != previous["security_warnings"]
+            )
             connection.execute(
                 """UPDATE records SET
                 content=COALESCE(%s,content),title=COALESCE(%s,title),
                 subtype=COALESCE(%s,subtype),source=COALESCE(%s,source),
                 tags=COALESCE(%s::text[],tags),keywords=COALESCE(%s::text[],keywords),
-                metadata=COALESCE(%s,metadata),version=version+1
+                metadata=COALESCE(%s,metadata),trust_level=%s,security_state=%s,
+                provenance=%s,content_hash=%s,security_warnings=%s,
+                security_history=%s,version=version+1
                 WHERE owner=%s AND id=%s""",
                 (
                     data.content,
@@ -392,6 +445,12 @@ class PostgresStore:
                     data.tags,
                     data.keywords,
                     Jsonb(data.metadata) if data.metadata is not None else None,
+                    security["trust_level"],
+                    security["security_state"],
+                    Jsonb(security["provenance"]),
+                    security["content_hash"],
+                    security["security_warnings"],
+                    Jsonb(security["security_history"]),
                     owner,
                     id,
                 ),
@@ -409,6 +468,62 @@ class PostgresStore:
                     "record_id": id,
                     "kind": row["kind"],
                     "change": "record",
+                    "version": row["version"] + 1,
+                },
+            )
+            if security_changed:
+                self._event(
+                    owner,
+                    row["kind"] + ".security_updated",
+                    {
+                        "record_id": id,
+                        "kind": row["kind"],
+                        "trust_level": security["trust_level"],
+                        "security_state": security["security_state"],
+                        "warnings": security["security_warnings"],
+                        "version": row["version"] + 1,
+                    },
+                )
+        return self.get(owner, id)
+
+    def update_security(self, owner, id, data):
+        with self.transaction(), self._connection() as connection:
+            row = connection.execute(
+                """SELECT * FROM records WHERE owner=%s AND id=%s
+                AND archived_at IS NULL FOR UPDATE""",
+                (owner, id),
+            ).fetchone()
+            if not row:
+                raise NotFound()
+            if row["version"] != data.expected_version:
+                raise Conflict()
+            record = self._record(row)
+            security = apply_security_update(record, data)
+            connection.execute(
+                """UPDATE records SET trust_level=%s,security_state=%s,provenance=%s,
+                content_hash=%s,security_warnings=%s,security_history=%s,version=version+1
+                WHERE owner=%s AND id=%s""",
+                (
+                    security["trust_level"],
+                    security["security_state"],
+                    Jsonb(security["provenance"]),
+                    security["content_hash"],
+                    security["security_warnings"],
+                    Jsonb(security["security_history"]),
+                    owner,
+                    id,
+                ),
+            )
+            self._event(
+                owner,
+                row["kind"] + ".security_updated",
+                {
+                    "record_id": id,
+                    "kind": row["kind"],
+                    "trust_level": security["trust_level"],
+                    "security_state": security["security_state"],
+                    "warnings": security["security_warnings"],
+                    "reason": data.reason,
                     "version": row["version"] + 1,
                 },
             )
@@ -445,12 +560,41 @@ class PostgresStore:
             result.append(item)
         return result
 
-    def list(self, owner, kind=None, limit=50, offset=0):
+    def list(
+        self,
+        owner,
+        kind=None,
+        limit=50,
+        offset=0,
+        include_untrusted=False,
+        include_quarantined=False,
+    ):
         with self._connection() as connection:
             rows = connection.execute(
                 """SELECT * FROM records WHERE owner=%s AND archived_at IS NULL
-                AND (%s='' OR kind=%s) ORDER BY created_at DESC,id OFFSET %s LIMIT %s""",
-                (owner, kind or "", kind or "", offset, limit),
+                AND (%s='' OR kind=%s)
+                AND (%s OR trust_level='trusted')
+                AND (%s OR security_state='active')
+                ORDER BY created_at DESC,id OFFSET %s LIMIT %s""",
+                (
+                    owner,
+                    kind or "",
+                    kind or "",
+                    include_untrusted,
+                    include_quarantined,
+                    offset,
+                    limit,
+                ),
+            ).fetchall()
+        return [self._record(row) for row in rows]
+
+    def quarantined(self, owner, limit=50, offset=0):
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT * FROM records WHERE owner=%s AND archived_at IS NULL
+                AND security_state='quarantined'
+                ORDER BY created_at DESC,id OFFSET %s LIMIT %s""",
+                (owner, offset, limit),
             ).fetchall()
         return [self._record(row) for row in rows]
 
@@ -804,6 +948,10 @@ class PostgresStore:
                     "source": record["source"],
                     "keywords": record["keywords"],
                     "metadata": record["metadata"],
+                    "trust_level": record["trust_level"],
+                    "security_state": record["security_state"],
+                    "security_warnings": record["security_warnings"],
+                    "provenance": record["provenance"],
                     "matched_keywords": matches,
                     "score": score,
                 }
@@ -844,15 +992,38 @@ class PostgresStore:
             result.append((keyword, parent))
         return result
 
-    def neighborhood(self, owner, seeds, depth):
+    def neighborhood(
+        self,
+        owner,
+        seeds,
+        depth,
+        include_untrusted=False,
+        include_quarantined=False,
+    ):
         edges = self.relations(owner)
         visited, frontier, selected = set(seeds), set(seeds), {}
+        allowed = {id: True for id in seeds}
+
+        def can_retrieve(id):
+            if id not in allowed:
+                allowed[id] = record_is_retrievable(
+                    self.get(owner, id),
+                    include_untrusted=include_untrusted,
+                    include_quarantined=include_quarantined,
+                )
+            return allowed[id]
+
         for _ in range(depth):
             following = set()
             for edge in edges:
-                if edge["source_id"] in frontier or edge["target_id"] in frontier:
+                source, target = edge["source_id"], edge["target_id"]
+                if (
+                    (source in frontier or target in frontier)
+                    and can_retrieve(source)
+                    and can_retrieve(target)
+                ):
                     selected[edge["id"]] = edge
-                    following.update((edge["source_id"], edge["target_id"]))
+                    following.update((source, target))
             frontier = following - visited
             visited.update(following)
         return {

@@ -13,8 +13,11 @@ For a suspected vulnerability, use GitHub's **Security → Report a vulnerabilit
 - Remote MCP uses OAuth 2.1 authorization code + S256 PKCE. Codes, access tokens, and rotating refresh tokens are stored only as hashes and can be revoked per connected client in the console.
 - Agent messages are restricted to stable connections in one account. Sender identity is derived from authentication, and only the exact recipient can read its inbox or advance acknowledgement state.
 - Treat every agent message as untrusted input. It cannot authorize a broader task or carry credentials/Vault values; connected agents must validate requests against current user authority before acting.
+- Label browser, scraper, message-derived, and imported record content with external provenance. Such records are quarantined and omitted from ordinary retrieval until explicitly reviewed; content changes invalidate prior scan evidence and restore quarantine.
+- Deterministic record warnings are defense in depth, not a content-security oracle. They do not execute, render, fetch, or send stored content to an external scanner. Agents remain responsible for treating retrieved text as data rather than instructions.
 - Vault access is a separate per-agent permission. Grant it only to agents trusted with every stored Vault value.
 - Vault values use AES-256-GCM authenticated encryption. The server-generated `vault.key` is mode 0600 and must remain persistent; losing it loses the values.
+- Prefer one-time Vault capture links when an agent needs a new credential. Links are owner-bound, expire within one hour, store only a token hash, and are consumed before encryption; the plaintext value is accepted only in the signed-in browser request body and is never returned.
 - A default `/data` backup contains both Vault ciphertext and its decryption key and must be protected as plaintext-equivalent. Configure `MEMORY_VAULT_KEY_FILE` outside the data backup when operational separation is required.
 - `vault exec` avoids printing values but cannot prevent the launched child process from logging or exfiltrating its environment.
 - Sessions are HttpOnly and SameSite=Lax; Secure is enabled for HTTPS origins. Browser mutations require a matching Origin.

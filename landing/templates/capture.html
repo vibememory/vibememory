@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Vault 보안 입력 — Vibe Memory</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/console.css">
+  <script src="/assets/capture.js" defer></script>
+</head>
+<body class="auth-page capture-page">
+  <a class="auth-brand brand" href="/console"><img src="/assets/favicon.svg" alt="" width="30" height="30"><span>vibe<span class="brand-light">memory</span></span></a>
+  <main class="capture-layout">
+    <section class="auth-card capture-card" aria-labelledby="capture-title">
+      <p class="eyebrow">SECURE VAULT CAPTURE</p>
+      <h1 id="capture-title">비밀값을 안전하게 저장하세요.</h1>
+      <p id="capture-status">일회용 요청을 확인하고 있습니다…</p>
+      <div class="capture-request" id="capture-request" hidden>
+        <dl><div><dt>요청한 에이전트</dt><dd id="capture-agent"></dd></div><div><dt>저장 위치</dt><dd><code id="capture-name"></code></dd></div><div><dt>만료 시각</dt><dd id="capture-expiry"></dd></div></dl>
+        <p id="capture-description" hidden></p>
+      </div>
+      <form id="capture-form" hidden>
+        <label>비밀값<textarea id="capture-value" name="value" required minlength="1" maxlength="65536" rows="5" autocomplete="off" spellcheck="false" placeholder="API 키 또는 토큰을 붙여넣으세요"></textarea></label>
+        <p class="auth-note">입력값은 암호화되어 Vault에 직접 저장되며 에이전트·채팅·응답에는 표시되지 않습니다.</p>
+        <p id="capture-error" class="form-error" role="alert" hidden></p>
+        <button class="button primary" id="capture-submit" type="submit">Vault에 안전하게 저장 <span aria-hidden="true">↗</span></button>
+      </form>
+      <div class="capture-success" id="capture-success" hidden><strong>저장했습니다.</strong><p>이 링크는 사용 완료되어 다시 열 수 없습니다. 이제 이 창을 닫아도 됩니다.</p><a class="button primary" href="/console">콘솔로 이동 ↗</a></div>
+    </section>
+  </main>
+</body>
+</html>

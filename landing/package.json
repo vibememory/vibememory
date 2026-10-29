@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "prebuild": "python3 scripts/package_vendor.py",
     "build": "next build && python3 scripts/finalize_next_build.py",
-    "check": "npm run typecheck && npm run build && node --check public/assets/i18n.js && node --check public/assets/install-prompt.js && node --check public/assets/app.js && node --check public/assets/login.js && node --check public/assets/connect.js && node --check public/assets/console.js && node --check src/worker.js && wrangler deploy --dry-run",
+    "check": "npm run typecheck && npm run build && node --check public/assets/i18n.js && node --check public/assets/install-prompt.js && node --check public/assets/app.js && node --check public/assets/login.js && node --check public/assets/connect.js && node --check public/assets/capture.js && node --check public/assets/console.js && node --check src/worker.js && wrangler deploy --dry-run",
     "deploy": "npm run check && wrangler deploy"
   },
   "dependencies": {

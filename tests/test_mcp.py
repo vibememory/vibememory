@@ -57,9 +57,7 @@ def authorize(client, registration, scopes="memory:read memory:write feature:wri
     consent = client.get("/oauth/authorize", params=params, follow_redirects=False)
     assert consent.status_code == 200, consent.text
     assert registration["client_name"] in consent.text
-    consent_token = re.search(
-        r'name="consent_token" value="([0-9a-f]{64})"', consent.text
-    )
+    consent_token = re.search(r'name="consent_token" value="([0-9a-f]{64})"', consent.text)
     assert consent_token
     approved = client.post(
         "/oauth/authorize",
@@ -133,9 +131,7 @@ def test_chatgpt_login_redirect_and_consent_round_trip(settings):
             "form-action 'self' https://client.example"
             in consent.headers["content-security-policy"]
         )
-        token_match = re.search(
-            r'name="consent_token" value="([0-9a-f]{64})"', consent.text
-        )
+        token_match = re.search(r'name="consent_token" value="([0-9a-f]{64})"', consent.text)
         assert token_match
 
         rejected = client.post(
@@ -225,11 +221,13 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "document_create",
             "relation_create",
             "record_update",
+            "record_security_update",
             "record_archive",
             "record_restore",
             "record_merge",
             "relation_update",
             "events_poll",
+            "quarantine_list",
             "feature_requests_list",
             "feature_request_submit",
             "agents_list",
@@ -282,6 +280,65 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "record_id": created["id"],
             "kind": "memory",
         }
+
+        external = mcp(
+            client,
+            credentials["access_token"],
+            50,
+            "tools/call",
+            {
+                "name": "memory_create",
+                "arguments": {
+                    "content": "quoted browser result",
+                    "kind": "fact",
+                    "keywords": ["browser result"],
+                    "provenance": {
+                        "source_type": "external",
+                        "origin_agent": "browser-agent",
+                        "origin_url": "https://example.test/result",
+                    },
+                },
+            },
+        )["result"]["structuredContent"]["record"]
+        assert external["security_state"] == "quarantined"
+        quarantined = mcp(
+            client,
+            credentials["access_token"],
+            51,
+            "tools/call",
+            {"name": "quarantine_list", "arguments": {}},
+        )["result"]["structuredContent"]["items"]
+        assert [item["id"] for item in quarantined] == [external["id"]]
+        hidden = mcp(
+            client,
+            credentials["access_token"],
+            52,
+            "tools/call",
+            {
+                "name": "memory_search",
+                "arguments": {"keywords": ["browser result"], "match_mode": "exact"},
+            },
+        )["result"]["structuredContent"]
+        assert hidden["hits"] == []
+        released = mcp(
+            client,
+            credentials["access_token"],
+            53,
+            "tools/call",
+            {
+                "name": "record_security_update",
+                "arguments": {
+                    "id": external["id"],
+                    "expected_version": 1,
+                    "trust_level": "trusted",
+                    "state": "active",
+                    "scan_verdict": "safe",
+                    "scan_evidence": ["reviewed exact content"],
+                    "reason": "explicit agent review",
+                },
+            },
+        )["result"]["structuredContent"]["record"]
+        assert released["security_state"] == "active"
 
         agent_data = mcp(
             client,

@@ -1,7 +1,7 @@
-:HL["/assets/style.css?v=20261029-dashboard-console-1","style"]
-:HL["/assets/i18n.css?v=20261029-dashboard-console-1","style"]
-:HL["/assets/console-fixes.css?v=20261029-dashboard-console-1","style"]
-:HL["/assets/console.css?v=20261029-dashboard-console-1","style"]
+:HL["/assets/style.css?v=20261029-vault-security-1","style"]
+:HL["/assets/i18n.css?v=20261029-vault-security-1","style"]
+:HL["/assets/console-fixes.css?v=20261029-vault-security-1","style"]
+:HL["/assets/console.css?v=20261029-vault-security-1","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"console","h":96,"c":"$Q2"}]]
-0:{"b":"dXSu-K6gqrGvIV3M4Akqa","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"oNGWyqffdKJUZKohcK84i","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

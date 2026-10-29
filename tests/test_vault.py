@@ -1,5 +1,6 @@
 import sqlite3
 import stat
+from urllib.parse import parse_qs, urlsplit
 
 from conftest import SpyEmbedder
 from fastapi.testclient import TestClient
@@ -109,3 +110,96 @@ def test_vault_restart_rotation_deletion_and_tamper_detection(settings):
         ).status_code == 200
         assert client.delete("/v1/vault/API_TOKEN").status_code == 204
         assert client.get("/v1/vault").json()["items"] == []
+
+
+def test_agent_creates_owner_bound_one_time_browser_capture(settings):
+    settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
+    with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
+        client.headers["Origin"] = ORIGIN
+        signup(client)
+        agent_key = client.post(
+            "/auth/api-keys", json={"name": "Moltbook agent", "vault_access": True}
+        ).json()["key"]
+
+        client.cookies.clear()
+        client.headers.pop("Origin")
+        created = client.post(
+            "/v1/vault/captures",
+            headers={"Authorization": "Bearer " + agent_key},
+            json={
+                "name": "MOLTBOOK_API_KEY",
+                "description": "Rotated Moltbook credential",
+                "expires_in": 300,
+            },
+        )
+        assert created.status_code == 201, created.text
+        capture = created.json()
+        assert capture["requester_agent_name"] == "Moltbook agent"
+        assert "value" not in capture
+        parsed_capture_url = urlsplit(capture["capture_url"])
+        assert parsed_capture_url.query == ""
+        token = parse_qs(parsed_capture_url.fragment)["token"][0]
+        assert len(token) >= 40
+        assert client.get(f"/v1/vault/captures/{token}").status_code == 401
+
+        client.headers["Origin"] = ORIGIN
+        assert client.post(
+            "/auth/login", json={"email": "vault@example.invalid", "password": PASSWORD}
+        ).status_code == 200
+        inspected = client.get(f"/v1/vault/captures/{token}")
+        assert inspected.status_code == 200, inspected.text
+        assert inspected.json()["name"] == "MOLTBOOK_API_KEY"
+
+        submitted = client.put(
+            f"/v1/vault/captures/{token}", json={"value": "secret-from-browser"}
+        )
+        assert submitted.status_code == 200, submitted.text
+        assert submitted.json()["name"] == "MOLTBOOK_API_KEY"
+        assert "value" not in submitted.json()
+        assert client.put(
+            f"/v1/vault/captures/{token}", json={"value": "replacement"}
+        ).status_code == 409
+        assert client.get(f"/v1/vault/captures/{token}").status_code == 409
+
+        client.cookies.clear()
+        retrieved = client.get(
+            "/v1/vault/MOLTBOOK_API_KEY",
+            headers={"Authorization": "Bearer " + agent_key},
+        )
+        assert retrieved.json()["value"] == "secret-from-browser"
+        with sqlite3.connect(settings.data_dir / "vault.sqlite") as db:
+            dump = "\n".join(db.iterdump())
+        assert token not in dump
+        assert "secret-from-browser" not in dump
+
+
+def test_capture_is_hidden_from_other_owner_and_expiry_is_enforced(settings):
+    settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
+    with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
+        client.headers["Origin"] = ORIGIN
+        signup(client)
+        agent_key = client.post(
+            "/auth/api-keys", json={"name": "Capture agent", "vault_access": True}
+        ).json()["key"]
+        client.cookies.clear()
+        client.headers.pop("Origin")
+        capture_url = client.post(
+            "/v1/vault/captures",
+            headers={"Authorization": "Bearer " + agent_key},
+            json={"name": "SERVICE_TOKEN", "expires_in": 60},
+        ).json()["capture_url"]
+        token = parse_qs(urlsplit(capture_url).fragment)["token"][0]
+
+        client.headers["Origin"] = ORIGIN
+        signup(client, "other@example.invalid")
+        assert client.get(f"/v1/vault/captures/{token}").status_code == 404
+        client.cookies.clear()
+        assert client.post(
+            "/auth/login", json={"email": "vault@example.invalid", "password": PASSWORD}
+        ).status_code == 200
+        with sqlite3.connect(settings.data_dir / "vault.sqlite") as db:
+            db.execute("UPDATE vault_captures SET expires_at=0")
+        assert client.get(f"/v1/vault/captures/{token}").status_code == 410
+        assert client.put(
+            f"/v1/vault/captures/{token}", json={"value": "too-late"}
+        ).status_code == 410

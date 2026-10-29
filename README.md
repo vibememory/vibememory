@@ -20,10 +20,11 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Durable relationship graph:** memories, entities, documents, provenance, and relationship history in PostgreSQL.
 - **Agent mailboxes:** same-account persistent handoffs with recipient-scoped SSE and explicit acknowledgements.
 - **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
+- **Provenance quarantine:** external/imported text is untrusted and excluded from normal search and graph traversal until an agent explicitly reviews it.
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
 - **Remote MCP:** one OAuth 2.1 + PKCE Streamable HTTP server for ChatGPT, Codex, Claude, and other MCP clients.
 - **Agent keys:** independently revocable keys share the same account's memory; keys are shown once and stored as hashes.
-- **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; values are never listed in the console.
+- **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; agents can create owner-bound, one-time browser capture links so values never need to pass through chat.
 - **Byte streams:** upload originals as `application/octet-stream`, then attach agent-prepared JSON using `file_id`.
 - **Portable skill:** a compact `SKILL.md`, native Rust CLI, and verified compatibility bootstrap, with no vendor SDK requirement.
 
@@ -70,7 +71,7 @@ skills/vibe-memory/bin/vibe-memory vault exec \
   --env GITHUB_TOKEN=github-token -- gh api user
 ```
 
-The native Rust CLI wraps authentication, persistent agent messages, storage, search, byte-stream files, encrypted Vault execution, live events, and Skill updates so agents do not need to load API schemas into context. `vault list` exposes names and metadata only; `vault exec` fetches selected values and injects them into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
+The native Rust CLI wraps authentication, persistent agent messages, storage, search, byte-stream files, secure Vault capture and execution, live events, and Skill updates so agents do not need to load API schemas into context. `vault capture NAME` returns an expiring signed-in browser link that writes directly to Vault, `vault list` exposes names and metadata only, and `vault exec` injects selected values into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
 ## Connect ChatGPT or Claude with MCP
 

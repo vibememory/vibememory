@@ -73,8 +73,10 @@ with sync_playwright() as p:
     relation = agent.post('/v1/relations',data={'source_id':entity_id,'target_id':memory_id,'relation':'PREFERS','reason':'QA explicit preference'})
     assert relation.status == 201
     page.locator('.sidebar [data-view="relations"]').click()
-    expect(page.locator('.records-table')).to_contain_text('PREFERS')
-    page.locator('[data-action="graph"]').click()
+    expect(page.locator('.relationship-graph-stage')).to_be_visible()
+    expect(page.locator('.relationship-node')).to_have_count(2)
+    expect(page.locator('.relationship-edge-label')).to_contain_text('PREFERS')
+    page.locator('.relationship-node').first.click()
     expect(page.locator('.graph-node')).to_have_count(2)
     page.locator('#detail-dialog button.close-detail').first.click()
     page.locator('.sidebar [data-view="documents"]').click()

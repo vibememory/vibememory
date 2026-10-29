@@ -58,6 +58,147 @@ function tags(keywords) { return (keywords || []).slice(0, 5).map(tag => `<span 
 function recordRows(items, deletable = true) {
   return `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 내용</th><th>키워드</th><th>등록일</th><th></th></tr></thead><tbody>${items.map(item => `<tr><td><button class="record-title" data-action="detail" data-id="${h(item.id)}">${h(item.title || item.content?.slice(0, 70) || '이름 없는 기록')}</button><span class="record-subtitle">${h(item.kind === 'entity' ? item.subtype : item.source || ({memory:'기억', document:'문서', file:'원본 파일'}[item.kind] || item.kind))}</span></td><td>${tags(item.keywords)}</td><td>${date(item.created_at)}</td><td><div class="row-actions">${item.kind === 'file' ? `<a href="/v1/files/${h(item.id)}" download>다운로드 ↓</a>` : ''}${deletable ? `<button class="danger" data-action="delete" data-id="${h(item.id)}">삭제</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
 }
+const graphKindLabel = kind => ({memory:'기억',entity:'엔티티',document:'문서',file:'파일'}[kind] || kind || '기록');
+const graphTitle = record => record?.title || record?.content?.slice(0, 46) || '이름 없는 기록';
+function layoutRelationshipGraph(records, relations) {
+  const width = 1000, height = 610, centerX = width / 2, centerY = height / 2;
+  const degree = new Map(records.map(record => [record.id, 0]));
+  for (const edge of relations) {
+    degree.set(edge.source_id, (degree.get(edge.source_id) || 0) + 1);
+    degree.set(edge.target_id, (degree.get(edge.target_id) || 0) + 1);
+  }
+  const nodes = [...records].sort((a, b) => (degree.get(b.id) - degree.get(a.id)) || graphTitle(a).localeCompare(graphTitle(b)));
+  const positions = new Map();
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  nodes.forEach((node, index) => {
+    if (nodes.length === 1) return positions.set(node.id, {x:centerX,y:centerY});
+    if (nodes.length === 2) return positions.set(node.id, {x:index ? 680 : 320,y:centerY});
+    if (index === 0) return positions.set(node.id, {x:centerX,y:centerY});
+    const orbitIndex = nodes.length > 2 ? index - 1 : index;
+    const angle = orbitIndex * goldenAngle - Math.PI / 2;
+    const radius = Math.min(235, 118 + Math.sqrt(Math.max(0, orbitIndex)) * 31);
+    positions.set(node.id, {x:centerX + Math.cos(angle) * radius * 1.45,y:centerY + Math.sin(angle) * radius});
+  });
+  for (let iteration = 0; iteration < 180 && nodes.length > 2; iteration += 1) {
+    const forces = new Map(nodes.map(node => [node.id, {x:0,y:0}]));
+    for (let left = 0; left < nodes.length; left += 1) {
+      for (let right = left + 1; right < nodes.length; right += 1) {
+        const a = positions.get(nodes[left].id), b = positions.get(nodes[right].id);
+        const dx = b.x - a.x || .1, dy = b.y - a.y || .1;
+        const distanceSquared = Math.max(2500, dx * dx + dy * dy);
+        const distance = Math.sqrt(distanceSquared), push = 125000 / distanceSquared;
+        const fx = dx / distance * push, fy = dy / distance * push;
+        forces.get(nodes[left].id).x -= fx; forces.get(nodes[left].id).y -= fy;
+        forces.get(nodes[right].id).x += fx; forces.get(nodes[right].id).y += fy;
+      }
+    }
+    for (const edge of relations) {
+      const source = positions.get(edge.source_id), target = positions.get(edge.target_id);
+      if (!source || !target || source === target) continue;
+      const dx = target.x - source.x, dy = target.y - source.y;
+      const distance = Math.max(1, Math.hypot(dx, dy));
+      const pull = (distance - 215) * .025;
+      const fx = dx / distance * pull, fy = dy / distance * pull;
+      forces.get(edge.source_id).x += fx; forces.get(edge.source_id).y += fy;
+      forces.get(edge.target_id).x -= fx; forces.get(edge.target_id).y -= fy;
+    }
+    const cooling = .28 * (1 - iteration / 220);
+    for (const node of nodes) {
+      const point = positions.get(node.id), force = forces.get(node.id);
+      force.x += (centerX - point.x) * .003; force.y += (centerY - point.y) * .003;
+      point.x = Math.max(88, Math.min(width - 88, point.x + force.x * cooling));
+      point.y = Math.max(68, Math.min(height - 68, point.y + force.y * cooling));
+    }
+  }
+  return {nodes,positions,width,height};
+}
+function relationshipGeometry(edge, positions, slot, slotCount) {
+  const source = positions.get(edge.source_id), target = positions.get(edge.target_id);
+  if (edge.source_id === edge.target_id) {
+    const x = source.x, y = source.y;
+    return {path:`M ${x + 29} ${y - 9} C ${x + 94} ${y - 92}, ${x - 82} ${y - 96}, ${x - 27} ${y - 10}`,labelX:x,labelY:y - 83};
+  }
+  const dx = target.x - source.x, dy = target.y - source.y, distance = Math.max(1, Math.hypot(dx, dy));
+  const unitX = dx / distance, unitY = dy / distance;
+  const start = {x:source.x + unitX * 38,y:source.y + unitY * 38};
+  const end = {x:target.x - unitX * 45,y:target.y - unitY * 45};
+  const offset = (slot - (slotCount - 1) / 2) * 38;
+  const control = {x:(start.x + end.x) / 2 - unitY * offset,y:(start.y + end.y) / 2 + unitX * offset};
+  return {
+    path:`M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${control.x.toFixed(1)} ${control.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
+    labelX:(start.x * .25 + control.x * .5 + end.x * .25),
+    labelY:(start.y * .25 + control.y * .5 + end.y * .25)
+  };
+}
+function relationshipGraph(records, relations, totals) {
+  const {nodes,positions,width,height} = layoutRelationshipGraph(records, relations);
+  const recordMap = new Map(records.map(record => [record.id, record]));
+  const pairCounts = new Map(), pairSlots = new Map();
+  for (const edge of relations) {
+    const pair = [edge.source_id, edge.target_id].sort().join('\0');
+    pairCounts.set(pair, (pairCounts.get(pair) || 0) + 1);
+  }
+  const renderedEdges = relations.map((edge, index) => {
+    const pair = [edge.source_id, edge.target_id].sort().join('\0');
+    const slot = pairSlots.get(pair) || 0; pairSlots.set(pair, slot + 1);
+    return {...edge,index,...relationshipGeometry(edge, positions, slot, pairCounts.get(pair))};
+  });
+  const truncated = nodes.length < totals.nodes || relations.length < totals.relations;
+  const paths = renderedEdges.map(edge => `<path class="relationship-edge" data-source="${h(edge.source_id)}" data-target="${h(edge.target_id)}" d="${edge.path}" pathLength="1" marker-end="url(#relationship-arrow)" style="--edge-delay:${Math.min(edge.index * 24, 480)}ms"/>`).join('');
+  const edgeLabels = renderedEdges.map(edge => {
+    const source = recordMap.get(edge.source_id), target = recordMap.get(edge.target_id);
+    return `<button class="relationship-edge-label" type="button" data-action="relation-detail" data-source="${h(edge.source_id)}" data-target="${h(edge.target_id)}" data-source-name="${h(graphTitle(source))}" data-target-name="${h(graphTitle(target))}" data-relation="${h(edge.relation)}" data-reason="${h(edge.reason)}" style="--x:${edge.labelX / width * 100};--y:${edge.labelY / height * 100};--edge-delay:${Math.min(280 + edge.index * 24, 760)}ms" aria-label="${h(graphTitle(source))}에서 ${h(graphTitle(target))}로 ${h(edge.relation)} 관계. 근거 보기">${h(edge.relation)}</button>`;
+  }).join('');
+  const nodeButtons = nodes.map((node, index) => {
+    const point = positions.get(node.id), kind = graphKindLabel(node.kind), title = graphTitle(node);
+    return `<button class="relationship-node kind-${h(node.kind)}" type="button" data-action="graph" data-id="${h(node.id)}" data-node-id="${h(node.id)}" style="--x:${point.x / width * 100};--y:${point.y / height * 100};--node-delay:${Math.min(120 + index * 32, 680)}ms" aria-label="${h(title)}, ${h(kind)}. 주변 연결 보기"><span class="relationship-node-mark" aria-hidden="true"></span><span><strong>${h(title)}</strong><small>${h(kind)} · 연결 ${h((relations.filter(edge => edge.source_id === node.id || edge.target_id === node.id).length))}</small></span></button>`;
+  }).join('');
+  return `<section class="console-panel relationship-panel"><div class="relationship-toolbar"><div><p>LIVE MEMORY MAP</p><h2>활성 관계 네트워크</h2></div><div class="relationship-stats"><span><strong>${nodes.length}</strong> 노드</span><span><strong>${relations.length}</strong> 관계</span><button type="button" data-action="reload">다시 배치 ↻</button></div></div><div class="relationship-graph-scroll"><div class="relationship-graph-stage" role="group" aria-label="기억 관계 그래프. 노드를 선택하면 주변 연결을, 관계 이름을 선택하면 근거를 확인할 수 있습니다."><svg class="relationship-lines" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="relationship-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${paths}</svg>${edgeLabels}${nodeButtons}</div></div><div class="relationship-footer"><div class="relationship-legend"><span><i class="kind-memory"></i>기억</span><span><i class="kind-entity"></i>엔티티</span><span><i class="kind-document"></i>문서</span><span><i class="kind-file"></i>파일</span></div><p>${truncated ? `전체 ${totals.nodes}개 노드 · ${totals.relations}개 관계 중 연결 중심으로 표시하고 있습니다.` : '노드에 포인터를 올리면 직접 연결된 경로가 강조됩니다.'}</p></div></section>`;
+}
+function bindRelationshipGraph() {
+  const stage = $('.relationship-graph-stage');
+  if (!stage) return;
+  const highlight = id => {
+    const connected = new Set([id]);
+    for (const edge of stage.querySelectorAll('.relationship-edge')) {
+      if (edge.dataset.source === id || edge.dataset.target === id) {
+        connected.add(edge.dataset.source); connected.add(edge.dataset.target); edge.classList.add('is-active'); edge.classList.remove('is-muted');
+      } else { edge.classList.remove('is-active'); edge.classList.add('is-muted'); }
+    }
+    for (const label of stage.querySelectorAll('.relationship-edge-label')) {
+      const active = label.dataset.source === id || label.dataset.target === id;
+      label.classList.toggle('is-active', active); label.classList.toggle('is-muted', !active);
+    }
+    for (const node of stage.querySelectorAll('.relationship-node')) {
+      node.classList.toggle('is-active', node.dataset.nodeId === id); node.classList.toggle('is-muted', !connected.has(node.dataset.nodeId));
+    }
+  };
+  const highlightEdge = (source, target) => {
+    for (const edge of stage.querySelectorAll('.relationship-edge')) {
+      const active = edge.dataset.source === source && edge.dataset.target === target;
+      edge.classList.toggle('is-active', active); edge.classList.toggle('is-muted', !active);
+    }
+    for (const label of stage.querySelectorAll('.relationship-edge-label')) {
+      const active = label.dataset.source === source && label.dataset.target === target;
+      label.classList.toggle('is-active', active); label.classList.toggle('is-muted', !active);
+    }
+    for (const node of stage.querySelectorAll('.relationship-node')) {
+      const active = node.dataset.nodeId === source || node.dataset.nodeId === target;
+      node.classList.toggle('is-active', active); node.classList.toggle('is-muted', !active);
+    }
+  };
+  const clear = () => stage.querySelectorAll('.is-active,.is-muted').forEach(item => item.classList.remove('is-active','is-muted'));
+  const interact = event => {
+    const node = event.target.closest('.relationship-node');
+    if (node) return highlight(node.dataset.nodeId);
+    const edge = event.target.closest('.relationship-edge-label');
+    if (edge) highlightEdge(edge.dataset.source, edge.dataset.target);
+  };
+  stage.addEventListener('pointerover', interact);
+  stage.addEventListener('pointerleave', clear);
+  stage.addEventListener('focusin', interact);
+  stage.addEventListener('focusout', event => { if (!stage.contains(event.relatedTarget)) clear(); });
+}
 const viewInfo = {
   overview: ['대시보드','WORKSPACE OVERVIEW','대시보드','에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.'],
   memories: ['기억','YOUR PERSONAL CONTEXT','기억','내가 남긴 사실과 취향, 에이전트가 구성한 엔티티를 확인하세요.','+ 기억 추가'],
@@ -121,13 +262,29 @@ async function navigate(view, reset = true) {
       html = `<section class="console-panel">${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>요청 내용</th><th>에이전트</th><th>상태</th><th>등록일</th></tr></thead><tbody>${result.items.map(item => `<tr><td><button class="record-title" data-action="request-detail" data-id="${h(item.id)}">${h(item.title)}</button><span class="record-subtitle">${h(item.description.slice(0,100))}</span></td><td>${h(item.agent_name)}</td><td><span class="tag">접수됨</span></td><td>${date(item.created_at)}</td></tr>`).join('')}</tbody></table></div>` : empty('더 나은 기억을 위한 아이디어가 있나요?','에이전트에서 요청을 보내거나 콘솔에서 필요한 기능과 사용 사례를 남겨주세요.')}</section>`;
     } else {
       const result = await api('/v1/relations');
-      const ids = [...new Set(result.items.flatMap(edge => [edge.source_id,edge.target_id]))];
-      const names = new Map(await Promise.all(ids.map(async id => { const record = await api('/v1/records/' + encodeURIComponent(id)); return [id,record.title]; })));
-      html = `<section class="console-panel"><div class="panel-heading"><h2>활성 관계 <span class="tag">${result.items.length}</span></h2></div>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>시작</th><th>관계</th><th>대상 · 근거</th><th></th></tr></thead><tbody>${result.items.map(edge => `<tr><td><button class="record-title" data-action="detail" data-id="${h(edge.source_id)}">${h(names.get(edge.source_id))}</button></td><td><span class="tag">${h(edge.relation)}</span></td><td><button class="record-title" data-action="detail" data-id="${h(edge.target_id)}">${h(names.get(edge.target_id))}</button><span class="record-subtitle">${h(edge.reason)}</span></td><td><div class="row-actions"><button data-action="graph" data-id="${h(edge.source_id)}">연결 보기 ↗</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('기억 사이의 연결을 기다리고 있어요.','에이전트가 엔티티와 관계를 구성해 등록하면 여기에 표시됩니다.')}</section>`;
+      if (!result.items.length) {
+        html = `<section class="console-panel">${empty('기억 사이의 연결을 기다리고 있어요.','에이전트가 엔티티와 관계를 구성해 등록하면 여기에 표시됩니다.')}</section>`;
+      } else {
+        const allIds = [...new Set(result.items.flatMap(edge => [edge.source_id,edge.target_id]))];
+        const degree = new Map(allIds.map(id => [id, 0]));
+        for (const edge of result.items) {
+          degree.set(edge.source_id, degree.get(edge.source_id) + 1); degree.set(edge.target_id, degree.get(edge.target_id) + 1);
+        }
+        const ranked = [...result.items].sort((a, b) => (degree.get(b.source_id) + degree.get(b.target_id)) - (degree.get(a.source_id) + degree.get(a.target_id)));
+        const visibleIds = new Set(), visibleRelations = [];
+        for (const edge of ranked) {
+          const additions = Number(!visibleIds.has(edge.source_id)) + Number(!visibleIds.has(edge.target_id));
+          if (visibleIds.size + additions > 64 || visibleRelations.length >= 120) continue;
+          visibleIds.add(edge.source_id); visibleIds.add(edge.target_id); visibleRelations.push(edge);
+        }
+        const records = await Promise.all([...visibleIds].map(id => api('/v1/records/' + encodeURIComponent(id))));
+        html = relationshipGraph(records, visibleRelations, {nodes:allIds.length,relations:result.items.length});
+      }
     }
     if (ticket !== generation) return;
     $('#view-content').innerHTML = html;
     if (view === 'keys') $('#view-content').insertAdjacentHTML('afterbegin', installPromptCard());
+    if (view === 'relations') bindRelationshipGraph();
     const filter = $('#kind-filter');
     if (filter) filter.addEventListener('change', () => { recordKind = filter.value; pageOffset = 0; navigate(view, false); });
     const search = $('#search-records');
@@ -194,7 +351,7 @@ document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return navigate(nav.dataset.view);
   const button = event.target.closest('[data-action]'); if (!button) return;
-  const {action,id,name,description} = button.dataset;
+  const {action,id,name,description,sourceName,targetName,relation,reason} = button.dataset;
   try {
     if (action === 'toggle-account') {
       if (window.innerWidth <= 820) {
@@ -233,6 +390,9 @@ document.addEventListener('click', async event => {
     if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); return navigate(currentView, false); }
     if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); return detail(record.title || '기록 상세', `<p class="detail-content-text">${h(record.content)}</p><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre>`); }
     if (action === 'request-detail') { const record = await api('/v1/feature-requests/' + encodeURIComponent(id)); return detail(record.title,`<pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre>`); }
+    if (action === 'relation-detail') {
+      return detail('관계 근거',`<div class="relation-detail-route"><span>${h(sourceName)}</span><strong>${h(relation)}</strong><span>${h(targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(reason)}</p></div>`);
+    }
     if (action === 'graph') {
       const graph = await api('/v1/graph/' + encodeURIComponent(id) + '?depth=2');
       return detail('연결된 기억',`<div class="graph-nodes">${graph.nodes.map(node => `<div class="graph-node"><strong>${h(node.kind)}</strong>${h(node.title)}</div>`).join('')}</div><pre class="detail-pre">${h(JSON.stringify(graph.relations.map(edge => ({relation:edge.relation,reason:edge.reason,source:edge.source_id,target:edge.target_id})),null,2))}</pre>`);

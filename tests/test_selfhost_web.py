@@ -27,6 +27,8 @@ def test_console_and_api_share_one_origin(settings):
         assert "/downloads/vibe-memory-skill.zip" in console_script.text
         assert "login --vault-access --no-browser" in console_script.text
         assert "vault exec" in console_script.text
+        assert "relationship-graph-stage" in console_script.text
+        assert "prefers-reduced-motion" in client.get("/assets/console.css").text
         console = client.get("/console").text
         assert "topbar-search" in console
         assert "sidebar-backdrop" in console

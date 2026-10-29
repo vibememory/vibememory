@@ -7,6 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MEMORY_", env_file=".env", extra="ignore")
     data_dir: Path = Path(".data")
+    database_url: str | None = None
+    database_pool_size: int = Field(default=10, ge=1, le=100)
+    embedding_dimension: int = Field(default=384, ge=1, le=2000)
     vault_key_file: Path | None = None
     # Map independently revocable agent keys to a common user ID.
     api_keys: dict[str, str] = Field(default_factory=dict)

@@ -28,13 +28,18 @@ with sync_playwright() as p:
     page.locator('#auth-submit').click()
     page.wait_for_url('**/console',timeout=30000)
     expect(page.locator('#view-title')).to_have_text('대시보드')
-    expect(page.locator('.welcome-panel')).to_be_visible()
-    expect(page.locator('.setup-panel')).to_be_visible()
+    expect(page.locator('.dashboard-guide')).to_be_visible()
     expect(page.locator('.stat-card')).to_have_count(4)
+    page.locator('[data-action="dismiss-dashboard-guide"]').click()
+    expect(page.locator('.dashboard-guide')).not_to_be_visible()
+    page.reload()
+    expect(page.locator('.dashboard-guide')).not_to_be_visible()
+    expect(page.locator('.dashboard-status-panel')).to_be_visible()
     page.locator('.topbar-search').click()
     expect(page.locator('#view-title')).to_have_text('기억')
     expect(page.locator('#search-records [name="keywords"]')).to_be_focused()
-    assert not context.storage_state()['origins'], 'Secrets must not enter localStorage'
+    stored = [item for origin in context.storage_state()['origins'] for item in origin['localStorage']]
+    assert stored == [{'name':'vibe-memory:dashboard-guide:hidden','value':'1'}], 'Only the dashboard display preference may enter localStorage'
     session = next(cookie for cookie in context.cookies() if cookie['name']=='vm_session')
     assert session['httpOnly'] and session['secure'] == base.startswith('https://') and session['sameSite']=='Lax'
     page.locator('#primary-action').click()
@@ -74,9 +79,10 @@ with sync_playwright() as p:
     assert relation.status == 201
     page.locator('.sidebar [data-view="relations"]').click()
     expect(page.locator('.relationship-graph-stage')).to_be_visible()
-    expect(page.locator('.relationship-node')).to_have_count(2)
-    expect(page.locator('.relationship-edge-label')).to_contain_text('PREFERS')
-    page.locator('.relationship-node').first.click()
+    expect(page.locator('.relationship-graph-stage canvas')).not_to_have_count(0)
+    expect(page.locator('.relationship-graph-a11y [data-action="graph"]')).to_have_count(2)
+    expect(page.locator('.relationship-graph-a11y [data-action="relation-detail"]')).to_contain_text('PREFERS')
+    page.locator('.relationship-graph-a11y [data-action="graph"]').first.click()
     expect(page.locator('.graph-node')).to_have_count(2)
     page.locator('#detail-dialog button.close-detail').first.click()
     page.locator('.sidebar [data-view="documents"]').click()

@@ -39,6 +39,8 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      POSTGRES_PASSWORD: ci-only-postgres-password
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

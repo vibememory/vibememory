@@ -11,7 +11,9 @@ from vibe_memory.embeddings import Embedder
 
 
 def test_real_keyword_search(tmp_path):
-    settings = Settings(data_dir=tmp_path, api_keys={KEY_A: "me", KEY_A2: "me"})
+    settings = Settings(
+        data_dir=tmp_path, database_url=None, api_keys={KEY_A: "me", KEY_A2: "me"}
+    )
     embedder = Embedder(settings.embedding_model, Path(".data/models"))
     with TestClient(create_app(settings, embedder)) as client:
         client.headers["Authorization"] = "Bearer " + KEY_A

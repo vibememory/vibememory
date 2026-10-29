@@ -39,7 +39,7 @@ uv run python scripts/selfhost_smoke.py
 
 The smoke test creates isolated QA users on its target service; use a disposable development volume. Never use `docker compose down -v` on a volume containing data you want to keep.
 
-For frontend changes, edit `landing/dist/` directly. The console is buildless HTML/CSS/JS. Update the self-hosted console as well as the hosted site. `python3 landing/scripts/package_skill.py` refreshes the downloadable skill. `landing/scripts/verify_site.py` checks the public presentation; `verify_console.py` creates QA accounts and exercises real data operations. Browser tests require Playwright Chromium and OS libraries.
+For frontend changes, edit the Next.js App Router source in `landing/app/`, its shared components, or the browser assets in `landing/public/`. The preserved page bodies live in `landing/templates/` while the interface is migrated incrementally. Run `npm --prefix landing run build`; it creates the static export in `landing/dist/` for both self-hosting and Cloudflare. Do not edit generated files in `landing/dist/` directly. `python3 landing/scripts/package_skill.py` refreshes the downloadable skill. `landing/scripts/verify_site.py` checks the public presentation; `verify_console.py` creates QA accounts and exercises real data operations. Browser tests require Playwright Chromium and OS libraries.
 
 ## Pull requests
 

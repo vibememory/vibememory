@@ -12,14 +12,30 @@ artifacts = Path("/tmp/vibe-memory-landing-qa")
 artifacts.mkdir(exist_ok=True)
 with sync_playwright() as p:
     browser = p.chromium.launch()
-    context = browser.new_context(viewport={"width": 1440, "height": 1000}, device_scale_factor=1)
+    context = browser.new_context(
+        viewport={"width": 1440, "height": 1000}, device_scale_factor=1, locale="ko-KR"
+    )
     page = context.new_page()
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))
     assert page.goto(base).status == 200
     page.wait_for_timeout(300)
-    assert page.title().startswith("Vibe Memory")
+    assert page.title().endswith("Vibe Memory")
     assert page.locator("h1").inner_text().startswith("에이전트가 바뀌어도")
+    language = page.locator("[data-vm-language] select")
+    for code, expected, html_lang in [
+        ("en", "Even when agents change", "en"),
+        ("zh", "即使更换智能体", "zh"),
+        ("ja", "エージェントが変わっても", "ja"),
+        ("es", "Aunque cambies de agente", "es"),
+        ("vi", "Ngay cả khi đổi tác nhân", "vi"),
+        ("th", "แม้จะเปลี่ยนเอเจนต์", "th"),
+        ("ko", "에이전트가 바뀌어도", "ko"),
+    ]:
+        language.select_option(code)
+        assert page.locator("h1").inner_text().startswith(expected)
+        assert page.locator("html").get_attribute("lang") == html_lang
+        assert page.evaluate("localStorage.getItem('vm-language')") == code
     assert page.locator("[data-agent]").count() == 4
     for name, label in [
         ("claude", "Claude Code"),

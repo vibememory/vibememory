@@ -2,7 +2,33 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname.startsWith('/auth/') || url.pathname.startsWith('/v1/') || ['/health','/openapi.json'].includes(url.pathname)) {
+    const sessionCookie = request.headers.get('Cookie') || '';
+    const hasSession = /(?:^|;\s*)vm_session=/.test(sessionCookie);
+    if (url.pathname === '/' && ['GET', 'HEAD'].includes(request.method) && hasSession) {
+      try {
+        const target = new URL('http://127.0.0.1:8080/auth/me');
+        const headers = new Headers(request.headers);
+        headers.delete('Host'); headers.delete('Forwarded');
+        headers.delete('X-Forwarded-Host'); headers.delete('X-Forwarded-Proto');
+        const session = await env.MEMORY_ORIGIN.fetch(new Request(target, {
+          method: 'GET', headers, redirect: 'manual'
+        }));
+        const signedIn = session.ok;
+        await session.body?.cancel();
+        if (signedIn) {
+          return new Response(null, {
+            status: 302,
+            headers: {'Location':'/console', 'Cache-Control':'no-store'}
+          });
+        }
+      } catch { /* A session-check failure must not make the public landing unavailable. */ }
+    }
+    const apiPath = url.pathname.startsWith('/auth/')
+      || url.pathname.startsWith('/v1/')
+      || url.pathname.startsWith('/oauth/')
+      || url.pathname.startsWith('/.well-known/')
+      || ['/mcp','/health','/openapi.json'].includes(url.pathname);
+    if (apiPath) {
       try {
         const target = new URL('http://127.0.0.1:8080');
         target.pathname = url.pathname; target.search = url.search;

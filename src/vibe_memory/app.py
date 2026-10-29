@@ -1,15 +1,25 @@
 import asyncio
 import hashlib
 import hmac
+import html
 import json
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
 from typing import Literal
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import anyio
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -25,17 +35,24 @@ from .auth import (
 from .config import Settings
 from .embeddings import Embedder
 from .files import FileStorage
+from .mcp import LATEST_PROTOCOL, MCPHandler
 from .models import (
     DocumentInput,
     EntityInput,
     FeatureRequestInput,
     KeywordUpdate,
     MemoryInput,
+    RecordArchive,
+    RecordMerge,
+    RecordUpdate,
     RelationInput,
     RelationUpdate,
     SearchInput,
     VaultInput,
 )
+from .oauth import OAuthError, OAuthStore
+from .postgres import PostgresDatabase
+from .postgres_store import PostgresStore
 from .retrieval import retrieve
 from .store import Conflict, DuplicateRequestConflict, FileInUse, NotFound, Store
 from .vault import VaultIntegrityError, VaultNotFound, VaultStore
@@ -55,31 +72,72 @@ class DeviceApproval(BaseModel):
     approved: bool
 
 
+class OAuthRegistration(BaseModel):
+    model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
+    redirect_uris: list[str] = Field(min_length=1, max_length=10)
+    client_name: str = Field(default="MCP client", min_length=1, max_length=100)
+    token_endpoint_auth_method: str = "none"
+    grant_types: list[str] = Field(
+        default_factory=lambda: ["authorization_code", "refresh_token"]
+    )
+    response_types: list[str] = Field(default_factory=lambda: ["code"])
+
+
 def create_app(settings=None, embedder=None):
     settings = settings or Settings()
     settings.validate_keys()
     embedder = embedder or Embedder(settings.embedding_model, settings.embedding_cache)
 
-    accounts = AuthStore(settings.data_dir / "auth.sqlite")
+    database = (
+        PostgresDatabase(
+            settings.database_url,
+            embedder.model_name,
+            settings.embedding_dimension,
+            settings.database_pool_size,
+        )
+        if settings.database_url
+        else None
+    )
+    account_storage = database or settings.data_dir / "auth.sqlite"
+    accounts = AuthStore(account_storage)
+    oauth = OAuthStore(account_storage)
     files = FileStorage(settings.data_dir / "files", settings.upload_max_bytes)
     vault = VaultStore(
-        settings.data_dir / "vault.sqlite",
+        database or settings.data_dir / "vault.sqlite",
         settings.vault_key_file or settings.data_dir / "vault.key",
     )
 
     @asynccontextmanager
     async def lifespan(app):
-        app.state.store = Store(settings.data_dir / "graph", embedder.model_name)
-        yield
-        app.state.store.close()
+        app.state.store = (
+            PostgresStore(database)
+            if database
+            else Store(settings.data_dir / "graph", embedder.model_name)
+        )
+        try:
+            yield
+        finally:
+            app.state.store.close()
+            if database:
+                database.close()
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.7.0",
+        version="0.9.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
     auth = HTTPBearer(auto_error=False)
+    mcp_handler = MCPHandler(embedder)
+    public_origin = settings.public_origin.rstrip("/")
+    oauth_issuer = public_origin
+    mcp_resource = public_origin + "/mcp"
+    oauth_scopes = {"memory:read", "memory:write", "feature:write"}
+    scope_labels = {
+        "memory:read": "기억·문서·관계 조회",
+        "memory:write": "기억·엔티티·문서·관계 저장",
+        "feature:write": "기능 요청 제출",
+    }
     key_hashes = [
         (hashlib.sha256(key.encode()).digest(), owner) for key, owner in settings.api_keys.items()
     ]
@@ -131,10 +189,130 @@ def create_app(settings=None, embedder=None):
     def store(request: Request):
         return request.app.state.store
 
+    def valid_redirect_uri(value):
+        if not isinstance(value, str) or not 1 <= len(value) <= 2048:
+            return False
+        if re.search(r"[\x00-\x20\x7f]", value):
+            return False
+        try:
+            parsed = urlsplit(value)
+            port = parsed.port
+        except ValueError:
+            return False
+        if not parsed.scheme or not parsed.netloc or parsed.fragment or parsed.username or parsed.password:
+            return False
+        if parsed.scheme == "https":
+            return True
+        return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "::1", "localhost"} and port is not None
+
+    def oauth_error_response(error, description, status=400):
+        return JSONResponse(
+            {"error": error, "error_description": description},
+            status_code=status,
+            headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        )
+
+    async def oauth_form(request):
+        content_type = request.headers.get("content-type", "").split(";", 1)[0].strip()
+        if content_type != "application/x-www-form-urlencoded":
+            raise HTTPException(415, "OAuth requests must use application/x-www-form-urlencoded")
+        body = await request.body()
+        if len(body) > 32768:
+            raise HTTPException(413, "OAuth request is too large")
+        try:
+            parsed = parse_qs(body.decode("utf-8"), keep_blank_values=True, strict_parsing=True)
+        except (UnicodeDecodeError, ValueError):
+            raise HTTPException(400, "Malformed OAuth form") from None
+        return {key: values[-1] for key, values in parsed.items()}
+
+    def normalize_scopes(value):
+        scopes = set((value or " ".join(sorted(oauth_scopes))).split())
+        if not scopes or not scopes.issubset(oauth_scopes):
+            raise OAuthError("invalid_scope", "Requested OAuth scope is not supported")
+        return " ".join(sorted(scopes))
+
+    def authorize_parameters(params):
+        client_id = params.get("client_id", "")
+        client = oauth.client(client_id)
+        if not client:
+            raise OAuthError("invalid_request", "Unknown OAuth client")
+        redirect_uri = params.get("redirect_uri", "")
+        if redirect_uri not in client["redirect_uris"]:
+            raise OAuthError("invalid_request", "redirect_uri is not registered")
+        if params.get("response_type") != "code":
+            raise OAuthError("unsupported_response_type", "Only authorization code is supported")
+        challenge = params.get("code_challenge", "")
+        if params.get("code_challenge_method") != "S256" or not re.fullmatch(
+            r"[A-Za-z0-9_-]{43,128}", challenge
+        ):
+            raise OAuthError("invalid_request", "A valid S256 PKCE challenge is required")
+        state = params.get("state", "")
+        if len(state) > 2048:
+            raise OAuthError("invalid_request", "OAuth state is too long")
+        resource = params.get("resource") or mcp_resource
+        if resource != mcp_resource:
+            raise OAuthError("invalid_target", "OAuth resource does not match this MCP server")
+        return {
+            "client": client,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "scope": normalize_scopes(params.get("scope", "")),
+            "state": state,
+            "resource": resource,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+            "response_type": "code",
+        }
+
+    def redirect_with_query(uri, values):
+        parsed = urlsplit(uri)
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        for key, value in values.items():
+            if value != "":
+                query[key] = [value]
+        encoded = urlencode([(key, item) for key, items in query.items() for item in items])
+        return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, encoded, parsed.fragment))
+
+    def oauth_consent_token(session_token, params):
+        """Bind consent to the browser session and exact OAuth authorization request."""
+        message = "\0".join(
+            str(params[key])
+            for key in (
+                "client_id",
+                "redirect_uri",
+                "scope",
+                "state",
+                "resource",
+                "code_challenge",
+                "code_challenge_method",
+                "response_type",
+            )
+        )
+        return hmac.new(
+            session_token.encode(), message.encode(), hashlib.sha256
+        ).hexdigest()
+
+    def mcp_challenge():
+        metadata = public_origin + "/.well-known/oauth-protected-resource/mcp"
+        return {
+            "WWW-Authenticate": (
+                f'Bearer resource_metadata="{metadata}", '
+                f'scope="{" ".join(sorted(oauth_scopes))}"'
+            ),
+            "Cache-Control": "no-store",
+        }
+
+    def mcp_principal(request):
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.casefold() != "bearer" or not token:
+            return None
+        return oauth.principal(token, mcp_resource)
+
     @app.middleware("http")
     async def no_private_cache(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/v1/", "/auth/")):
+        if request.url.path.startswith(("/v1/", "/auth/", "/oauth/", "/mcp", "/.well-known/")):
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"
         return response
@@ -222,6 +400,285 @@ def create_app(settings=None, embedder=None):
     def revoke_api_key(id: str, user=Depends(browser_user)):
         accounts.revoke_key(user["id"], id)
 
+    @app.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+    @app.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
+    def oauth_protected_resource():
+        return {
+            "resource": mcp_resource,
+            "authorization_servers": [oauth_issuer],
+            "scopes_supported": sorted(oauth_scopes),
+            "bearer_methods_supported": ["header"],
+            "resource_documentation": public_origin + "/guide#mcp",
+        }
+
+    @app.get("/.well-known/oauth-authorization-server", include_in_schema=False)
+    def oauth_server_metadata():
+        return {
+            "issuer": oauth_issuer,
+            "authorization_endpoint": public_origin + "/oauth/authorize",
+            "token_endpoint": public_origin + "/oauth/token",
+            "registration_endpoint": public_origin + "/oauth/register",
+            "revocation_endpoint": public_origin + "/oauth/revoke",
+            "scopes_supported": sorted(oauth_scopes),
+            "response_types_supported": ["code"],
+            "response_modes_supported": ["query"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "revocation_endpoint_auth_methods_supported": ["none"],
+            "code_challenge_methods_supported": ["S256"],
+            "service_documentation": public_origin + "/guide#mcp",
+        }
+
+    @app.post("/oauth/register", status_code=201, tags=["MCP OAuth"])
+    def oauth_register(data: OAuthRegistration, request: Request):
+        accounts.throttle(
+            "oauth-register:" + (request.client.host if request.client else "unknown"), 50
+        )
+        if data.token_endpoint_auth_method != "none":
+            return oauth_error_response(
+                "invalid_client_metadata", "Only public PKCE clients are supported"
+            )
+        if re.search(r"[\x00-\x1f\x7f]", data.client_name):
+            return oauth_error_response(
+                "invalid_client_metadata", "Client name contains control characters"
+            )
+        if "authorization_code" not in data.grant_types or any(
+            grant not in {"authorization_code", "refresh_token"} for grant in data.grant_types
+        ):
+            return oauth_error_response(
+                "invalid_client_metadata", "Unsupported OAuth grant type"
+            )
+        if data.response_types != ["code"]:
+            return oauth_error_response(
+                "invalid_client_metadata", "Only the code response type is supported"
+            )
+        redirect_uris = list(dict.fromkeys(data.redirect_uris))
+        if not all(valid_redirect_uri(uri) for uri in redirect_uris):
+            return oauth_error_response(
+                "invalid_redirect_uri",
+                "Redirect URIs must use HTTPS or an explicit localhost loopback port",
+            )
+        return JSONResponse(
+            oauth.register_client(data.client_name, redirect_uris),
+            status_code=201,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get("/oauth/authorize", response_class=HTMLResponse, tags=["MCP OAuth"])
+    def oauth_authorize(request: Request):
+        try:
+            params = authorize_parameters(request.query_params)
+        except OAuthError as error:
+            return oauth_error_response(error.code, error.description)
+        session_token = request.cookies.get(COOKIE, "")
+        user = accounts.user_for_session(session_token)
+        if not user:
+            next_path = request.url.path + ("?" + request.url.query if request.url.query else "")
+            return RedirectResponse("/login?" + urlencode({"next": next_path}), status_code=302)
+        hidden = "".join(
+            f'<input type="hidden" name="{html.escape(key, quote=True)}" '
+            f'value="{html.escape(str(value), quote=True)}">'
+            for key, value in params.items()
+            if key != "client"
+        )
+        hidden += (
+            '<input type="hidden" name="consent_token" value="'
+            + oauth_consent_token(session_token, params)
+            + '">'
+        )
+        permissions = "".join(
+            f"<li>{html.escape(scope_labels[scope])}</li>" for scope in params["scope"].split()
+        )
+        client_name = html.escape(params["client"]["client_name"])
+        account = html.escape(user["email"])
+        redirect = urlsplit(params["redirect_uri"])
+        redirect_origin = urlunsplit((redirect.scheme, redirect.netloc, "", "", ""))
+        page = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>MCP 연결 승인 — Vibe Memory</title><link rel="icon" href="/assets/favicon.svg">
+<style>*{{box-sizing:border-box}}body{{margin:0;min-height:100vh;display:grid;place-items:center;
+padding:24px;background:#f6f7fa;color:#263147;font-family:Arial,sans-serif}}main{{width:min(520px,100%);
+padding:34px;border:1px solid #e0e5ef;border-radius:16px;background:#fff;box-shadow:0 24px 70px
+rgba(31,45,75,.08)}}.brand{{display:flex;align-items:center;gap:10px;margin-bottom:28px;color:#263147;
+font-size:19px;font-weight:700;text-decoration:none}}.brand img{{width:30px}}.eyebrow{{color:#315bfb;
+font-size:10px;letter-spacing:1.2px}}h1{{margin:9px 0 10px;font-size:25px}}p,li{{color:#68758b;
+font-size:13px;line-height:1.75}}ul{{margin:20px 0;padding:16px 16px 16px 34px;border-radius:10px;
+background:#f5f7ff}}.account{{padding:12px 14px;border:1px solid #e5e8ef;border-radius:9px;
+background:#fafbfc}}.actions{{display:flex;gap:9px;margin-top:24px}}button{{flex:1;padding:12px;border-radius:8px;
+font-size:13px;font-weight:650;cursor:pointer}}.approve{{border:0;background:#315bfb;color:#fff}}.deny{{border:1px
+solid #dfe3eb;background:#fff;color:#68758b}}small{{display:block;margin-top:18px;color:#98a1af;
+font-size:10px;line-height:1.65}}</style></head><body><main><a class="brand" href="/"><img
+src="/assets/favicon.svg" alt="">vibememory</a><p class="eyebrow">CONNECT REMOTE MCP</p>
+<h1>{client_name} 연결을 승인할까요?</h1><p>GPT 또는 Claude가 다음 작업을 내 Vibe Memory에서
+수행할 수 있습니다.</p><ul>{permissions}</ul><p class="account">연결 계정 · <strong>{account}</strong></p>
+<form method="post" action="/oauth/authorize">{hidden}<div class="actions"><button class="deny"
+name="decision" value="deny" type="submit">거절</button><button class="approve" name="decision"
+value="approve" type="submit">연결 승인</button></div></form><small>원본 파일 업로드와 Vault 비밀값은
+이 연결에 포함되지 않습니다. 연결은 콘솔에서 언제든 철회할 수 있습니다.</small></main></body></html>"""
+        return HTMLResponse(
+            page,
+            headers={
+                "Content-Security-Policy": (
+                    "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; "
+                    f"form-action 'self' {redirect_origin}; base-uri 'none'; "
+                    "frame-ancestors 'none'"
+                ),
+                "Referrer-Policy": "no-referrer",
+                "X-Frame-Options": "DENY",
+            },
+        )
+
+    @app.post("/oauth/authorize", tags=["MCP OAuth"])
+    async def oauth_authorize_decision(request: Request):
+        session_token = request.cookies.get(COOKIE, "")
+        user = accounts.user_for_session(session_token)
+        if not user:
+            return oauth_error_response("access_denied", "Login session expired", 401)
+        form = await oauth_form(request)
+        try:
+            params = authorize_parameters(form)
+        except OAuthError as error:
+            return oauth_error_response(error.code, error.description)
+        expected_consent = oauth_consent_token(session_token, params)
+        if not hmac.compare_digest(form.get("consent_token", ""), expected_consent):
+            return oauth_error_response(
+                "access_denied", "OAuth consent request is invalid or expired", 403
+            )
+        if form.get("decision") != "approve":
+            location = redirect_with_query(
+                params["redirect_uri"],
+                {"error": "access_denied", "state": params["state"]},
+            )
+            return RedirectResponse(location, status_code=303)
+        code = oauth.create_code(
+            client_id=params["client_id"],
+            user_id=user["id"],
+            redirect_uri=params["redirect_uri"],
+            scope=params["scope"],
+            resource=params["resource"],
+            code_challenge=params["code_challenge"],
+        )
+        location = redirect_with_query(
+            params["redirect_uri"], {"code": code, "state": params["state"]}
+        )
+        return RedirectResponse(location, status_code=303)
+
+    @app.post("/oauth/token", tags=["MCP OAuth"])
+    async def oauth_token(request: Request):
+        form = await oauth_form(request)
+        client_id = form.get("client_id", "")
+        if not oauth.client(client_id):
+            return oauth_error_response("invalid_client", "Unknown OAuth client", 401)
+        resource = form.get("resource") or mcp_resource
+        if resource != mcp_resource:
+            return oauth_error_response("invalid_target", "OAuth resource does not match")
+        try:
+            if form.get("grant_type") == "authorization_code":
+                verifier = form.get("code_verifier", "")
+                if not re.fullmatch(r"[A-Za-z0-9._~-]{43,128}", verifier):
+                    raise OAuthError("invalid_grant", "A valid PKCE verifier is required")
+                result = oauth.exchange_code(
+                    code=form.get("code", ""),
+                    client_id=client_id,
+                    redirect_uri=form.get("redirect_uri", ""),
+                    code_verifier=verifier,
+                    resource=resource,
+                )
+            elif form.get("grant_type") == "refresh_token":
+                scope = form.get("scope")
+                if scope:
+                    scope = normalize_scopes(scope)
+                result = oauth.refresh(
+                    refresh_token=form.get("refresh_token", ""),
+                    client_id=client_id,
+                    resource=resource,
+                    requested_scope=scope,
+                )
+            else:
+                raise OAuthError("unsupported_grant_type", "Unsupported OAuth grant type")
+        except OAuthError as error:
+            return oauth_error_response(error.code, error.description)
+        return JSONResponse(
+            result, headers={"Cache-Control": "no-store", "Pragma": "no-cache"}
+        )
+
+    @app.post("/oauth/revoke", status_code=200, tags=["MCP OAuth"])
+    async def oauth_revoke(request: Request):
+        form = await oauth_form(request)
+        oauth.revoke_token(form.get("token", ""))
+        return Response(status_code=200, headers={"Cache-Control": "no-store"})
+
+    @app.get("/auth/mcp-connections", tags=["account"])
+    def mcp_connections(user=Depends(browser_user)):
+        return {"items": oauth.list_connections(user["id"]), "server_url": mcp_resource}
+
+    @app.delete("/auth/mcp-connections/{client_id}", status_code=204, tags=["account"])
+    def revoke_mcp_connection(client_id: str, user=Depends(browser_user)):
+        try:
+            oauth.revoke_connection(user["id"], client_id)
+        except OAuthError:
+            raise HTTPException(404, "MCP 연결을 찾을 수 없습니다.") from None
+
+    @app.post("/mcp", tags=["MCP"])
+    async def mcp_endpoint(request: Request):
+        principal = mcp_principal(request)
+        if not principal:
+            return JSONResponse(
+                {"error": "unauthorized", "error_description": "OAuth login is required"},
+                status_code=401,
+                headers=mcp_challenge(),
+            )
+        body = await request.body()
+        if len(body) > 1024 * 1024:
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Request too large"}},
+                status_code=413,
+            )
+        try:
+            payload = json.loads(body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return JSONResponse(
+                {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
+                status_code=400,
+            )
+        db = request.app.state.store
+        if isinstance(payload, list):
+            if not payload:
+                return JSONResponse(
+                    {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}},
+                    status_code=400,
+                )
+            results = [mcp_handler.dispatch(item, principal, db) for item in payload]
+            results = [item for item in results if item is not None]
+            if not results:
+                return Response(status_code=202)
+            response = JSONResponse(results)
+        else:
+            result = mcp_handler.dispatch(payload, principal, db)
+            if result is None:
+                return Response(status_code=202)
+            response = JSONResponse(result)
+        response.headers["MCP-Protocol-Version"] = LATEST_PROTOCOL
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
+    @app.get("/mcp", include_in_schema=False)
+    def mcp_event_stream(request: Request):
+        if not mcp_principal(request):
+            return Response(status_code=401, headers=mcp_challenge())
+        return Response(
+            status_code=405,
+            headers={"Allow": "POST", "Cache-Control": "no-store"},
+        )
+
+    @app.options("/mcp", include_in_schema=False)
+    def mcp_options():
+        return Response(
+            status_code=204,
+            headers={"Allow": "POST, GET, OPTIONS", "Cache-Control": "no-store"},
+        )
+
     @app.exception_handler(NotFound)
     async def missing(request, error):
         return JSONResponse(status_code=404, content={"detail": "Record or relationship not found"})
@@ -229,7 +686,7 @@ def create_app(settings=None, embedder=None):
     @app.exception_handler(Conflict)
     async def conflict(request, error):
         return JSONResponse(
-            status_code=409, content={"detail": "Version conflict; reload the relationship"}
+            status_code=409, content={"detail": "Version conflict; reload the current resource"}
         )
 
     @app.exception_handler(FileInUse)
@@ -467,6 +924,32 @@ def create_app(settings=None, embedder=None):
     def update_keywords(id: str, data: KeywordUpdate, user=Depends(owner), db=Depends(store)):
         db.get(user, id)
         return db.update_keywords(user, id, data.keywords, vectors_for(data.keywords))
+
+    @app.patch("/v1/records/{id}", tags=["memories"])
+    def update_record(id: str, data: RecordUpdate, user=Depends(owner), db=Depends(store)):
+        vectors = vectors_for(data.keywords) if data.keywords is not None else None
+        return db.update_record(user, id, data, vectors)
+
+    @app.post("/v1/records/{id}/archive", tags=["memories"])
+    def archive_record(id: str, data: RecordArchive, user=Depends(owner), db=Depends(store)):
+        return db.archive(user, id, data.expected_version, data.reason)
+
+    @app.post("/v1/records/{id}/restore", tags=["memories"])
+    def restore_record(id: str, data: RecordArchive, user=Depends(owner), db=Depends(store)):
+        return db.restore(user, id, data.expected_version, data.reason)
+
+    @app.get("/v1/trash", tags=["memories"])
+    def trash(
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        return {"items": db.archived(user, limit, offset), "limit": limit, "offset": offset}
+
+    @app.post("/v1/records/merge", tags=["memories"])
+    def merge_records(data: RecordMerge, user=Depends(owner), db=Depends(store)):
+        return db.merge(user, data)
 
     @app.get("/v1/stats", tags=["memories"])
     def stats(user=Depends(owner), db=Depends(store)):

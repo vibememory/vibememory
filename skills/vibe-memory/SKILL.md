@@ -63,15 +63,22 @@ An unavailable service or failed checkpoint must not block the task. Report the 
 
 Use command help for flags. The ordinary workflow is:
 
-- `recall KEYWORD...`, `get ID`, `list`, `graph ID`
+- `recall KEYWORD...`, with `--match-mode semantic|exact|hybrid`, `--min-score`,
+  `--must-keyword`, `--exclude-keyword`, tags, metadata and UTC date filters when useful
+- `get ID`, `list`, `graph ID`
 - `remember CONTENT -k KEYWORD...`
 - `entity NAME --type TYPE -k KEYWORD...`
 - `document TITLE -k KEYWORD...` after the agent prepares metadata
 - `upload FILE` for an authorized original, then pass its returned ID to `document --file-id ID`
 - `relate SOURCE TARGET --relation NAME --reason EVIDENCE`
 - `keywords ID KEYWORD...` to replace an index
+- `update ID PAYLOAD.json` for an agent-prepared, version-checked field update
+- `archive ID --version N --reason TEXT`, `trash`, and
+  `restore ID --version N --reason TEXT` for recoverable removal
+- `merge CANONICAL_ID DUPLICATE_ID... --versions '@versions.json' --reason TEXT`
+  after updating the canonical record with every unique fact and keyword to retain
 - `relation-status ID --status active|retracted --reason TEXT --version N`
-- `forget ID` only when deletion is authorized
+- `forget ID` only for explicitly authorized irreversible deletion; ordinarily archive instead
 - `feedback`, `feedback-list`, `feedback-get`
 - `vault list`, `vault exec --env VARIABLE=ENTRY -- PROGRAM...`
 
@@ -95,9 +102,11 @@ The CLI intentionally has no command that prints a Vault value. Do not bypass it
 
 ## Data rules
 
-Supply 1–32 concise keywords or phrases per record, each at most 100 characters. Include useful names, topics and aliases. The server embeds each supplied keyword separately; it never embeds content, titles or metadata. Search with extracted keywords, not the raw user question. Keyword similarity is a lead, not proof: inspect the record and source evidence before answering.
+The canonical time basis for Vibe Memory is UTC. Treat every server-generated ISO timestamp as offset-aware UTC and every integer timestamp as Unix epoch seconds (an absolute UTC instant). Normalize unambiguous temporal facts and session checkpoints to UTC before saving them; preserve the user's original local expression and named time zone in content or metadata when it matters. Never guess a missing UTC offset or time zone—store the time as unresolved and ask the user when ordering depends on it.
 
-Resolve possible duplicate entities with `recall` and `get` before creating one. Use uppercase relationship identifiers such as `WORKS_ON`, `MENTIONED_IN`, `PREFERS` or `SUPERSEDES`; include an evidence-based reason. A correction should normally create the new record and connect it with `SUPERSEDES` rather than silently rewriting history.
+Supply 1–32 concise keywords or phrases per record, each at most 100 characters. Include useful names, topics and aliases. The server embeds each supplied keyword separately; it never embeds content, titles or metadata. Search with extracted keywords, not the raw user question. Prefer exact mode for identifiers and known phrases, semantic mode for conceptual recall, and hybrid when both matter. Use required/excluded keywords, structured metadata/date filters and a minimum score when broad semantic matches would pollute the result. Keyword similarity is a lead, not proof: inspect the record and source evidence before answering. Do not ask Vibe Memory to rerank raw content; select evidence yourself.
+
+Resolve possible duplicates with `recall` and `get` before creating one. Before an update, archive, restore, merge or relationship status change, fetch the current record and use its version; on conflict, refetch and reconsider rather than overwriting. Merge only after evidence confirms identity and after explicitly updating the canonical record with unique information, metadata and keywords worth keeping. Archive uncertain or obsolete duplicates so they remain recoverable. Use uppercase relationship identifiers such as `WORKS_ON`, `MENTIONED_IN`, `PREFERS` or `SUPERSEDES`; include an evidence-based reason. Preserve historical facts with a new record plus `SUPERSEDES` when silent rewriting would erase meaningful provenance; use versioned update for corrections to the same logical record.
 
 Analyze files with your own tools. `upload` sends opaque bytes without parsing or embedding; multipart forms and base64 JSON are not used. Prepare summaries, MIME type, hashes, entities and page/section evidence yourself, then register them with `document`. Upload originals only when storage is authorized.
 

@@ -6,12 +6,14 @@ import re
 import secrets
 import sqlite3
 import threading
-import time
 from contextlib import contextmanager
 from uuid import uuid4
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .clock import utc_epoch_seconds
+from .postgres import IntegrityError, PostgresDatabase
 
 COOKIE = "vm_session"
 SESSION_SECONDS = 7 * 24 * 3600
@@ -63,6 +65,12 @@ def password_hash(password, salt):
 
 class AuthStore:
     def __init__(self, path):
+        self.postgres = path if isinstance(path, PostgresDatabase) else None
+        if self.postgres:
+            self.path, self.lock = None, threading.RLock()
+            self.dummy_salt = secrets.token_hex(16)
+            self.dummy_hash = password_hash("not-a-real-password", self.dummy_salt)
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path, self.lock = path, threading.RLock()
         with self.connection() as db:
@@ -102,6 +110,10 @@ class AuthStore:
 
     @contextmanager
     def connection(self):
+        if self.postgres:
+            with self.postgres.compat_connection() as db:
+                yield db
+            return
         with self.lock:
             db = sqlite3.connect(self.path, timeout=10)
             db.row_factory = sqlite3.Row
@@ -113,7 +125,7 @@ class AuthStore:
                 db.close()
 
     def throttle(self, identifier, limit=12):
-        now = int(time.time())
+        now = utc_epoch_seconds()
         with self.connection() as db:
             key = digest(identifier)
             db.execute("DELETE FROM auth_attempts WHERE resets_at <= ?", (now,))
@@ -122,13 +134,15 @@ class AuthStore:
                 raise HTTPException(429, "시도가 너무 많습니다. 15분 뒤 다시 시도해주세요.")
             db.execute(
                 """INSERT INTO auth_attempts(key,count,resets_at) VALUES(?,1,?)
-                ON CONFLICT(key) DO UPDATE SET count=count+1""",
+                ON CONFLICT(key) DO UPDATE SET count=auth_attempts.count+1""",
                 (key, now + 900),
             )
 
     def signup(self, data):
         salt = secrets.token_hex(16)
-        user = dict(id=str(uuid4()), email=data.email, name=data.name, created_at=int(time.time()))
+        user = dict(
+            id=str(uuid4()), email=data.email, name=data.name, created_at=utc_epoch_seconds()
+        )
         hashed = password_hash(data.password, salt)
         try:
             with self.connection() as db:
@@ -136,7 +150,7 @@ class AuthStore:
                     "INSERT INTO users VALUES(?,?,?,?,?,?)",
                     (user["id"], user["email"], user["name"], salt, hashed, user["created_at"]),
                 )
-        except sqlite3.IntegrityError:
+        except (sqlite3.IntegrityError, IntegrityError):
             raise HTTPException(409, "이미 등록된 이메일입니다. 로그인해주세요.") from None
         return user
 
@@ -157,10 +171,10 @@ class AuthStore:
     def session(self, user_id):
         token = secrets.token_urlsafe(36)
         with self.connection() as db:
-            db.execute("DELETE FROM sessions WHERE expires_at <= ?", (int(time.time()),))
+            db.execute("DELETE FROM sessions WHERE expires_at <= ?", (utc_epoch_seconds(),))
             db.execute(
                 "INSERT INTO sessions VALUES(?,?,?)",
-                (digest(token), user_id, int(time.time()) + SESSION_SECONDS),
+                (digest(token), user_id, utc_epoch_seconds() + SESSION_SECONDS),
             )
         return token
 
@@ -171,7 +185,7 @@ class AuthStore:
             row = db.execute(
                 """SELECT u.id,u.email,u.name,u.created_at FROM users u
                 JOIN sessions s ON u.id=s.user_id WHERE s.hash=? AND s.expires_at>?""",
-                (digest(token), int(time.time())),
+                (digest(token), utc_epoch_seconds()),
             ).fetchone()
         return dict(row) if row else None
 
@@ -211,7 +225,7 @@ class AuthStore:
             id=str(uuid4()),
             name=name,
             prefix=token[:10] + "…",
-            created_at=int(time.time()),
+            created_at=utc_epoch_seconds(),
             vault_access=bool(vault_access),
         )
         with self.connection() as db:
@@ -235,7 +249,7 @@ class AuthStore:
                     name,
                     record["prefix"],
                     record["created_at"],
-                    int(record["vault_access"]),
+                    bool(record["vault_access"]),
                 ),
             )
         return {**record, "key": token}
@@ -244,7 +258,7 @@ class AuthStore:
         with self.connection() as db:
             result = db.execute(
                 "UPDATE api_keys SET vault_access=? WHERE id=? AND user_id=?",
-                (int(vault_access), id, user_id),
+                (bool(vault_access), id, user_id),
             )
             if not result.rowcount:
                 raise HTTPException(404, "키를 찾을 수 없습니다.")
@@ -253,9 +267,9 @@ class AuthStore:
     def start_device(self, name, vault_access=False):
         device = secrets.token_urlsafe(36)
         code = secrets.token_hex(5).upper()
-        expires = int(time.time()) + 300
+        expires = utc_epoch_seconds() + 300
         with self.connection() as db:
-            db.execute("DELETE FROM device_logins WHERE expires_at <= ?", (int(time.time()),))
+            db.execute("DELETE FROM device_logins WHERE expires_at <= ?", (utc_epoch_seconds(),))
             db.execute(
                 """INSERT INTO device_logins(
                     device_hash,user_hash,name,expires_at,state,user_id,polled_at,vault_access
@@ -268,7 +282,7 @@ class AuthStore:
                     "pending",
                     None,
                     0,
-                    int(vault_access),
+                    bool(vault_access),
                 ),
             )
         return {"device_code": device, "user_code": code, "expires_in": 300, "interval": 3}
@@ -280,7 +294,7 @@ class AuthStore:
                 WHERE user_hash=?""",
                 (digest(code.upper()),),
             ).fetchone()
-        if not row or row["expires_at"] <= int(time.time()):
+        if not row or row["expires_at"] <= utc_epoch_seconds():
             raise HTTPException(410, "연결 요청이 만료되었거나 존재하지 않습니다.")
         return {**dict(row), "vault_access": bool(row["vault_access"])}
 
@@ -289,14 +303,19 @@ class AuthStore:
             result = db.execute(
                 """UPDATE device_logins SET state=?,user_id=? WHERE user_hash=?
                 AND state='pending' AND expires_at>?""",
-                ("approved" if approved else "denied", user_id, digest(code.upper()), int(time.time())),
+                (
+                    "approved" if approved else "denied",
+                    user_id,
+                    digest(code.upper()),
+                    utc_epoch_seconds(),
+                ),
             )
             if not result.rowcount:
                 raise HTTPException(410, "이미 처리되었거나 만료된 연결 요청입니다.")
         return {"state": "approved" if approved else "denied"}
 
     def poll_device(self, device):
-        now = int(time.time())
+        now = utc_epoch_seconds()
         with self.connection() as db:
             row = db.execute("SELECT * FROM device_logins WHERE device_hash=?",
                              (digest(device),)).fetchone()

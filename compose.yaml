@@ -1,5 +1,22 @@
 name: vibe-memory
 services:
+  db:
+    image: pgvector/pgvector:0.8.7-pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-vibe_memory}"
+      POSTGRES_USER: "${POSTGRES_USER:-vibe_memory}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vibe_memory} -d ${POSTGRES_DB:-vibe_memory}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+
   app:
     build: .
     image: vibe-memory:local
@@ -8,9 +25,13 @@ services:
     ports:
       - "${MEMORY_BIND_ADDRESS:-127.0.0.1}:${MEMORY_HTTP_PORT:-8080}:8080"
     environment:
+      MEMORY_DATABASE_URL: "postgresql://${POSTGRES_USER:-vibe_memory}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-vibe_memory}"
       MEMORY_PUBLIC_ORIGIN: "${MEMORY_PUBLIC_ORIGIN:-http://localhost:8080}"
       MEMORY_SIGNUP_ENABLED: "${MEMORY_SIGNUP_ENABLED:-true}"
       MEMORY_UPLOAD_MAX_BYTES: "${MEMORY_UPLOAD_MAX_BYTES:-104857600}"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - memory_data:/data
     read_only: true
@@ -22,3 +43,4 @@ services:
       - ALL
 volumes:
   memory_data:
+  postgres_data:

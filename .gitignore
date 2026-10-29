@@ -23,6 +23,8 @@ dist/
 build/
 node_modules/
 .next/
+landing/out/
+landing/tsconfig.tsbuildinfo
 bin/
 !skills/vibe-memory/bin/
 !skills/vibe-memory/bin/vibe-memory

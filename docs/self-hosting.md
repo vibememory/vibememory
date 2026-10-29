@@ -5,10 +5,10 @@ The console, login, REST endpoints, graph, local keyword embeddings, and file st
 ## Requirements
 
 - Linux amd64 with Docker Engine and Compose v2, or Python 3.12/3.13 with uv for source installs.
-- Persistent disk for user data and the model cache; about 220 MB is downloaded for the default model.
+- Persistent disk for PostgreSQL, uploaded files, the Vault key, and the model cache; about 220 MB is downloaded for the default model.
 - Network access for dependencies during build and for the first embedding-model download. After the model is cached, keyword embeddings run locally.
 
-Other OS/CPU combinations are not claimed as container-tested. Embedded Kuzu/ONNX wheels and container base images must support the target architecture.
+Other OS/CPU combinations are not claimed as container-tested. PostgreSQL/pgvector, ONNX wheels, and container base images must support the target architecture.
 
 ## Docker Compose
 
@@ -21,6 +21,10 @@ docker compose up -d --build
 
 Open http://localhost:8080, create an account, and issue an agent key in the console. There is no default account or password. Browser credentials and agent Bearer keys are separate.
 
+Compose starts `pgvector/pgvector:0.8.7-pg17` and waits for it to become healthy before starting the app. Change `POSTGRES_PASSWORD` in `.env` before exposing the deployment; use URL-safe random characters because Compose also places it in the application connection URL.
+
+For ChatGPT or Claude remote MCP connections, expose the deployment through HTTPS and add `https://your-domain.example/mcp` as a custom MCP server/connector. The client follows the server's OAuth discovery metadata and redirects the user back to the Vibe Memory login and consent screen. Local plain-HTTP MCP development is limited to explicit localhost loopback redirect URIs; hosted clients require a publicly reachable HTTPS origin.
+
 `docker compose exec app vibe-memory warmup` downloads/initializes the model before the first memory write. Until it is needed, authentication, lists, file byte uploads, and feature requests do not load an embedding model.
 
 ## Configuration
@@ -32,8 +36,14 @@ Open http://localhost:8080, create an account, and issue an agent key in the con
 | `MEMORY_HTTP_PORT` | `8080` | Compose host-side port |
 | `MEMORY_SIGNUP_ENABLED` | `true` | Accept new accounts; set `false` after creating your accounts if desired |
 | `MEMORY_UPLOAD_MAX_BYTES` | `104857600` | Raw upload size limit (100 MiB) |
+| `POSTGRES_DB` | `vibe_memory` | Compose PostgreSQL database name |
+| `POSTGRES_USER` | `vibe_memory` | Compose PostgreSQL role |
+| `POSTGRES_PASSWORD` | required | Compose PostgreSQL password; replace the example value |
+| `MEMORY_DATABASE_URL` | set by Compose | PostgreSQL connection URL for source installations |
+| `MEMORY_DATABASE_POOL_SIZE` | `10` | Maximum application database connections |
+| `MEMORY_EMBEDDING_DIMENSION` | `384` | pgvector dimension; must match the configured model |
 | `MEMORY_API_KEYS` | `{}` | Optional source-install legacy key-to-user mapping; not required for console-issued keys |
-| `MEMORY_DATA_DIR` | `/data` in Docker | Graph, auth DB, and uploads |
+| `MEMORY_DATA_DIR` | `/data` in Docker | Uploaded files, Vault key, and model/cache data |
 | `MEMORY_VAULT_KEY_FILE` | `<data dir>/vault.key` | Persistent 32-byte Vault encryption-key file; generated with mode 0600 |
 | `MEMORY_EMBEDDING_CACHE` | `/data/models` in Docker | Persistent local model cache |
 | `MEMORY_EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Local keyword model |
@@ -41,7 +51,7 @@ Open http://localhost:8080, create an account, and issue an agent key in the con
 
 When using `http://127.0.0.1:8080`, set `MEMORY_PUBLIC_ORIGIN` to that value; it differs from `http://localhost:8080`. A mismatched origin causes 403 on browser writes. Remote deployments should use HTTPS, which enables Secure session cookies. Changing `MEMORY_HTTP_PORT` also requires updating the public origin.
 
-Compose intentionally passes only the supported application configuration and persists data in one named volume. It does not pass arbitrary host credentials into the container. The image runs as UID/GID 10001 with a read-only root filesystem and writable data/tmp locations. If replacing the named volume with a host bind mount, make that directory writable by UID/GID 10001.
+Compose intentionally passes only the supported application configuration and persists PostgreSQL and app files in separate named volumes. It does not pass arbitrary host credentials into the container. The image runs as UID/GID 10001 with a read-only root filesystem and writable data/tmp locations. If replacing the app named volume with a host bind mount, make that directory writable by UID/GID 10001.
 
 ## HTTPS with Caddy
 
@@ -62,45 +72,56 @@ The included Caddy configuration terminates TLS and forwards requests to `app:80
 
 ## Source installation
 
+Create an empty PostgreSQL database, install the `vector` extension as a privileged database user, and set its connection URL. The application creates its own tables but does not create database roles or databases.
+
 ```sh
 uv sync --frozen
 cp .env.example .env
+# In .env:
+# MEMORY_DATABASE_URL=postgresql://vibe_memory:password@127.0.0.1:5432/vibe_memory
 uv run vibe-memory serve
 ```
 
-The maintained `landing/dist/` assets are served directly. Built wheels bundle those same assets under the Python package, so an installed wheel also includes login and the console. Node.js is only needed for optional Cloudflare deployment tooling, not for serving the self-hosted app.
+The website and console use the Next.js App Router under `landing/app/`. `npm --prefix landing run build` creates the static export in `landing/dist/`; the server never needs a Node.js process at runtime. Built wheels bundle that export under the Python package, so an installed wheel also includes login and the console. A normal self-hosted installation uses the prebuilt assets and does not need Node.js.
 
 For an explicit directory, set `MEMORY_WEB_DIR=/absolute/path/to/web-assets`; startup rejects an invalid directory instead of silently serving a broken console.
 
 ## Data and backups
 
-The `memory_data` named volume contains:
+PostgreSQL is the source of truth for accounts, sessions, API keys, OAuth/MCP state, records, keyword vectors, relationships, change events, feature requests, and Vault ciphertext. The `postgres_data` named volume holds that database.
 
-- `graph`: Kuzu graph, keyword vectors, relation history, and feature requests.
-- `auth.sqlite` and SQLite WAL files: accounts, sessions, and hashed agent keys.
-- `vault.sqlite`: AES-256-GCM ciphertext, entry metadata, and access counters.
+The separate `memory_data` named volume contains:
+
 - `vault.key`: the 32-byte Vault encryption key, created with mode 0600.
 - `files/`: uploaded originals.
 - `models/` and `cache/`: embedding model/download cache.
 
-Stop the app before taking a filesystem backup so the embedded databases are consistent:
+Old `graph`, `auth.sqlite`, and `vault.sqlite` entries can remain after a verified legacy migration, but the PostgreSQL-enabled app does not read them during normal operation.
+
+Back up PostgreSQL with `pg_dump`, then archive the app volume. Stopping the app gives the dump and files one clear application-level cut point:
 
 ```sh
 docker compose stop app
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+  > vibe-memory-postgres.dump
 docker compose run --rm -T --no-deps --entrypoint python app -c \
   "import sys,tarfile; t=tarfile.open(fileobj=sys.stdout.buffer,mode='w|gz'); t.add('/data',arcname='data'); t.close()" \
-  > vibe-memory-backup.tar.gz
+  > vibe-memory-files.tar.gz
 docker compose start app
 ```
 
-Keep the backup private; it contains personal records, authentication data, Vault ciphertext, and the key capable of decrypting it. If `MEMORY_VAULT_KEY_FILE` points outside `/data`, back up that key separately and restore the exact same key before starting the restored service. Losing the key makes Vault values unrecoverable; obtaining both the key and ciphertext reveals them. If the backup command fails, restart the app and resolve the failure rather than treating a partial archive as a backup.
+Keep both files private and together for recovery. The database dump contains personal records, authentication data, and Vault ciphertext; the file archive contains uploaded originals and the key capable of decrypting Vault entries. If `MEMORY_VAULT_KEY_FILE` points outside `/data`, back up that key separately and restore the exact same key. Losing the key makes Vault values unrecoverable; obtaining both the key and ciphertext reveals them.
 
-Restore into an **empty deployment's data volume**, with its app stopped:
+Restore into an **empty deployment**, with its app stopped. Start only PostgreSQL, restore its dump, then restore the app volume:
 
 ```sh
+docker compose up -d db
+docker compose exec -T db sh -c \
+  'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+  < vibe-memory-postgres.dump
 docker compose run --rm -T --no-deps --entrypoint python app -c \
   "import sys,tarfile; t=tarfile.open(fileobj=sys.stdin.buffer,mode='r|gz'); t.extractall('/',filter='data')" \
-  < vibe-memory-backup.tar.gz
+  < vibe-memory-files.tar.gz
 docker compose up -d
 ```
 
@@ -117,7 +138,40 @@ docker compose up -d --build
 
 `docker compose down` preserves the named volume. **`docker compose down -v` deletes it.** Do not use `-v` for a normal upgrade.
 
-Run only one API process per graph directory; do not add `--workers` or scale the app service. The embedding model is recorded in the graph: changing it without rebuilding the keyword index is rejected. The first import of old full-content indexes removes derived chunk vectors, preserves source records and semantic relationships, and waits for agent-supplied keywords to reindex them.
+The embedding model and dimension are recorded in PostgreSQL. Changing either without rebuilding the keyword index is rejected. Search currently performs exact owner-scoped cosine distance with pgvector; no HNSW/IVFFlat index is created by default.
+
+## Legacy Kuzu/SQLite migration
+
+Version 0.9 moves all structured data from the embedded Kuzu/SQLite layout to PostgreSQL. This is an offline, one-time migration into an empty destination. Keep the old data volume and a backup until verification is complete.
+
+First inspect the source without writing anything:
+
+```sh
+vibe-memory migrate-postgres --data-dir /path/to/legacy/data
+```
+
+Then stop every old API process so Kuzu and SQLite are no longer changing. Create an empty pgvector database, back up the source, and apply:
+
+```sh
+vibe-memory migrate-postgres \
+  --data-dir /path/to/legacy/data \
+  --database-url 'postgresql://vibe_memory:password@127.0.0.1:5432/vibe_memory' \
+  --apply
+```
+
+The command imports accounts, sessions, keys, OAuth state, records, keyword embeddings, relations, events, feature requests, and Vault ciphertext in one PostgreSQL transaction. It rejects a non-empty destination, a locked Kuzu database, embedding model/dimension mismatches, or count differences. Raw `files/`, `vault.key`, and model caches stay in the same app data directory and are not copied into PostgreSQL.
+
+For an existing Compose installation, pull the new code, set the PostgreSQL variables in `.env`, and run:
+
+```sh
+docker compose stop app
+docker compose build app
+docker compose up -d db
+docker compose run --rm app vibe-memory migrate-postgres --data-dir /data --apply
+docker compose up -d app
+```
+
+Start the normal app only after the migration command reports verified counts. If verification fails, the PostgreSQL transaction rolls back; keep serving the prior version from the untouched legacy volume until the cause is resolved.
 
 ## Hosted Cloudflare bridge (optional)
 

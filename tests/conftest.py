@@ -25,7 +25,11 @@ class SpyEmbedder:
 
 @pytest.fixture
 def settings(tmp_path):
-    return Settings(data_dir=tmp_path, api_keys={KEY_A: "alice", KEY_A2: "alice", KEY_B: "bob"})
+    return Settings(
+        data_dir=tmp_path,
+        database_url=None,
+        api_keys={KEY_A: "alice", KEY_A2: "alice", KEY_B: "bob"},
+    )
 
 
 @pytest.fixture

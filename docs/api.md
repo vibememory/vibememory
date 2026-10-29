@@ -8,25 +8,35 @@ Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/
 
 Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
 
+Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. Vault is not an MCP scope.
+
 ## Endpoints
 
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/health` | Liveness, no private data |
+| POST | `/mcp` | OAuth-protected stateless Streamable HTTP MCP endpoint |
+| GET | `/.well-known/oauth-protected-resource/mcp` | MCP resource and authorization-server discovery |
+| GET | `/.well-known/oauth-authorization-server` | OAuth endpoints, grants, scopes, and PKCE metadata |
 | GET | `/v1/me` | Authenticated user ID and keyword model |
 | GET | `/v1/stats` | Owner-scoped console counts |
 | POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata |
 | POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata |
 | POST | `/v1/documents` | title, keywords; optional content/file_id/source/tags/metadata |
 | GET | `/v1/records` | Owner-scoped records with kind/limit/offset |
-| GET/DELETE | `/v1/records/{id}` | Read/delete a record and its index/incident edges |
+| GET/DELETE | `/v1/records/{id}` | Read / permanently delete a record and incident edges |
+| PATCH | `/v1/records/{id}` | Version-checked update of agent-selected record fields |
 | PUT | `/v1/records/{id}/keywords` | Replace the explicitly supplied keyword index |
+| POST | `/v1/records/{id}/archive` | Move a record to recoverable trash with expected_version/reason |
+| POST | `/v1/records/{id}/restore` | Restore an archived record with expected_version/reason |
+| GET | `/v1/trash` | List owner-scoped archived records |
+| POST | `/v1/records/merge` | Rewire relationships and archive version-checked duplicates |
 | POST | `/v1/files` | Raw application/octet-stream body; optional filename query |
 | GET/DELETE | `/v1/files/{id}` | Original bytes / delete unreferenced original |
 | POST/GET | `/v1/relations` | Store agent-inferred relationships / list with status filter |
 | PATCH | `/v1/relations/{id}` | Retract/restore using reason and expected_version |
 | GET | `/v1/graph/{id}` | Explicit 0–2 hop active-edge traversal |
-| POST | `/v1/search` | keywords, optional limit/scope/tags |
+| POST | `/v1/search` | Keyword search with relevance and structured filters |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
@@ -63,10 +73,28 @@ Every indexed record requires 1–32 keywords, each 1–100 characters. The serv
 The agent extracts search keywords before calling:
 
 ```json
-{"keywords":["Python","code examples"],"scope":"memories","limit":5}
+{
+  "keywords": ["Python", "code examples"],
+  "scope": "memories",
+  "match_mode": "hybrid",
+  "min_score": 0.6,
+  "must_keywords": ["active project"],
+  "exclude_keywords": ["archived"],
+  "metadata_filters": {"project": "vibe-memory"},
+  "created_after": "2026-01-01T00:00:00Z",
+  "limit": 5
+}
 ```
 
-Scopes: `all`, `memories`, `documents`, `entities`. `tags` requires all provided tags to match. The response contains record IDs, matched keywords, metadata, and vector similarity scores. It does not build an answer or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422).
+Scopes: `all`, `memories`, `documents`, `entities`. `match_mode` is `semantic`, `exact`, or `hybrid`; exact mode performs no embedding call, while semantic/hybrid embed only the supplied search keywords. `tags` and `must_keywords` require every value, `exclude_keywords` rejects exact stored-keyword matches, `metadata_filters` uses exact JSON scalar equality, and date bounds require offset-aware timestamps normalized to UTC. `min_score` prevents unrelated results from filling the response. The response contains record IDs, matched keywords, metadata, the chosen mode, and similarity scores. It does not build an answer, rerank raw body content, or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422).
+
+## Record lifecycle and duplicate merge
+
+Every record includes an integer `version`. `PATCH /v1/records/{id}` accepts `expected_version` plus one or more complete replacement fields: content, title, subtype, source, tags, keywords, or metadata. Updating keywords embeds only the replacement keyword array. A stale version returns 409.
+
+Archive is the recoverable-delete path used by agents. Archived records disappear from ordinary get/list/search/graph results but remain in `/v1/trash`; restoring increments the version again. Permanent `DELETE` remains available to explicitly authorized REST/console clients and removes incident relationships. Archiving a file referenced by an active document returns 409 and never removes its bytes.
+
+`POST /v1/records/merge` takes `canonical_id`, unique `duplicate_ids`, an `expected_versions` map containing every ID, and a reason. The server does not infer or combine content. The agent first updates the canonical record with the unique information and keywords it intends to retain; merge then rewires non-self relationships, retracts relationships that would become self-loops, archives duplicates, and reports counts plus the affected IDs.
 
 ## Agent-prepared document metadata
 
@@ -137,17 +165,16 @@ stored in the graph transaction alongside each successful mutation, so failed
 writes emit nothing. History currently remains until the operator replaces the
 data store; it is not a bounded notification queue.
 
-Events include `memory.created/updated/deleted`, corresponding `document`,
-`entity` and `file` changes, and `relation.created/updated`. Updates currently
-mean keyword replacement or relationship status changes, which are the supported
-update operations. Record deletion also invalidates incident relationships.
+Events include `memory.created/updated/archived/restored/deleted`, corresponding
+`document`, `entity` and `file` changes, `record.merged`, and
+`relation.created/updated`. Record deletion also invalidates incident relationships.
 Payloads contain IDs and change metadata, without original text or keywords.
 Fetch current records/relations to refresh context; events can be replayed and
 must be deduplicated by ID. Deleting a record retains its minimal event history.
 
 The stream sends heartbeats, disables buffering/caching, checks authentication
 while connected and closes access after key revocation or session expiration.
-The current single-process service polls its event journal every 0.5 seconds.
+The service polls its PostgreSQL event journal every 0.5 seconds.
 
 Agents use `./bin/vibe-memory watch --seconds 3600 --cursor-file PATH`.
 The helper prints JSON lines, reconnects and persists the last printed ID. Use a

@@ -1,6 +1,7 @@
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Keyword = Annotated[str, Field(min_length=1, max_length=100)]
 
@@ -84,6 +85,69 @@ class KeywordUpdate(KeywordsInput):
     """Replace an agent-supplied keyword index without analyzing original content."""
 
 
+class RecordUpdate(Input):
+    expected_version: int = Field(ge=1)
+    content: str | None = Field(default=None, max_length=500000)
+    title: str | None = Field(default=None, max_length=300)
+    subtype: str | None = Field(default=None, max_length=100)
+    source: str | None = Field(default=None, max_length=2000)
+    tags: list[Annotated[str, Field(min_length=1, max_length=80)]] | None = Field(
+        default=None, max_length=30
+    )
+    keywords: list[Keyword] | None = Field(default=None, min_length=1, max_length=32)
+    metadata: dict | None = None
+
+    @field_validator("keywords")
+    @classmethod
+    def normalize_optional_keywords(cls, values):
+        if values is None:
+            return None
+        return KeywordsInput(keywords=values).keywords
+
+    @field_validator("metadata")
+    @classmethod
+    def bounded_optional_metadata(cls, value):
+        if value is None:
+            return None
+        return RecordInput(metadata=value, keywords=["validation"]).metadata
+
+    @model_validator(mode="after")
+    def has_change(self):
+        if not any(
+            getattr(self, field) is not None
+            for field in ("content", "title", "subtype", "source", "tags", "keywords", "metadata")
+        ):
+            raise ValueError("at least one record field must be supplied")
+        return self
+
+
+class RecordArchive(Input):
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class RecordMerge(Input):
+    canonical_id: str = Field(min_length=1, max_length=100)
+    duplicate_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        min_length=1, max_length=50
+    )
+    expected_versions: dict[str, int] = Field(min_length=2, max_length=51)
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_ids(self):
+        if self.canonical_id in self.duplicate_ids:
+            raise ValueError("canonical_id cannot also be a duplicate")
+        if len(set(self.duplicate_ids)) != len(self.duplicate_ids):
+            raise ValueError("duplicate_ids must be unique")
+        required = {self.canonical_id, *self.duplicate_ids}
+        if set(self.expected_versions) != required or any(
+            version < 1 for version in self.expected_versions.values()
+        ):
+            raise ValueError("expected_versions must contain every canonical and duplicate ID")
+        return self
+
+
 class VaultInput(Input):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
     value: str = Field(min_length=1, max_length=65536)
@@ -94,6 +158,46 @@ class SearchInput(KeywordsInput):
     limit: int = Field(default=8, ge=1, le=50)
     scope: Literal["all", "memories", "documents", "entities"] = "all"
     tags: list[str] = Field(default_factory=list, max_length=30)
+    match_mode: Literal["semantic", "exact", "hybrid"] = "semantic"
+    min_score: float = Field(default=0.0, ge=-1.0, le=1.0)
+    must_keywords: list[Keyword] = Field(default_factory=list, max_length=32)
+    exclude_keywords: list[Keyword] = Field(default_factory=list, max_length=32)
+    metadata_filters: dict[str, str | int | float | bool | None] = Field(
+        default_factory=dict, max_length=30
+    )
+    created_after: datetime | None = None
+    created_before: datetime | None = None
+
+    @field_validator("must_keywords", "exclude_keywords")
+    @classmethod
+    def normalize_filter_keywords(cls, values):
+        result, seen = [], set()
+        for value in values:
+            folded = value.casefold()
+            if folded not in seen:
+                result.append(value)
+                seen.add(folded)
+        return result
+
+    @field_validator("created_after", "created_before")
+    @classmethod
+    def require_utc_timestamp(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamps must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def ordered_dates(self):
+        if self.created_after and self.created_before and self.created_after > self.created_before:
+            raise ValueError("created_after must not be later than created_before")
+        overlap = {item.casefold() for item in self.must_keywords} & {
+            item.casefold() for item in self.exclude_keywords
+        }
+        if overlap:
+            raise ValueError("a keyword cannot be both required and excluded")
+        return self
 
 
 class FeatureRequestInput(Input):

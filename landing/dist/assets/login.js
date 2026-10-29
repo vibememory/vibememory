@@ -1,7 +1,13 @@
 'use strict';
 let mode = 'login';
 const requestedNext = new URLSearchParams(location.search).get('next') || '';
-const destination = /^\/connect\?code=[A-Fa-f0-9]{10}$/.test(requestedNext) ? requestedNext : '/console';
+let destination = '/console';
+try {
+  const nextUrl = new URL(requestedNext, location.origin);
+  const approvedPath = /^\/connect\?code=[A-Fa-f0-9]{10}$/.test(requestedNext)
+    || (nextUrl.origin === location.origin && nextUrl.pathname === '/oauth/authorize' && !nextUrl.hash);
+  if (approvedPath && requestedNext.length <= 8192) destination = nextUrl.pathname + nextUrl.search;
+} catch { /* Keep the console as the safe destination. */ }
 const form = document.querySelector('#auth-form');
 const errorBox = document.querySelector('#auth-error');
 function selectMode(next) {

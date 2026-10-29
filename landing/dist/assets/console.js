@@ -1,9 +1,19 @@
 'use strict';
 const $ = selector => document.querySelector(selector);
 const h = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const date = value => value ? new Date(typeof value === 'number' ? value * 1000 : value).toLocaleDateString('ko-KR') : '—';
+const date = value => value ? new Date(typeof value === 'number' ? value * 1000 : value).toLocaleDateString(window.vmLocaleTag?.() || 'ko-KR', {timeZone:'UTC'}) : '—';
 let currentView = 'overview', pageOffset = 0, recordKind = 'memory', generation = 0;
 let user, toastTimer;
+let dashboardGuideDismissed = false;
+const dashboardGuideKey = 'vibe-memory:dashboard-guide:hidden';
+function dashboardGuideHidden() {
+  if (dashboardGuideDismissed) return true;
+  try { return localStorage.getItem(dashboardGuideKey) === '1'; } catch { return false; }
+}
+function dismissDashboardGuide() {
+  dashboardGuideDismissed = true;
+  try { localStorage.setItem(dashboardGuideKey, '1'); } catch { /* Keep it hidden for this session. */ }
+}
 async function api(path, options = {}) {
   const response = await fetch(path, {headers: {'Content-Type': 'application/json'}, ...options});
   let data = null;
@@ -43,147 +53,119 @@ function recordRows(items, deletable = true) {
 }
 const graphKindLabel = kind => ({memory:'기억',entity:'엔티티',document:'문서',file:'파일'}[kind] || kind || '기록');
 const graphTitle = record => record?.title || record?.content?.slice(0, 46) || '이름 없는 기록';
-function layoutRelationshipGraph(records, relations) {
-  const width = 1000, height = 610, centerX = width / 2, centerY = height / 2;
+let relationshipCy = null, relationshipResizeObserver = null;
+function destroyRelationshipGraph() {
+  relationshipResizeObserver?.disconnect(); relationshipResizeObserver = null;
+  relationshipCy?.destroy(); relationshipCy = null;
+}
+function cytoscapeRuntime() {
+  if (window.cytoscape) return Promise.resolve(window.cytoscape);
+  return Promise.reject(new Error('그래프 엔진 파일을 불러오지 못했습니다. 페이지를 새로고침해주세요.'));
+}
+function relationshipGraph(records, relations, totals) {
+  const truncated = records.length < totals.nodes || relations.length < totals.relations;
+  const summary = truncated ? `전체 ${totals.nodes}개 노드와 ${totals.relations}개 관계 중 연결 중심으로 표시합니다.` : `${records.length}개 노드와 ${relations.length}개 관계를 표시합니다.`;
+  const recordMap = new Map(records.map(record => [record.id, record]));
+  const accessibleNodes = records.map(record => `<button type="button" data-action="graph" data-id="${h(record.id)}">${h(graphTitle(record))}, ${h(graphKindLabel(record.kind))}</button>`).join('');
+  const accessibleEdges = relations.map(edge => `<button type="button" data-action="relation-detail" data-source-name="${h(graphTitle(recordMap.get(edge.source_id)))}" data-target-name="${h(graphTitle(recordMap.get(edge.target_id)))}" data-relation="${h(edge.relation)}" data-reason="${h(edge.reason)}">${h(edge.relation)} 관계</button>`).join('');
+  return `<section class="relationship-panel" aria-label="관계 그래프. ${h(summary)}"><div class="relationship-graph-stage" role="application" aria-label="기억 관계 그래프. 드래그하여 이동하고 휠로 확대할 수 있습니다."></div><div class="relationship-graph-a11y"><p>${h(summary)}</p>${accessibleNodes}${accessibleEdges}</div><div class="relationship-graph-meta"><span><i></i>${h(summary)}</span><span>노드나 관계를 선택하면 상세 정보를 확인할 수 있습니다.</span></div><div class="relationship-graph-controls" aria-label="그래프 화면 조절"><button type="button" data-graph-command="zoom-in" aria-label="확대">+</button><button type="button" data-graph-command="zoom-out" aria-label="축소">−</button><button type="button" data-graph-command="fit" aria-label="그래프 전체 보기">⌂</button></div></section>`;
+}
+async function bindRelationshipGraph(records, relations) {
+  const stage = $('.relationship-graph-stage');
+  if (!stage) return;
+  const cytoscape = await cytoscapeRuntime();
+  if (!stage.isConnected) return;
+  const recordMap = new Map(records.map(record => [record.id, record]));
   const degree = new Map(records.map(record => [record.id, 0]));
   for (const edge of relations) {
     degree.set(edge.source_id, (degree.get(edge.source_id) || 0) + 1);
     degree.set(edge.target_id, (degree.get(edge.target_id) || 0) + 1);
   }
-  const nodes = [...records].sort((a, b) => (degree.get(b.id) - degree.get(a.id)) || graphTitle(a).localeCompare(graphTitle(b)));
-  const positions = new Map();
-  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  nodes.forEach((node, index) => {
-    if (nodes.length === 1) return positions.set(node.id, {x:centerX,y:centerY});
-    if (nodes.length === 2) return positions.set(node.id, {x:index ? 680 : 320,y:centerY});
-    if (index === 0) return positions.set(node.id, {x:centerX,y:centerY});
-    const orbitIndex = nodes.length > 2 ? index - 1 : index;
-    const angle = orbitIndex * goldenAngle - Math.PI / 2;
-    const radius = Math.min(235, 118 + Math.sqrt(Math.max(0, orbitIndex)) * 31);
-    positions.set(node.id, {x:centerX + Math.cos(angle) * radius * 1.45,y:centerY + Math.sin(angle) * radius});
+  const elements = [
+    ...records.map(record => ({data:{
+      id:record.id,
+      label:`${graphTitle(record)}\n${graphKindLabel(record.kind)} · 연결 ${degree.get(record.id) || 0}`,
+      title:graphTitle(record),
+      kind:record.kind || 'record'
+    },classes:`kind-${record.kind || 'record'}`})),
+    ...relations.map((edge, index) => ({data:{
+      id:`relation-${index}`,
+      source:edge.source_id,
+      target:edge.target_id,
+      relation:edge.relation || 'RELATED_TO',
+      reason:edge.reason || '',
+      sourceName:graphTitle(recordMap.get(edge.source_id)),
+      targetName:graphTitle(recordMap.get(edge.target_id))
+    }}))
+  ];
+  relationshipCy = cytoscape({
+    container:stage,
+    elements,
+    wheelSensitivity:.2,
+    minZoom:.3,
+    maxZoom:2.4,
+    boxSelectionEnabled:false,
+    style:[
+      {selector:'node',style:{'shape':'roundrectangle','width':168,'height':60,'background-color':'#ffffff','border-width':1.4,'border-color':'#aebce0','label':'data(label)','color':'#3d4a62','font-family':'VibeSans, Arial, sans-serif','font-size':10,'font-weight':500,'text-wrap':'wrap','text-max-width':145,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
+      {selector:'node.kind-memory',style:{'border-color':'#7892ec','background-color':'#f9fbff'}},
+      {selector:'node.kind-entity',style:{'border-color':'#a991d8','background-color':'#fcfaff'}},
+      {selector:'node.kind-document',style:{'border-color':'#72b9a5','background-color':'#f8fdfa'}},
+      {selector:'node.kind-file',style:{'border-color':'#d9a36d','background-color':'#fffaf5'}},
+      {selector:'node:selected, node.highlighted',style:{'border-width':2.4,'border-color':'#315bfb','background-color':'#f0f4ff'}},
+      {selector:'edge',style:{'width':1.45,'curve-style':'bezier','control-point-step-size':45,'line-color':'#aeb9d5','target-arrow-color':'#8fa0ca','target-arrow-shape':'triangle','arrow-scale':.85,'label':'data(relation)','font-family':'ui-monospace, SFMono-Regular, Consolas, monospace','font-size':8,'color':'#60719a','text-background-color':'#ffffff','text-background-opacity':.94,'text-background-padding':4,'text-border-color':'#dde4f2','text-border-width':1,'text-border-opacity':1,'text-rotation':'autorotate','text-margin-y':-9,'overlay-opacity':0,'transition-property':'line-color, target-arrow-color, width, opacity','transition-duration':'160ms'}},
+      {selector:'edge:selected, edge.highlighted',style:{'width':2.4,'line-color':'#315bfb','target-arrow-color':'#315bfb','color':'#315bfb','z-index':10}},
+      {selector:'.faded',style:{'opacity':.12,'text-opacity':.08}}
+    ],
+    layout:{
+      name:records.length > 1 ? 'cose' : 'grid',
+      animate:true,
+      animationDuration:650,
+      fit:true,
+      padding:75,
+      randomize:true,
+      nodeRepulsion:650000,
+      idealEdgeLength:155,
+      edgeElasticity:100,
+      nestingFactor:1.2,
+      gravity:.16,
+      numIter:1200,
+      nodeOverlap:32,
+      componentSpacing:130
+    }
   });
-  for (let iteration = 0; iteration < 180 && nodes.length > 2; iteration += 1) {
-    const forces = new Map(nodes.map(node => [node.id, {x:0,y:0}]));
-    for (let left = 0; left < nodes.length; left += 1) {
-      for (let right = left + 1; right < nodes.length; right += 1) {
-        const a = positions.get(nodes[left].id), b = positions.get(nodes[right].id);
-        const dx = b.x - a.x || .1, dy = b.y - a.y || .1;
-        const distanceSquared = Math.max(2500, dx * dx + dy * dy);
-        const distance = Math.sqrt(distanceSquared), push = 125000 / distanceSquared;
-        const fx = dx / distance * push, fy = dy / distance * push;
-        forces.get(nodes[left].id).x -= fx; forces.get(nodes[left].id).y -= fy;
-        forces.get(nodes[right].id).x += fx; forces.get(nodes[right].id).y += fy;
-      }
-    }
-    for (const edge of relations) {
-      const source = positions.get(edge.source_id), target = positions.get(edge.target_id);
-      if (!source || !target || source === target) continue;
-      const dx = target.x - source.x, dy = target.y - source.y;
-      const distance = Math.max(1, Math.hypot(dx, dy));
-      const pull = (distance - 215) * .025;
-      const fx = dx / distance * pull, fy = dy / distance * pull;
-      forces.get(edge.source_id).x += fx; forces.get(edge.source_id).y += fy;
-      forces.get(edge.target_id).x -= fx; forces.get(edge.target_id).y -= fy;
-    }
-    const cooling = .28 * (1 - iteration / 220);
-    for (const node of nodes) {
-      const point = positions.get(node.id), force = forces.get(node.id);
-      force.x += (centerX - point.x) * .003; force.y += (centerY - point.y) * .003;
-      point.x = Math.max(88, Math.min(width - 88, point.x + force.x * cooling));
-      point.y = Math.max(68, Math.min(height - 68, point.y + force.y * cooling));
-    }
-  }
-  return {nodes,positions,width,height};
-}
-function relationshipGeometry(edge, positions, slot, slotCount) {
-  const source = positions.get(edge.source_id), target = positions.get(edge.target_id);
-  if (edge.source_id === edge.target_id) {
-    const x = source.x, y = source.y;
-    return {path:`M ${x + 29} ${y - 9} C ${x + 94} ${y - 92}, ${x - 82} ${y - 96}, ${x - 27} ${y - 10}`,labelX:x,labelY:y - 83};
-  }
-  const dx = target.x - source.x, dy = target.y - source.y, distance = Math.max(1, Math.hypot(dx, dy));
-  const unitX = dx / distance, unitY = dy / distance;
-  const start = {x:source.x + unitX * 38,y:source.y + unitY * 38};
-  const end = {x:target.x - unitX * 45,y:target.y - unitY * 45};
-  const offset = (slot - (slotCount - 1) / 2) * 38;
-  const control = {x:(start.x + end.x) / 2 - unitY * offset,y:(start.y + end.y) / 2 + unitX * offset};
-  return {
-    path:`M ${start.x.toFixed(1)} ${start.y.toFixed(1)} Q ${control.x.toFixed(1)} ${control.y.toFixed(1)} ${end.x.toFixed(1)} ${end.y.toFixed(1)}`,
-    labelX:(start.x * .25 + control.x * .5 + end.x * .25),
-    labelY:(start.y * .25 + control.y * .5 + end.y * .25)
-  };
-}
-function relationshipGraph(records, relations, totals) {
-  const {nodes,positions,width,height} = layoutRelationshipGraph(records, relations);
-  const recordMap = new Map(records.map(record => [record.id, record]));
-  const pairCounts = new Map(), pairSlots = new Map();
-  for (const edge of relations) {
-    const pair = [edge.source_id, edge.target_id].sort().join('\0');
-    pairCounts.set(pair, (pairCounts.get(pair) || 0) + 1);
-  }
-  const renderedEdges = relations.map((edge, index) => {
-    const pair = [edge.source_id, edge.target_id].sort().join('\0');
-    const slot = pairSlots.get(pair) || 0; pairSlots.set(pair, slot + 1);
-    return {...edge,index,...relationshipGeometry(edge, positions, slot, pairCounts.get(pair))};
+  const clearFocus = () => relationshipCy?.elements().removeClass('faded highlighted');
+  relationshipCy.on('mouseover','node',event => {
+    const focus = event.target.closedNeighborhood();
+    relationshipCy.elements().addClass('faded'); focus.removeClass('faded'); event.target.addClass('highlighted');
   });
-  const truncated = nodes.length < totals.nodes || relations.length < totals.relations;
-  const paths = renderedEdges.map(edge => `<path class="relationship-edge" data-source="${h(edge.source_id)}" data-target="${h(edge.target_id)}" d="${edge.path}" pathLength="1" marker-end="url(#relationship-arrow)" style="--edge-delay:${Math.min(edge.index * 24, 480)}ms"/>`).join('');
-  const edgeLabels = renderedEdges.map(edge => {
-    const source = recordMap.get(edge.source_id), target = recordMap.get(edge.target_id);
-    return `<button class="relationship-edge-label" type="button" data-action="relation-detail" data-source="${h(edge.source_id)}" data-target="${h(edge.target_id)}" data-source-name="${h(graphTitle(source))}" data-target-name="${h(graphTitle(target))}" data-relation="${h(edge.relation)}" data-reason="${h(edge.reason)}" style="--x:${edge.labelX / width * 100};--y:${edge.labelY / height * 100};--edge-delay:${Math.min(280 + edge.index * 24, 760)}ms" aria-label="${h(graphTitle(source))}에서 ${h(graphTitle(target))}로 ${h(edge.relation)} 관계. 근거 보기">${h(edge.relation)}</button>`;
-  }).join('');
-  const nodeButtons = nodes.map((node, index) => {
-    const point = positions.get(node.id), kind = graphKindLabel(node.kind), title = graphTitle(node);
-    return `<button class="relationship-node kind-${h(node.kind)}" type="button" data-action="graph" data-id="${h(node.id)}" data-node-id="${h(node.id)}" style="--x:${point.x / width * 100};--y:${point.y / height * 100};--node-delay:${Math.min(120 + index * 32, 680)}ms" aria-label="${h(title)}, ${h(kind)}. 주변 연결 보기"><span class="relationship-node-mark" aria-hidden="true"></span><span><strong>${h(title)}</strong><small>${h(kind)} · 연결 ${h((relations.filter(edge => edge.source_id === node.id || edge.target_id === node.id).length))}</small></span></button>`;
-  }).join('');
-  return `<section class="console-panel relationship-panel"><div class="relationship-toolbar"><div><p>LIVE MEMORY MAP</p><h2>활성 관계 네트워크</h2></div><div class="relationship-stats"><span><strong>${nodes.length}</strong> 노드</span><span><strong>${relations.length}</strong> 관계</span><button type="button" data-action="reload">다시 배치 ↻</button></div></div><div class="relationship-graph-scroll"><div class="relationship-graph-stage" role="group" aria-label="기억 관계 그래프. 노드를 선택하면 주변 연결을, 관계 이름을 선택하면 근거를 확인할 수 있습니다."><svg class="relationship-lines" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true"><defs><marker id="relationship-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"/></marker></defs>${paths}</svg>${edgeLabels}${nodeButtons}</div></div><div class="relationship-footer"><div class="relationship-legend"><span><i class="kind-memory"></i>기억</span><span><i class="kind-entity"></i>엔티티</span><span><i class="kind-document"></i>문서</span><span><i class="kind-file"></i>파일</span></div><p>${truncated ? `전체 ${totals.nodes}개 노드 · ${totals.relations}개 관계 중 연결 중심으로 표시하고 있습니다.` : '노드에 포인터를 올리면 직접 연결된 경로가 강조됩니다.'}</p></div></section>`;
-}
-function bindRelationshipGraph() {
-  const stage = $('.relationship-graph-stage');
-  if (!stage) return;
-  const highlight = id => {
-    const connected = new Set([id]);
-    for (const edge of stage.querySelectorAll('.relationship-edge')) {
-      if (edge.dataset.source === id || edge.dataset.target === id) {
-        connected.add(edge.dataset.source); connected.add(edge.dataset.target); edge.classList.add('is-active'); edge.classList.remove('is-muted');
-      } else { edge.classList.remove('is-active'); edge.classList.add('is-muted'); }
-    }
-    for (const label of stage.querySelectorAll('.relationship-edge-label')) {
-      const active = label.dataset.source === id || label.dataset.target === id;
-      label.classList.toggle('is-active', active); label.classList.toggle('is-muted', !active);
-    }
-    for (const node of stage.querySelectorAll('.relationship-node')) {
-      node.classList.toggle('is-active', node.dataset.nodeId === id); node.classList.toggle('is-muted', !connected.has(node.dataset.nodeId));
-    }
-  };
-  const highlightEdge = (source, target) => {
-    for (const edge of stage.querySelectorAll('.relationship-edge')) {
-      const active = edge.dataset.source === source && edge.dataset.target === target;
-      edge.classList.toggle('is-active', active); edge.classList.toggle('is-muted', !active);
-    }
-    for (const label of stage.querySelectorAll('.relationship-edge-label')) {
-      const active = label.dataset.source === source && label.dataset.target === target;
-      label.classList.toggle('is-active', active); label.classList.toggle('is-muted', !active);
-    }
-    for (const node of stage.querySelectorAll('.relationship-node')) {
-      const active = node.dataset.nodeId === source || node.dataset.nodeId === target;
-      node.classList.toggle('is-active', active); node.classList.toggle('is-muted', !active);
-    }
-  };
-  const clear = () => stage.querySelectorAll('.is-active,.is-muted').forEach(item => item.classList.remove('is-active','is-muted'));
-  const interact = event => {
-    const node = event.target.closest('.relationship-node');
-    if (node) return highlight(node.dataset.nodeId);
-    const edge = event.target.closest('.relationship-edge-label');
-    if (edge) highlightEdge(edge.dataset.source, edge.dataset.target);
-  };
-  stage.addEventListener('pointerover', interact);
-  stage.addEventListener('pointerleave', clear);
-  stage.addEventListener('focusin', interact);
-  stage.addEventListener('focusout', event => { if (!stage.contains(event.relatedTarget)) clear(); });
+  relationshipCy.on('mouseover','edge',event => {
+    const focus = event.target.connectedNodes().union(event.target);
+    relationshipCy.elements().addClass('faded'); focus.removeClass('faded'); event.target.addClass('highlighted');
+  });
+  relationshipCy.on('mouseout','node, edge',clearFocus);
+  relationshipCy.on('tap','node',async event => {
+    try {
+      const graph = await api('/v1/graph/' + encodeURIComponent(event.target.id()) + '?depth=2');
+      detail('연결된 기억',`<div class="graph-nodes">${graph.nodes.map(node => `<div class="graph-node"><strong>${h(node.kind)}</strong>${h(node.title)}</div>`).join('')}</div><pre class="detail-pre">${h(JSON.stringify(graph.relations.map(edge => ({relation:edge.relation,reason:edge.reason,source:edge.source_id,target:edge.target_id})),null,2))}</pre>`);
+    } catch (error) { toast(error.message); }
+  });
+  relationshipCy.on('tap','edge',event => {
+    const edge = event.target.data();
+    detail('관계 근거',`<div class="relation-detail-route"><span>${h(edge.sourceName)}</span><strong>${h(edge.relation)}</strong><span>${h(edge.targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(edge.reason)}</p></div>`);
+  });
+  for (const button of document.querySelectorAll('[data-graph-command]')) {
+    button.addEventListener('click', () => {
+      if (!relationshipCy) return;
+      if (button.dataset.graphCommand === 'fit') return relationshipCy.fit(undefined, 75);
+      const factor = button.dataset.graphCommand === 'zoom-in' ? 1.22 : .82;
+      relationshipCy.zoom({level:Math.max(relationshipCy.minZoom(), Math.min(relationshipCy.maxZoom(), relationshipCy.zoom() * factor)),renderedPosition:{x:stage.clientWidth / 2,y:stage.clientHeight / 2}});
+    });
+  }
+  relationshipResizeObserver = new ResizeObserver(() => relationshipCy?.resize());
+  relationshipResizeObserver.observe(stage);
 }
 const viewInfo = {
-  overview: ['대시보드','WORKSPACE OVERVIEW','대시보드','에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.'],
+  overview: ['대시보드','WORKSPACE CONSOLE','대시보드','워크스페이스 데이터 · 연결 상태 · 최근 활동'],
   memories: ['기억','YOUR PERSONAL CONTEXT','기억','내가 남긴 사실과 취향, 에이전트가 구성한 엔티티를 확인하세요.','+ 기억 추가'],
   documents: ['문서 · 파일','YOUR KNOWLEDGE, CONNECTED','문서 · 파일','원본과 에이전트가 분석한 문서 메타정보를 관리하세요.','↑ 원본 업로드'],
   relations: ['관계 그래프','CONNECTIONS WITH A REASON','관계 그래프','에이전트가 구성한 기억의 연결과 근거를 살펴보세요.'],
@@ -191,26 +173,38 @@ const viewInfo = {
   vault: ['Vault','ENCRYPTED SECRETS','Vault','에이전트가 로컬 설정 파일 없이 사용할 비밀값을 암호화해 관리하세요.','+ 비밀 추가'],
   requests: ['기능 요청','HELP SHAPE VIBE MEMORY','기능 요청','필요한 기능과 실제 사용 사례를 남겨주세요.','+ 기능 요청']
 };
-async function navigate(view, reset = true) {
+function viewFromLocation() {
+  const view = decodeURIComponent(location.hash.slice(1));
+  return Object.hasOwn(viewInfo, view) ? view : 'overview';
+}
+function syncViewLocation(view, mode = 'push') {
+  const hash = `#${view}`;
+  if (location.hash === hash || mode === 'none') return;
+  history[mode === 'replace' ? 'replaceState' : 'pushState']({view}, '', `${location.pathname}${location.search}${hash}`);
+}
+async function navigate(view, reset = true, historyMode = 'push') {
+  if (!Object.hasOwn(viewInfo, view)) view = 'overview';
+  syncViewLocation(view, historyMode);
   const ticket = ++generation;
+  destroyRelationshipGraph();
   currentView = view;
   if (reset) { pageOffset = 0; recordKind = view === 'documents' ? 'document' : 'memory'; }
   for (const button of document.querySelectorAll('.sidebar nav [data-view]')) {
     if (button.dataset.view === view) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
   const info = viewInfo[view];
+  document.title = `${info[0]} — Vibe Memory`;
+  $('#console-main').classList.toggle('is-graph-view', view === 'relations');
   $('#breadcrumb').textContent = info[0]; $('#view-eyebrow').textContent = info[1];
   $('#view-title').textContent = info[2]; $('#view-description').textContent = info[3];
   $('#primary-action').hidden = !info[4]; $('#primary-action').textContent = info[4] || '';
   $('#console-error').hidden = true; $('#view-content').innerHTML = '<div class="loading-state">불러오는 중…</div>';
   $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded', 'false');
   try {
-    let html;
+    let html, graphPayload = null;
     if (view === 'overview') {
       const [stats, recent, keys] = await Promise.all([api('/v1/stats'), api('/v1/records?limit=6'), api('/auth/api-keys')]);
       const totalRecords = stats.memory + stats.document + stats.file + stats.entity;
-      const setup = [true, keys.items.length > 0, totalRecords > 0, stats.relations > 0];
-      const complete = setup.filter(Boolean).length;
       const statIcons = [
         '<svg viewBox="0 0 24 24"><path d="M9 4.5A3.5 3.5 0 0 0 5.5 8v1A3.5 3.5 0 0 0 4 15.5 3.5 3.5 0 0 0 7.5 19H9m6-14.5A3.5 3.5 0 0 1 18.5 8v1a3.5 3.5 0 0 1 1.5 6.5 3.5 3.5 0 0 1-3.5 3.5H15M9 4v16m6-16v16"/></svg>',
         '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v5h4M9 12h6m-6 4h6"/></svg>',
@@ -223,13 +217,9 @@ async function navigate(view, reset = true) {
         ['엔티티', stats.entity, '식별된 사람과 대상', 'memories'],
         ['활성 관계', stats.relations, '기억 사이의 연결', 'relations']
       ];
-      const setupItems = [
-        ['워크스페이스 생성', '개인 데이터 공간이 준비됐어요.', 'overview'],
-        ['에이전트 연결', keys.items.length ? `${keys.items.length}개 에이전트 키가 활성 상태예요.` : '승인 링크로 첫 에이전트를 연결하세요.', 'keys'],
-        ['첫 기억 저장', totalRecords ? `${totalRecords}개의 기록이 쌓였어요.` : '에이전트 또는 콘솔에서 기억을 추가하세요.', 'memories'],
-        ['관계 만들기', stats.relations ? `${stats.relations}개의 관계가 연결됐어요.` : '에이전트가 엔티티 사이의 관계를 등록해요.', 'relations']
-      ];
-      html = `<section class="welcome-panel"><div class="welcome-copy"><p class="welcome-kicker"><i></i>PERSONAL MEMORY WORKSPACE</p><h2>${h(user.name)}님, 기억이 이어지고 있어요.</h2><p>Claude Code, Codex, OpenClaw, Hermes가 같은 맥락을 사용할 수 있도록 기록과 연결 상태를 관리하세요.</p><div class="quick-actions"><button data-action="add-memory"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>기억 추가</button><button data-action="upload-file"><svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 15v5h14v-5"/></svg>파일 업로드</button><button data-view="keys"><svg viewBox="0 0 24 24"><circle cx="9" cy="12" r="4"/><path d="M13 12h8m-3 0v3"/></svg>에이전트 연결</button></div></div><div class="memory-network-card"><div class="memory-network-top"><span>연결된 에이전트</span><strong>${keys.items.length}</strong></div><div class="agent-mini-list">${[['claude-code.png','Claude Code'],['codex.png','Codex'],['openclaw.svg','OpenClaw'],['hermes.png','Hermes']].map(([file,name]) => `<img src="/assets/brands/${file}" alt="${name}" title="${name}">`).join('')}<span class="agent-mini-more">+AI</span></div><div class="memory-network-foot"><i></i>${keys.items.length ? '연결된 키가 정상 작동 중입니다.' : '첫 에이전트를 연결해보세요.'}</div></div></section><div class="stats-grid">${statsData.map(([label,count,caption,target],index) => `<article class="stat-card"><div class="stat-card-top"><span class="stat-card-label">${h(label)}</span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div><div class="dashboard-grid"><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>가장 최근에 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 →</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('아직 저장된 기억이 없어요.','에이전트를 연결하거나 콘솔에서 첫 기억을 추가해보세요.','<button data-action="add-memory">첫 기억 추가하기</button>')}</section><div><section class="console-panel setup-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>시작 체크리스트</h2><p>워크스페이스 설정 상태</p></div></div><div class="setup-progress"><div class="setup-progress-top"><span>${complete}/4 완료</span><strong>${complete * 25}%</strong></div><div class="setup-progress-bar"><i style="width:${complete * 25}%"></i></div></div><div class="setup-list">${setupItems.map(([title,description,target],index) => `<div class="setup-item"><span class="setup-check ${setup[index] ? '' : 'pending'}">${setup[index] ? '✓' : '○'}</span><div class="setup-item-copy"><strong>${h(title)}</strong><span>${h(description)}</span></div><button data-view="${target}" aria-label="${h(title)} 보기">→</button></div>`).join('')}</div></section><section class="console-panel dashboard-agent-panel"><p>하나의 기억을 여러 코딩 에이전트에서 안전하게 이어가세요.</p><div class="agent-brand-grid">${[['claude-code.png','Claude Code'],['codex.png','Codex'],['openclaw.svg','OpenClaw'],['hermes.png','Hermes']].map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"></span>`).join('')}</div></section></div></div>`;
+      const guide = dashboardGuideHidden() ? '' : `<section class="dashboard-guide" aria-label="빠른 시작"><div class="dashboard-guide-copy"><span>QUICK START</span><strong>워크스페이스 빠른 작업</strong></div><div class="dashboard-guide-actions"><button data-action="add-memory">+ 기억 추가</button><button data-action="upload-file">↑ 파일 업로드</button><button data-view="keys">에이전트 연결</button><button class="dashboard-guide-dismiss" data-action="dismiss-dashboard-guide">다시 보지 않기 <span aria-hidden="true">×</span></button></div></section>`;
+      const agentBrands = [['claude-code.png','Claude Code'],['codex.png','Codex'],['openclaw.svg','OpenClaw'],['hermes.png','Hermes']];
+      html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target],index) => `<article class="stat-card"><div class="stat-card-top"><span class="stat-card-label">${h(label)}</span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div><div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 →</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>연결 상태</h2><p>Workspace runtime</p></div><span class="console-live-badge"><i></i>LIVE</span></div><div class="console-status-list"><div><span>API</span><strong class="status-ok">정상</strong></div><div><span>에이전트 키</span><strong>${keys.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div><div><span>관계</span><strong>${stats.relations}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
     } else if (view === 'memories' || view === 'documents') {
       const result = await api(`/v1/records?kind=${recordKind}&limit=50&offset=${pageOffset}`);
       const options = view === 'memories' ? [['memory','기억'],['entity','엔티티']] : [['document','문서 메타정보'],['file','원본 파일']];
@@ -238,15 +228,17 @@ async function navigate(view, reset = true) {
       const result = await api('/v1/vault');
       html = `<section class="vault-note"><strong>값은 저장 후 다시 표시되지 않습니다.</strong><p>비밀값은 AES-256-GCM으로 암호화되며, Vault 권한을 따로 허용한 에이전트만 <code>vault exec</code>로 프로세스에 전달할 수 있습니다. 이름과 사용 기록은 이 화면에 표시됩니다.</p></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>암호화된 비밀</h2><p>${result.items.length}개의 비밀값이 저장되어 있습니다.</p></div></div>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 설명</th><th>마지막 사용</th><th>사용 횟수</th><th></th></tr></thead><tbody>${result.items.map(item => `<tr><td><strong>${h(item.name)}</strong><span class="record-subtitle">${h(item.description || '설명 없음')}</span></td><td>${date(item.last_accessed_at)}</td><td>${h(item.access_count)}</td><td><div class="row-actions"><button data-action="rotate-vault" data-name="${h(item.name)}" data-description="${h(item.description)}">교체</button><button class="danger" data-action="delete-vault" data-name="${h(item.name)}">삭제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('저장된 비밀값이 없어요.','API 토큰과 자동화 자격 증명을 암호화해 저장하고 허용한 에이전트에서 사용하세요.')}</section>`;
     } else if (view === 'keys') {
-      const result = await api('/auth/api-keys');
-      html = `<div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>활성 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드</a></div><p class="key-note">Vault 권한은 기억 접근과 별도로 관리됩니다. 신뢰하는 에이전트에만 허용하고 언제든 철회하세요.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>Vault</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><button class="permission-toggle ${key.vault_access ? 'enabled' : ''}" data-action="toggle-vault-access" data-id="${h(key.id)}" data-enabled="${key.vault_access}">${key.vault_access ? '허용됨' : '차단됨'}</button></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.','<a class="secondary-button" href="/guide.html" target="_blank">연결 방법 보기</a>')}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
+      const [result, mcp] = await Promise.all([api('/auth/api-keys'), api('/auth/mcp-connections')]);
+      const scopeName = {'memory:read':'기억 조회','memory:write':'기억 저장','feature:write':'기능 요청'};
+      const mcpRows = mcp.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>MCP 클라이언트</th><th>허용 범위</th><th>마지막 사용</th><th></th></tr></thead><tbody>${mcp.items.map(connection => `<tr><td><strong>${h(connection.client_name)}</strong><span class="record-subtitle">OAuth · 웹 승인 연결</span></td><td>${connection.scopes.map(scope => `<span class="tag">${h(scopeName[scope] || scope)}</span>`).join('')}</td><td>${date(connection.last_used_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke-mcp" data-id="${h(connection.client_id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="mcp-empty">아직 연결된 원격 MCP 클라이언트가 없습니다.</p>';
+      html = `<section class="mcp-connect-card"><div class="mcp-connect-copy"><span>REMOTE MCP · OAUTH 2.1</span><h2>GPT와 Claude에 바로 연결하세요.</h2><p>커스텀 MCP 서버에 아래 주소를 추가하면 Vibe Memory 로그인 화면으로 이동합니다. API 키를 복사하거나 채팅에 붙여넣지 않습니다.</p><code>${h(mcp.server_url)}</code></div><div class="mcp-connect-actions"><div><img src="/assets/brands/codex.png" alt=""><strong>GPT</strong></div><div><img src="/assets/brands/claude-code.png" alt=""><strong>Claude</strong></div><button class="button primary" type="button" data-action="copy-mcp-url" data-url="${h(mcp.server_url)}">MCP 주소 복사 ⧉</button><a href="/guide.html#mcp" target="_blank" rel="noopener">연결 방법 보기 ↗</a></div></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>원격 MCP 연결</h2><p>${mcp.items.length}개의 GPT·Claude 연결이 활성 상태입니다.</p></div></div>${mcpRows}</section><div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>CLI·Skill 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드</a></div><p class="key-note">Vault 권한은 기억 접근과 별도로 관리됩니다. 신뢰하는 에이전트에만 허용하고 언제든 철회하세요.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>Vault</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><button class="permission-toggle ${key.vault_access ? 'enabled' : ''}" data-action="toggle-vault-access" data-id="${h(key.id)}" data-enabled="${key.vault_access}">${key.vault_access ? '허용됨' : '차단됨'}</button></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.','<a class="secondary-button" href="/guide.html" target="_blank">연결 방법 보기</a>')}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
     } else if (view === 'requests') {
       const result = await api(`/v1/feature-requests?limit=50&offset=${pageOffset}`);
       html = `<section class="console-panel">${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>요청 내용</th><th>에이전트</th><th>상태</th><th>등록일</th></tr></thead><tbody>${result.items.map(item => `<tr><td><button class="record-title" data-action="request-detail" data-id="${h(item.id)}">${h(item.title)}</button><span class="record-subtitle">${h(item.description.slice(0,100))}</span></td><td>${h(item.agent_name)}</td><td><span class="tag">접수됨</span></td><td>${date(item.created_at)}</td></tr>`).join('')}</tbody></table></div>` : empty('더 나은 기억을 위한 아이디어가 있나요?','에이전트에서 요청을 보내거나 콘솔에서 필요한 기능과 사용 사례를 남겨주세요.')}</section>`;
     } else {
       const result = await api('/v1/relations');
       if (!result.items.length) {
-        html = `<section class="console-panel">${empty('기억 사이의 연결을 기다리고 있어요.','에이전트가 엔티티와 관계를 구성해 등록하면 여기에 표시됩니다.')}</section>`;
+        html = `<section class="relationship-panel relationship-empty-panel">${empty('기억 사이의 연결을 기다리고 있어요.','에이전트가 엔티티와 관계를 구성해 등록하면 여기에 표시됩니다.')}</section>`;
       } else {
         const allIds = [...new Set(result.items.flatMap(edge => [edge.source_id,edge.target_id]))];
         const degree = new Map(allIds.map(id => [id, 0]));
@@ -257,17 +249,18 @@ async function navigate(view, reset = true) {
         const visibleIds = new Set(), visibleRelations = [];
         for (const edge of ranked) {
           const additions = Number(!visibleIds.has(edge.source_id)) + Number(!visibleIds.has(edge.target_id));
-          if (visibleIds.size + additions > 64 || visibleRelations.length >= 120) continue;
+          if (visibleIds.size + additions > 21 || visibleRelations.length >= 36) continue;
           visibleIds.add(edge.source_id); visibleIds.add(edge.target_id); visibleRelations.push(edge);
         }
         const records = await Promise.all([...visibleIds].map(id => api('/v1/records/' + encodeURIComponent(id))));
+        graphPayload = {records,relations:visibleRelations};
         html = relationshipGraph(records, visibleRelations, {nodes:allIds.length,relations:result.items.length});
       }
     }
     if (ticket !== generation) return;
     $('#view-content').innerHTML = html;
     if (view === 'keys') $('#view-content').insertAdjacentHTML('afterbegin', installPromptCard());
-    if (view === 'relations') bindRelationshipGraph();
+    if (view === 'relations' && graphPayload) await bindRelationshipGraph(graphPayload.records, graphPayload.relations);
     const filter = $('#kind-filter');
     if (filter) filter.addEventListener('change', () => { recordKind = filter.value; pageOffset = 0; navigate(view, false); });
     const search = $('#search-records');
@@ -334,7 +327,7 @@ document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return navigate(nav.dataset.view);
   const button = event.target.closest('[data-action]'); if (!button) return;
-  const {action,id,name,description,sourceName,targetName,relation,reason} = button.dataset;
+  const {action,id,name,description,sourceName,targetName,relation,reason,url} = button.dataset;
   try {
     if (action === 'toggle-account') {
       if (window.innerWidth <= 820) {
@@ -346,6 +339,11 @@ document.addEventListener('click', async event => {
       return;
     }
     if (action === 'home') return navigate('overview');
+    if (action === 'dismiss-dashboard-guide') {
+      dismissDashboardGuide();
+      toast('대시보드 안내를 숨겼습니다.');
+      return navigate('overview', false);
+    }
     if (action === 'focus-search') {
       await navigate('memories');
       $('#search-records [name="keywords"]')?.focus();
@@ -357,6 +355,11 @@ document.addEventListener('click', async event => {
       const prompt = window.vibeMemoryInstallPrompt();
       try { await copyText(prompt); toast('설치·최신화 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.'); }
       catch { detail('에이전트 설치·최신화 프롬프트', `<p class="dialog-help">자동 복사가 차단됐습니다. 아래 내용을 선택해 복사하세요.</p><pre class="detail-pre">${h(prompt)}</pre>`); }
+      return;
+    }
+    if (action === 'copy-mcp-url') {
+      try { await copyText(url); toast('MCP 서버 주소를 복사했습니다.'); }
+      catch { detail('Vibe Memory MCP 주소', `<pre class="detail-pre">${h(url)}</pre>`); }
       return;
     }
     if (action === 'create-key') return createKey();
@@ -382,6 +385,9 @@ document.addEventListener('click', async event => {
     }
     if (action === 'revoke' && confirm('이 API 키를 삭제할까요? 연결된 에이전트에서 더 이상 사용할 수 없습니다.')) {
       await api('/auth/api-keys/' + encodeURIComponent(id),{method:'DELETE'}); toast('API 키를 삭제했습니다.'); await navigate(currentView,false);
+    }
+    if (action === 'revoke-mcp' && confirm('이 GPT·Claude MCP 연결을 해제할까요?')) {
+      await api('/auth/mcp-connections/' + encodeURIComponent(id),{method:'DELETE'}); toast('MCP 연결을 해제했습니다.'); await navigate(currentView,false);
     }
     if (action === 'delete-vault' && confirm(`${name} 비밀값을 영구 삭제할까요?`)) {
       await api('/v1/vault/' + encodeURIComponent(name),{method:'DELETE'}); toast('Vault 비밀값을 삭제했습니다.'); await navigate(currentView,false);
@@ -409,6 +415,10 @@ document.addEventListener('keydown',async event => {
   if (event.key !== '/' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) return;
   event.preventDefault(); await navigate('memories'); $('#search-records [name="keywords"]')?.focus();
 });
+window.addEventListener('popstate',() => {
+  const view = viewFromLocation();
+  if (view !== currentView) navigate(view, true, 'none');
+});
 $('#logout').addEventListener('click',async () => {
   try { await api('/auth/logout',{method:'POST'}); $('#detail-content').replaceChildren(); $('#view-content').replaceChildren(); location.replace('/login'); }
   catch (error) { toast(error.message); }
@@ -420,6 +430,6 @@ $('#logout').addEventListener('click',async () => {
     const initial = user.name[0].toUpperCase();
     $('#user-initial').textContent = initial; $('#topbar-initial').textContent = initial;
     $('#workspace-initial').textContent = initial; $('#workspace-name').textContent = user.name + '의 기억';
-    await navigate('overview');
+    await navigate(viewFromLocation(), true, 'replace');
   } catch (error) { $('#console-error').textContent = error.message; $('#console-error').hidden = false; }
 })();

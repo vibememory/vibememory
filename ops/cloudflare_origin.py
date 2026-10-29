@@ -91,7 +91,15 @@ def main():
         config = json.loads(config_path.read_text())
         config["main"] = "src/worker.js"
         config["assets"]["binding"] = "ASSETS"
-        config["assets"]["run_worker_first"] = ["/auth/*", "/v1/*", "/health", "/openapi.json"]
+        config["assets"]["run_worker_first"] = [
+            "/auth/*",
+            "/v1/*",
+            "/oauth/*",
+            "/.well-known/*",
+            "/mcp",
+            "/health",
+            "/openapi.json",
+        ]
         config["vpc_networks"] = [
             {"binding": "MEMORY_ORIGIN", "tunnel_id": tunnel["id"], "remote": True}
         ]

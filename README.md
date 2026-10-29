@@ -17,9 +17,10 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 | Extract search keywords from the user's question | Compare keyword vectors and return matching records |
 | Select evidence and build an answer | Provide source records and explicit graph traversal |
 
-- **Real graph storage:** memories, entities, documents, provenance, and relationship history in Kuzu.
-- **Keyword-only search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
+- **Durable relationship graph:** memories, entities, documents, provenance, and relationship history in PostgreSQL.
+- **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
+- **Remote MCP:** one OAuth 2.1 + PKCE Streamable HTTP server for ChatGPT, Codex, Claude, and other MCP clients.
 - **Agent keys:** independently revocable keys share the same account's memory; keys are shown once and stored as hashes.
 - **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; values are never listed in the console.
 - **Byte streams:** upload originals as `application/octet-stream`, then attach agent-prepared JSON using `file_id`.
@@ -27,7 +28,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 
 ## Quick start: Docker Compose
 
-Requires Docker Engine with Compose v2 on Linux amd64. No Cloudflare account, Node.js, external database, or LLM API key is required.
+Requires Docker Engine with Compose v2 on Linux amd64. Compose starts PostgreSQL 17 with pgvector, so no separately managed database, Cloudflare account, Node.js, or LLM API key is required.
 
 ```sh
 git clone https://github.com/vibememory/vibememory.git
@@ -38,7 +39,7 @@ docker compose up -d --build
 
 Open **http://localhost:8080**, create an account, then open the **Console → Agent API keys** page.
 
-The same container serves the website, console, and REST API. A named volume preserves the graph, account database, uploads, and model cache. The first keyword embedding downloads the multilingual model (about 220 MB); signup and the console do not require this download.
+The app container serves the website, console, and REST API. Separate named volumes preserve PostgreSQL data and uploaded files, the Vault key, and model cache. The first keyword embedding downloads the multilingual model (about 220 MB); signup and the console do not require this download.
 
 ```sh
 docker compose logs -f app
@@ -70,13 +71,24 @@ skills/vibe-memory/bin/vibe-memory vault exec \
 
 The native Rust CLI wraps authentication, storage, search, byte-stream files, encrypted Vault execution, live events, and Skill updates so agents do not need to load API schemas into context. `vault list` exposes names and metadata only; `vault exec` fetches selected values and injects them into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
+## Connect ChatGPT or Claude with MCP
+
+Add your deployment's public MCP URL as a custom MCP server or custom connector:
+
+```text
+https://memory.example.com/mcp
+```
+
+The client discovers OAuth metadata, dynamically registers as a public client, and redirects the user to Vibe Memory for login and explicit consent. Authorization code + PKCE tokens are user-scoped, stored only as hashes, refresh-token rotation is enabled, and connections can be revoked from **Console → Agent connections**. The MCP tool set supports keyword search, record/graph/event reads, agent-authored memory/entity/document/relation writes, and feature requests. It deliberately excludes Vault, deletion, and base64 file uploads; original files keep using the raw byte-stream endpoint.
+
 ## Run from source
 
-Requires Python 3.12/3.13 and [uv](https://docs.astral.sh/uv/). The web assets are already included; no frontend build step is needed.
+Requires Python 3.12/3.13, [uv](https://docs.astral.sh/uv/), and PostgreSQL with the pgvector extension. The web assets are already included; no frontend build step is needed.
 
 ```sh
 uv sync --frozen
 cp .env.example .env
+# Set MEMORY_DATABASE_URL to your empty PostgreSQL/pgvector database.
 uv run vibe-memory serve
 ```
 
@@ -114,18 +126,19 @@ Tests use temporary data. Semantic integration tests download the actual embeddi
 ## Architecture and current limits
 
 ```text
-Browser console / REST agent
+Browser console / REST agent / remote MCP client
             │
-         FastAPI ─── account/session/key store (SQLite)
+         FastAPI
             │
-            ├── Kuzu graph: records, keyword nodes, relationships, feedback
-            ├── local multilingual keyword embeddings (FastEmbed / ONNX)
-            └── opaque byte-stream files
+            ├── PostgreSQL: accounts, OAuth, records, relationships, feedback, Vault ciphertext
+            ├── pgvector: agent-supplied keyword embeddings and exact cosine search
+            ├── local multilingual keyword model (FastEmbed / ONNX)
+            └── persistent volume: opaque byte-stream files and Vault key
 ```
 
-This is a **single-process, personal/small-team deployment**. Do not run multiple API workers against one embedded graph directory. Search scans the authenticated user's keyword vectors; distributed storage and ANN indexing are not implemented. Email verification, password recovery, and social login are not currently included.
+This is a **personal/small-team deployment**. PostgreSQL is the source of truth for structured data; raw uploaded bytes remain on the app volume. Search uses exact, owner-scoped pgvector cosine distance, so it favors perfect recall over an approximate ANN index. Horizontal file-storage replication, email verification, password recovery, and social login are not currently included.
 
-Kuzu is pinned to 0.11.3; the upstream project is [archived](https://github.com/kuzudb/kuzu). Replacing it for long-term maintenance is an open design concern. The store boundary is kept separate from the API and agent workflow. No Cloudflare service is required for self-hosting; the hosted website uses an optional private Worker/Tunnel bridge.
+Kuzu remains pinned only to read legacy installations during the offline migration. Run `vibe-memory migrate-postgres` before enabling PostgreSQL on an existing deployment; see the [migration procedure](docs/self-hosting.md#legacy-kuzusqlite-migration). No Cloudflare service is required for self-hosting; the hosted website uses an optional private Worker/Tunnel bridge.
 
 ## Contributing and license
 

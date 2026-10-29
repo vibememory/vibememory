@@ -1,4 +1,7 @@
 'use strict';
+fetch('/auth/me', {cache:'no-store', credentials:'same-origin'})
+  .then(response => { if (response.ok) window.location.replace('/console'); })
+  .catch(() => {});
 const descriptions = {
   claude: 'Claude Code가 나의 개발 언어 선호를 참고하는 예시입니다.',
   codex: 'Codex가 이전 작업의 맥락을 이어받는 예시입니다.',
@@ -113,6 +116,16 @@ for (const button of document.querySelectorAll('[data-copy-install-prompt]')) {
       notify('설치·최신화 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.');
     } catch {
       notify('자동 복사가 차단됐습니다. 콘솔에서 프롬프트를 복사해주세요.');
+    }
+  });
+}
+for (const link of document.querySelectorAll('[data-use-mcp]')) {
+  link.addEventListener('click', async () => {
+    try {
+      await copyText(`${location.origin}/mcp`);
+      notify('MCP 주소를 복사했습니다. 열린 서비스의 커넥터에 붙여넣으세요.');
+    } catch {
+      notify('MCP 주소를 복사하지 못했습니다. vibememory.io/mcp를 직접 입력해주세요.');
     }
   });
 }

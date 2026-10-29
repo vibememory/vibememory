@@ -4,13 +4,15 @@ import os
 import sqlite3
 import stat
 import threading
-import time
 from contextlib import contextmanager
 from pathlib import Path
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import HTTPException
+
+from .clock import utc_epoch_seconds
+from .postgres import PostgresDatabase
 
 
 class VaultNotFound(Exception):
@@ -49,6 +51,11 @@ def _load_or_create_key(path: Path) -> bytes:
 
 class VaultStore:
     def __init__(self, path: Path, key_path: Path):
+        self.postgres = path if isinstance(path, PostgresDatabase) else None
+        if self.postgres:
+            self.path, self.lock = None, threading.RLock()
+            self.cipher = AESGCM(_load_or_create_key(key_path))
+            return
         path.parent.mkdir(parents=True, exist_ok=True)
         self.path = path
         self.lock = threading.RLock()
@@ -75,6 +82,10 @@ class VaultStore:
 
     @contextmanager
     def connection(self):
+        if self.postgres:
+            with self.postgres.compat_connection() as db:
+                yield db
+            return
         with self.lock:
             db = sqlite3.connect(self.path, timeout=10)
             db.row_factory = sqlite3.Row
@@ -102,13 +113,13 @@ class VaultStore:
         with self.connection() as db:
             rows = db.execute(
                 """SELECT name,description,created_at,updated_at,last_accessed_at,access_count
-                FROM vault_secrets WHERE user_id=? ORDER BY name COLLATE NOCASE""",
+                FROM vault_secrets WHERE user_id=? ORDER BY name""",
                 (user_id,),
             ).fetchall()
         return [self._metadata(row) for row in rows]
 
     def set(self, user_id: str, name: str, value: str, description: str):
-        now = int(time.time())
+        now = utc_epoch_seconds()
         nonce = os.urandom(12)
         ciphertext = self.cipher.encrypt(
             nonce, value.encode(), _associated_data(user_id, name)
@@ -159,7 +170,7 @@ class VaultStore:
             db.execute(
                 """UPDATE vault_secrets SET last_accessed_at=?,access_count=access_count+1
                 WHERE user_id=? AND name=?""",
-                (int(time.time()), user_id, name),
+                (utc_epoch_seconds(), user_id, name),
             )
         return {"name": name, "value": value}
 

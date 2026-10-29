@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>워크스페이스 — Vibe Memory</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/console.css">
+  <script src="/assets/install-prompt.js" defer></script>
+  <script src="/assets/vendor/cytoscape.min.js" defer></script>
+  <script src="/assets/console.js" defer></script>
+</head>
+<body class="console-page">
+  <a class="skip" href="#console-main">본문으로 바로가기</a>
+
+  <aside class="sidebar" aria-label="워크스페이스 메뉴">
+    <div class="sidebar-brand-row">
+      <a class="brand" href="/" aria-label="Vibe Memory 홈">
+        <img src="/assets/favicon.svg" width="28" height="28" alt="">
+        <span>vibe<span class="brand-light">memory</span></span>
+      </a>
+      <span class="plan-badge">PERSONAL</span>
+    </div>
+    <button class="workspace" type="button" data-action="home">
+      <span class="workspace-icon" id="workspace-initial">V</span>
+      <span class="workspace-copy"><strong id="workspace-name">나의 워크스페이스</strong><small>Personal workspace</small></span>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3 3 3-3"/></svg>
+    </button>
+    <nav aria-label="콘솔 메뉴">
+      <p class="sidebar-label">WORKSPACE</p>
+      <button data-view="overview" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>대시보드</span></button>
+      <button data-view="memories"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4.5A3.5 3.5 0 0 0 5.5 8v1A3.5 3.5 0 0 0 4 15.5 3.5 3.5 0 0 0 7.5 19H9m6-14.5A3.5 3.5 0 0 1 18.5 8v1a3.5 3.5 0 0 1 1.5 6.5 3.5 3.5 0 0 1-3.5 3.5H15M9 4v16m6-16v16M9 8h3m0 4h3m-6 4h3"/></svg><span>기억</span></button>
+      <button data-view="documents"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4M9 12h6m-6 4h6"/></svg><span>문서 · 파일</span></button>
+      <button data-view="relations"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.3 11 7.4-3.7M8.3 13l7.4 3.7"/></svg><span>관계 그래프</span></button>
+      <p class="sidebar-label sidebar-label-spaced">MANAGE</p>
+      <button data-view="keys"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="4"/><path d="M13 12h8m-3 0v3m-3-3v2"/></svg><span>에이전트 연결</span></button>
+      <button data-view="vault"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg><span>Vault</span></button>
+      <button data-view="requests"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8m-8 3h5"/></svg><span>기능 요청</span></button>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="sidebar-help-card"><span class="sidebar-help-icon">?</span><div><strong>도움이 필요하신가요?</strong><a href="/guide.html" target="_blank" rel="noopener">연결 가이드 보기</a></div></div>
+      <div class="account-line"><span id="user-initial">V</span><div><strong id="user-name">로그인 확인 중…</strong><small id="user-email"></small></div><button id="account-menu" type="button" aria-label="계정 메뉴 열기" aria-expanded="false">•••</button></div>
+      <div class="account-popover" id="account-popover" hidden><a href="/" target="_blank" rel="noopener">서비스 홈 <span>↗</span></a><a href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 <span>↓</span></a><button id="logout" type="button">로그아웃 <span>↗</span></button></div>
+    </div>
+  </aside>
+  <button class="sidebar-backdrop" id="sidebar-backdrop" type="button" aria-label="메뉴 닫기" tabindex="-1"></button>
+
+  <div class="console-body">
+    <header class="console-header">
+      <button id="menu-toggle" aria-expanded="false" aria-label="메뉴 열기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+      <div class="breadcrumb"><span>Vibe Memory</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg><strong id="breadcrumb">대시보드</strong></div>
+      <button class="topbar-search" type="button" data-action="focus-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><span>기억 검색</span><kbd>/</kbd></button>
+      <div class="topbar-actions"><span class="service-status"><i></i>API 정상</span><a href="/guide.html" target="_blank" rel="noopener">문서</a><button class="topbar-avatar" type="button" data-action="toggle-account" aria-label="계정 메뉴"><span id="topbar-initial">V</span></button></div>
+    </header>
+
+    <main id="console-main">
+      <div class="console-page-heading">
+        <div><p class="eyebrow" id="view-eyebrow">WORKSPACE OVERVIEW</p><h1 id="view-title">대시보드</h1><p id="view-description">에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.</p></div>
+        <button class="button primary" id="primary-action" hidden></button>
+      </div>
+      <div class="console-banner" id="console-error" role="alert" hidden></div>
+      <div id="view-content" aria-live="polite"><div class="loading-state"><span></span>워크스페이스를 불러오는 중입니다…</div></div>
+    </main>
+    <footer class="console-footer"><span><i></i> All systems operational</span><span>Vibe Memory · Your context, carried forward.</span></footer>
+  </div>
+
+  <dialog id="editor"><form id="editor-form"><div class="dialog-heading"><div><p class="dialog-kicker">VIBE MEMORY</p><h2 id="editor-title"></h2></div><button type="button" class="close-dialog" aria-label="닫기">×</button></div><div id="editor-fields"></div><p class="form-error" id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button close-dialog">취소</button><button type="submit" class="button primary" id="editor-submit">저장</button></div></form></dialog>
+  <dialog id="detail-dialog"><div class="dialog-heading"><div><p class="dialog-kicker">DETAIL</p><h2 id="detail-title">상세 정보</h2></div><button type="button" class="close-detail" aria-label="닫기">×</button></div><div id="detail-content"></div><button class="secondary-button close-detail" type="button">닫기</button></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

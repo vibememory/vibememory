@@ -1,14 +1,28 @@
 {
-  "name": "vibe-memory-landing",
+  "name": "vibe-memory-web",
   "private": true,
   "version": "1.0.0",
   "scripts": {
     "prepare-assets": "python3 scripts/package_skill.py",
-    "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
-    "check": "node --check dist/assets/install-prompt.js && node --check dist/assets/app.js && node --check dist/assets/login.js && node --check dist/assets/connect.js && node --check dist/assets/console.js && node --check src/worker.js && wrangler deploy --dry-run",
-    "deploy": "npm run prepare-assets && wrangler deploy"
+    "predev": "python3 scripts/package_vendor.py",
+    "dev": "next dev",
+    "typecheck": "tsc --noEmit",
+    "prebuild": "python3 scripts/package_vendor.py",
+    "build": "next build && python3 scripts/finalize_next_build.py",
+    "check": "npm run typecheck && npm run build && node --check public/assets/i18n.js && node --check public/assets/install-prompt.js && node --check public/assets/app.js && node --check public/assets/login.js && node --check public/assets/connect.js && node --check public/assets/console.js && node --check src/worker.js && wrangler deploy --dry-run",
+    "deploy": "npm run check && wrangler deploy"
+  },
+  "dependencies": {
+    "cytoscape": "^3.34.4",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.9.0",
     "wrangler": "^4.0.0"
   },
   "type": "module"

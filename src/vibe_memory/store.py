@@ -1,14 +1,15 @@
 import json
 import threading
 from contextlib import contextmanager
-from datetime import UTC, datetime
 from uuid import uuid4
 
 import kuzu
 
+from .clock import utc_now_iso
+
 
 def now():
-    return datetime.now(UTC).isoformat()
+    return utc_now_iso()
 
 
 def uid():
@@ -70,6 +71,10 @@ class Store:
             self.query("ALTER TABLE Item ADD metadata STRING DEFAULT '{}'")
         if "file_id" not in columns:
             self.query("ALTER TABLE Item ADD file_id STRING DEFAULT ''")
+        if "version" not in columns:
+            self.query("ALTER TABLE Item ADD version INT64 DEFAULT 1")
+        if "archived_at" not in columns:
+            self.query("ALTER TABLE Item ADD archived_at STRING DEFAULT ''")
         # Old full-text/chunk vectors cannot be repurposed as agent keyword vectors.
         # Preserve source records and semantic relationships, but leave them unindexed.
         with self.transaction():
@@ -128,16 +133,20 @@ class Store:
         if not internal:
             for key in ("embedding", "owner", "parent_id", "start_offset", "end_offset"):
                 result.pop(key, None)
+            result.pop("archived_at", None)
         result["metadata"] = json.loads(result.get("metadata") or "{}")
         return result
 
     def _node(self, item):
         item.setdefault("file_id", "")
+        item.setdefault("version", 1)
+        item.setdefault("archived_at", "")
         self.query(
             """CREATE (:Item {id: $id, owner: $owner, kind: $kind, subtype: $subtype,
             title: $title, content: $content, source: $source, tags: $tags, created_at: $created_at,
             embedding: $embedding, parent_id: $parent_id, start_offset: $start_offset,
-            end_offset: $end_offset, keywords: $keywords, metadata: $metadata, file_id: $file_id})""",
+            end_offset: $end_offset, keywords: $keywords, metadata: $metadata, file_id: $file_id,
+            version: $version, archived_at: $archived_at})""",
             item,
         )
 
@@ -218,17 +227,54 @@ class Store:
                 {"owner": owner, "id": id},
             )
             self.query(
-                "MATCH (n:Item {owner: $owner, id: $id}) SET n.keywords = $keywords",
+                """MATCH (n:Item {owner: $owner, id: $id})
+                SET n.keywords = $keywords, n.version = n.version + 1""",
                 {"owner": owner, "id": id, "keywords": keywords},
             )
             self._index(owner, id, keywords, vectors)
             self._event(owner, record["kind"] + ".updated",
-                        {"record_id": id, "kind": record["kind"], "change": "keywords"})
+                        {"record_id": id, "kind": record["kind"], "change": "keywords",
+                         "version": record["version"] + 1})
+            return self.get(owner, id)
+
+    def update_record(self, owner, id, data, vectors=None):
+        with self.transaction():
+            record = self.get(owner, id)
+            if record["version"] != data.expected_version:
+                raise Conflict()
+            fields = {
+                key: getattr(data, key)
+                for key in ("content", "title", "subtype", "source", "tags", "keywords")
+                if getattr(data, key) is not None
+            }
+            if data.metadata is not None:
+                fields["metadata"] = json.dumps(data.metadata, ensure_ascii=False)
+            assignments = [f"n.{key} = ${key}" for key in fields]
+            assignments.append("n.version = n.version + 1")
+            self.query(
+                "MATCH (n:Item {owner: $owner, id: $id}) SET " + ", ".join(assignments),
+                {"owner": owner, "id": id, **fields},
+            )
+            if data.keywords is not None:
+                if vectors is None or len(vectors) != len(data.keywords):
+                    raise ValueError("Embedding count does not match keyword count")
+                self.query(
+                    "MATCH (n:Item {owner: $owner, parent_id: $id}) DETACH DELETE n",
+                    {"owner": owner, "id": id},
+                )
+                self._index(owner, id, data.keywords, vectors)
+            self._event(
+                owner,
+                record["kind"] + ".updated",
+                {"record_id": id, "kind": record["kind"], "change": "record",
+                 "version": record["version"] + 1},
+            )
             return self.get(owner, id)
 
     def get(self, owner, id, internal=False):
         rows = self.query(
-            "MATCH (n:Item {owner: $owner, id: $id}) RETURN n", {"owner": owner, "id": id}
+            """MATCH (n:Item {owner: $owner, id: $id})
+            WHERE n.archived_at = '' RETURN n""", {"owner": owner, "id": id}
         )
         if not rows or (not internal and rows[0]["n"]["kind"] in {"chunk", "keyword"}):
             raise NotFound()
@@ -237,11 +283,26 @@ class Store:
     def list(self, owner, kind=None, limit=50, offset=0):
         rows = self.query(
             """MATCH (n:Item {owner: $owner})
-            WHERE n.kind <> 'chunk' AND n.kind <> 'keyword' AND ($kind = '' OR n.kind = $kind)
+            WHERE n.kind <> 'chunk' AND n.kind <> 'keyword' AND n.archived_at = ''
+            AND ($kind = '' OR n.kind = $kind)
             RETURN n ORDER BY n.created_at DESC, n.id SKIP $offset LIMIT $limit""",
             {"owner": owner, "kind": kind or "", "limit": limit, "offset": offset},
         )
         return [self.clean(row["n"]) for row in rows]
+
+    def archived(self, owner, limit=50, offset=0):
+        rows = self.query(
+            """MATCH (n:Item {owner: $owner})
+            WHERE n.kind <> 'chunk' AND n.kind <> 'keyword' AND n.archived_at <> ''
+            RETURN n ORDER BY n.archived_at DESC, n.id SKIP $offset LIMIT $limit""",
+            {"owner": owner, "limit": limit, "offset": offset},
+        )
+        result = []
+        for row in rows:
+            record = self.clean(row["n"])
+            record["archived_at"] = row["n"]["archived_at"]
+            result.append(record)
+        return result
 
     def delete(self, owner, id):
         with self.transaction():
@@ -259,6 +320,141 @@ class Store:
             self._event(owner, record["kind"] + ".deleted",
                         {"record_id": id, "kind": record["kind"],
                          "incident_relations_removed": True})
+
+    def archive(self, owner, id, expected_version, reason):
+        with self.transaction():
+            record = self.get(owner, id)
+            if record["version"] != expected_version:
+                raise Conflict()
+            if record["kind"] == "file" and self.query(
+                """MATCH (n:Item {owner: $owner, file_id: $id})
+                WHERE n.archived_at = '' RETURN n.id""",
+                {"owner": owner, "id": id},
+            ):
+                raise FileInUse()
+            archived_at = now()
+            self.query(
+                """MATCH (n:Item {owner: $owner, id: $id})
+                SET n.archived_at = $archived_at, n.version = n.version + 1""",
+                {"owner": owner, "id": id, "archived_at": archived_at},
+            )
+            self._event(
+                owner,
+                record["kind"] + ".archived",
+                {"record_id": id, "kind": record["kind"], "reason": reason,
+                 "version": record["version"] + 1, "recoverable": True},
+            )
+            return {"id": id, "archived_at": archived_at, "version": record["version"] + 1}
+
+    def restore(self, owner, id, expected_version, reason):
+        with self.transaction():
+            rows = self.query(
+                """MATCH (n:Item {owner: $owner, id: $id})
+                WHERE n.archived_at <> '' RETURN n""",
+                {"owner": owner, "id": id},
+            )
+            if not rows:
+                raise NotFound()
+            record = self.clean(rows[0]["n"])
+            if record["version"] != expected_version:
+                raise Conflict()
+            if record["kind"] == "document" and record["file_id"]:
+                if self.get(owner, record["file_id"])["kind"] != "file":
+                    raise NotFound()
+            self.query(
+                """MATCH (n:Item {owner: $owner, id: $id})
+                SET n.archived_at = '', n.version = n.version + 1""",
+                {"owner": owner, "id": id},
+            )
+            self._event(
+                owner,
+                record["kind"] + ".restored",
+                {"record_id": id, "kind": record["kind"], "reason": reason,
+                 "version": record["version"] + 1},
+            )
+            return self.get(owner, id)
+
+    def merge(self, owner, data):
+        ids = [data.canonical_id, *data.duplicate_ids]
+        duplicates = set(data.duplicate_ids)
+        with self.transaction():
+            records = {id: self.get(owner, id) for id in ids}
+            if any(records[id]["version"] != data.expected_versions[id] for id in ids):
+                raise Conflict()
+            kinds = {records[id]["kind"] for id in ids}
+            if len(kinds) != 1 or "file" in kinds:
+                raise ValueError("Only records of the same non-file kind can be merged")
+            edges = [
+                edge
+                for edge in self.relations(owner, "all")
+                if edge["source_id"] in duplicates or edge["target_id"] in duplicates
+            ]
+            rewired = retracted = 0
+            relation_id_map = {}
+            for edge in edges:
+                source = data.canonical_id if edge["source_id"] in duplicates else edge["source_id"]
+                target = data.canonical_id if edge["target_id"] in duplicates else edge["target_id"]
+                version = edge["version"] + 1
+                change_reason = "Record merge: " + data.reason
+                history = edge["history"] + [
+                    dict(
+                        status="retracted" if source == target else edge["status"],
+                        reason=change_reason,
+                        at=now(),
+                        version=version,
+                    )
+                ]
+                if source == target:
+                    self.query(
+                        """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
+                        WHERE r.id = $id SET r.status = 'retracted', r.reason = $reason,
+                        r.version = $version, r.history = $history""",
+                        {"owner": owner, "id": edge["id"], "reason": change_reason,
+                         "version": version, "history": json.dumps(history)},
+                    )
+                    retracted += 1
+                    continue
+                self.query(
+                    """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
+                    WHERE r.id = $id DELETE r""",
+                    {"owner": owner, "id": edge["id"]},
+                )
+                new_id = self._link(owner, source, target, edge["relation"], change_reason)
+                self.query(
+                    """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
+                    WHERE r.id = $id SET r.status = $status, r.version = $version,
+                    r.history = $history""",
+                    {"owner": owner, "id": new_id, "status": edge["status"],
+                     "version": version, "history": json.dumps(history)},
+                )
+                relation_id_map[edge["id"]] = new_id
+                rewired += 1
+            archived_at = now()
+            self.query(
+                """MATCH (n:Item {owner: $owner}) WHERE n.id IN $ids
+                SET n.archived_at = $archived_at, n.version = n.version + 1""",
+                {"owner": owner, "ids": data.duplicate_ids, "archived_at": archived_at},
+            )
+            self.query(
+                """MATCH (n:Item {owner: $owner, id: $id}) SET n.version = n.version + 1""",
+                {"owner": owner, "id": data.canonical_id},
+            )
+            self._event(
+                owner,
+                "record.merged",
+                {"canonical_id": data.canonical_id, "archived_ids": data.duplicate_ids,
+                 "reason": data.reason, "relations_rewired": rewired,
+                 "relations_retracted": retracted},
+            )
+            return {
+                "canonical": self.get(owner, data.canonical_id),
+                "archived_ids": data.duplicate_ids,
+                "archived_at": archived_at,
+                "relations_rewired": rewired,
+                "relations_retracted": retracted,
+                "relation_id_map": relation_id_map,
+                "archived_records_recoverable": True,
+            }
 
     def _link(self, owner, source, target, relation, reason):
         id, created = uid(), now()
@@ -296,6 +492,7 @@ class Store:
         rows = self.query(
             """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
             WHERE r.relation <> 'CHUNK_OF' AND r.relation <> 'KEYWORD_OF' AND ($status = 'all' OR r.status = $status)
+            AND a.archived_at = '' AND b.archived_at = ''
             RETURN a.id AS source_id, b.id AS target_id, r.id AS id, r.relation AS relation,
                 r.reason AS reason, r.status AS status, r.version AS version,
                 r.created_at AS created_at, r.history AS history""",
@@ -345,7 +542,8 @@ class Store:
     def candidates(self, owner, scope, tags):
         rows = self.query(
             """MATCH (n:Item {owner: $owner})-[:Link]->(p:Item {owner: $owner})
-            WHERE n.kind = 'keyword' AND ($scope = 'all' OR p.kind = $scope)
+            WHERE n.kind = 'keyword' AND p.archived_at = ''
+            AND ($scope = 'all' OR p.kind = $scope)
             RETURN n, p""",
             {
                 "owner": owner,
@@ -434,7 +632,7 @@ class Store:
         with self.transaction():
             counts = self.query(
                 """MATCH (n:Item {owner: $owner})
-                WHERE n.kind <> 'keyword' AND n.kind <> 'chunk'
+                WHERE n.kind <> 'keyword' AND n.kind <> 'chunk' AND n.archived_at = ''
                 RETURN n.kind AS kind, count(*) AS count""",
                 {"owner": owner},
             )

@@ -11,6 +11,10 @@ const captureForm = document.querySelector('#capture-form');
 const errorBox = document.querySelector('#capture-error');
 const successBox = document.querySelector('#capture-success');
 
+function setCaptureAction(button) {
+  button.innerHTML = 'Vault에 안전하게 저장 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg>';
+}
+
 function showError(message) {
   statusText.textContent = message;
   errorBox.textContent = message;
@@ -78,7 +82,7 @@ captureForm.addEventListener('submit', async event => {
     errorBox.textContent = error instanceof TypeError ? '서버에 연결할 수 없습니다.' : error.message;
     errorBox.hidden = false;
     button.disabled = false;
-    button.textContent = 'Vault에 안전하게 저장 ↗';
+    setCaptureAction(button);
   }
 });
 

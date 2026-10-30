@@ -549,6 +549,12 @@
     if (document.querySelector('[data-vm-language]')) return;
     const wrapper = document.createElement('label');
     wrapper.className = 'vm-language-switcher'; wrapper.dataset.vmLanguage = '';
+    const languageIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    languageIcon.setAttribute('class', 'vm-language-icon');
+    languageIcon.setAttribute('aria-hidden', 'true');
+    const languageIconUse = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    languageIconUse.setAttribute('href', '/assets/icons.svg#language');
+    languageIcon.append(languageIconUse);
     const select = document.createElement('select');
     select.setAttribute('aria-label', translateText('언어 선택'));
     for (const code of supported) {
@@ -560,7 +566,7 @@
       document.querySelectorAll('[data-vm-language] select').forEach(peer => { peer.value = locale; });
       window.dispatchEvent(new CustomEvent('vm-language-change', {detail:{locale,tag:localeTag()}}));
     });
-    wrapper.append(select);
+    wrapper.append(languageIcon, select);
     const mount = document.querySelector('.header-actions') || document.querySelector('.console-header .topbar-actions');
     if (mount) mount.prepend(wrapper); else { wrapper.classList.add('vm-language-floating'); document.body.append(wrapper); }
   }

@@ -38,6 +38,7 @@ def test_console_and_api_share_one_origin(settings):
         login_script = client.get("/assets/login.js")
         capture_script = client.get("/assets/capture.js")
         landing_styles = client.get("/assets/style.css")
+        icon_sprite = client.get("/assets/icons.svg")
         assert install_script.status_code == 200
         assert locale_script.status_code == 200
         assert console_script.status_code == 200
@@ -50,6 +51,13 @@ def test_console_and_api_share_one_origin(settings):
         assert login_script.status_code == 200
         assert capture_script.status_code == 200
         assert landing_styles.status_code == 200
+        assert icon_sprite.status_code == 200
+        assert '<symbol id="sparkles"' in icon_sprite.text
+        assert '<symbol id="copy"' in icon_sprite.text
+        assert '<symbol id="external-link"' in icon_sprite.text
+        assert '/assets/icons.svg#sparkles' in landing
+        assert '/assets/icons.svg#copy' in landing
+        assert '/assets/icons.svg#external-link' in landing
         assert 'class="landing-page"' in landing
         assert "Readable landing typography" in landing_styles.text
         assert "Large-screen readability pass" in landing_styles.text
@@ -91,14 +99,14 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v020-5" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v020-5" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v020-5" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v020-5" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v020-5" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v020-5" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v020-5" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v020-5" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-v020-6" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v020-6" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v020-6" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v020-6" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v020-6" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v020-6" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v020-6" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v020-6" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -113,7 +121,8 @@ def test_console_and_api_share_one_origin(settings):
         assert "window.confirm(" not in console_script.text
         assert "설치·최신화 프롬프트 복사" in console_script.text
         assert "vibeMemoryInstallPrompt" in console_script.text
-        assert "'설치 프롬프트 복사 ⧉'" in console_script.text
+        assert "icon('copy')" in console_script.text
+        assert '설치 프롬프트 복사 ⧉' not in console_script.text
         assert "if (currentView === 'overview') return copyInstallPrompt();" in console_script.text
         assert "async function copyInstallPrompt()" in console_script.text
         assert "vibeMemoryInstallPrompt" in landing_script.text
@@ -136,7 +145,7 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v020-5' in connect
+        assert '/assets/ui-kit.css?v=20261030-v020-6' in connect
         assert '.ui-choice-input:checked+.ui-choice-control' in ui_styles.text
         assert '.ui-choice-card--sensitive:has(.ui-choice-input:checked)' in ui_styles.text
         assert "Vault 권한:" in client.get("/assets/connect.js").text

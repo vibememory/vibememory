@@ -26,7 +26,7 @@
 <span>vibe<span class="brand-light">memory</span>
 </span>
 </a>
-<a class="nav-cta" href="/">랜딩 페이지로 돌아가기 ↗</a>
+<a class="nav-cta" href="/">랜딩 페이지로 돌아가기 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a>
 </header>
 <main class="guide wrap" id="main">
 <aside>
@@ -72,7 +72,7 @@ uv run vibe-memory serve</code>
 <h2>02. Skill 연결</h2>
 <p>콘솔의 <strong>설치·최신화 프롬프트 복사</strong>를 에이전트 대화에 붙여넣으세요. 프롬프트는 오래된 Skill을 최신 ZIP으로 교체하고 웹 승인 링크를 안내한 뒤, 사용자가 매번 다시 요청하지 않아도 관련 기억 조회와 중요한 맥락 체크포인트를 기본 동작으로 사용하게 합니다. 전역 <code>vibe-memory</code> 명령 설치는 필요하지 않습니다.</p>
 <p>
-<a href="/skills/vibe-memory/SKILL.md">Live SKILL.md ↗</a> · <a href="/skills/vibe-memory/manifest.json">Revision manifest ↗</a> · <a href="https://github.com/vibememory/cli" target="_blank" rel="noopener">CLI 소스 ↗</a>
+<a href="/skills/vibe-memory/SKILL.md">Live SKILL.md <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a> · <a href="/skills/vibe-memory/manifest.json">Revision manifest <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a> · <a href="https://github.com/vibememory/cli" target="_blank" rel="noopener">CLI 소스 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a>
 </p>
 <p>수동 설치 시 ZIP을 에이전트의 skill 디렉터리에 <code>vibe-memory</code> 폴더로 풀고, 로드된 <code>SKILL.md</code>가 있는 폴더의 <strong>절대 경로</strong>를 사용하세요. 현재 프로젝트 폴더를 기준으로 실행하면 안 됩니다.</p>
 <pre>
@@ -83,7 +83,7 @@ VM_CLI="$VM_SKILL_DIR/bin/vibe-memory"
 </pre>
 <p>Windows PowerShell에서는 <code>$VmSkillDir</code>에 같은 절대 경로를 넣고 <code>py (Join-Path $VmSkillDir "scripts\memory.py") sync</code>를 실행한 뒤 <code>$VmCli = Join-Path $VmSkillDir "bin\vibe-memory.exe"</code>를 사용합니다. sync가 Skill을 갱신하면 새 <code>SKILL.md</code>를 다시 읽습니다.</p>
 <p>사용자는 링크를 열고 웹에서 로그인한 뒤 코드와 에이전트 이름을 확인하고 <strong>연결 승인</strong>을 누릅니다. Vault를 요청한 경우 별도 체크가 기본 선택되며 사용자가 해제할 수 있고, CLI는 실제로 허용된 권한을 명확히 출력합니다. API 키를 복사하거나 터미널에 입력할 필요가 없습니다. 연결 요청은 기본 5분이며 <code>--approval-timeout 60..900</code>으로 조절할 수 있고, 이미 연결된 에이전트가 <code>login --vault-access</code>를 실행하면 새 키 없이 기존 연결의 Vault 권한만 승인받습니다. 이후 에이전트는 작업 전에 최신 Rust CLI와 Skill을 확인합니다. 자체 호스팅은 해당 서버가 제공하는 Skill 매니페스트를 사용합니다.</p>
-<a class="button primary" href="/downloads/vibe-memory-skill.zip" download>Skill 내려받기 ↓</a>
+<a class="button primary" href="/downloads/vibe-memory-skill.zip" download>Skill 내려받기 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg></a>
 <p>수동 API 키 연결은 고급 설정용입니다. 서버용 <code>MEMORY_API_KEYS</code>는 JSON 객체, 클라이언트용 <code>MEMORY_API_KEY</code>는 단일 키 문자열입니다.</p>
 <pre>
 <code>export MEMORY_URL=https://vibememory.io
@@ -109,7 +109,7 @@ openclaw plugins inspect vibe-memory-hooks --runtime --json</code></pre>
 </section>
 <section id="mcp">
 <h2>GPT·Claude 원격 MCP 연결</h2>
-<p><a class="button primary" href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec" target="_blank" rel="noopener">ChatGPT Work에 Vibe Memory 설치 ↗</a></p>
+<p><a class="button primary" href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec" target="_blank" rel="noopener">ChatGPT Work에 Vibe Memory 설치 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a></p>
 <p>ChatGPT의 커스텀 MCP 서버 또는 Claude의 커스텀 커넥터에 아래 주소를 추가하세요.</p>
 <pre><code>https://vibememory.io/mcp</code></pre>
 <p>연결하면 Vibe Memory 로그인과 권한 승인 화면으로 자동 이동합니다. API 키나 비밀번호를 채팅에 붙여넣지 않습니다. OAuth 2.1, 동적 클라이언트 등록, PKCE를 사용하며 연결은 콘솔의 <strong>에이전트 연결</strong> 화면에서 언제든 철회할 수 있습니다.</p>
@@ -301,14 +301,14 @@ openclaw plugins inspect vibe-memory-hooks --runtime --json</code></pre>
 </table>
 </div>
 </section>
-<a class="text-link" href="/">← Vibe Memory 홈으로</a>
+<a class="text-link" href="/"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg> Vibe Memory 홈으로</a>
 </article>
 </main>
 <footer class="footer wrap">
 <a href="/">vibememory</a>
 <p>A little context. A lasting connection.</p>
 <div>
-<a href="/downloads/vibe-memory-skill.zip" download>Download Skill ↓</a>
+<a href="/downloads/vibe-memory-skill.zip" download>Download Skill <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#download"></use></svg></a>
 <span>© 2026 Vibe Memory</span>
 </div>
 </footer>

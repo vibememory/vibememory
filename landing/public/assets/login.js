@@ -12,6 +12,9 @@ try {
 } catch { /* Keep the console as the safe destination. */ }
 const form = document.querySelector('#auth-form');
 const errorBox = document.querySelector('#auth-error');
+function setActionLabel(button, label) {
+  button.innerHTML = `${label} <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg>`;
+}
 function selectMode(next) {
   mode = next;
   otpChallenge = '';
@@ -28,7 +31,7 @@ function selectMode(next) {
   document.querySelector('#password').autocomplete = mode === 'signup' ? 'new-password' : 'current-password';
   document.querySelector('#auth-title').textContent = mode === 'signup' ? '나의 기억을 시작해요.' : '다시 만나 반가워요.';
   document.querySelector('#auth-subtitle').textContent = mode === 'signup' ? '계정을 만들고 에이전트에 기억을 연결하세요.' : '로그인하고 나의 기억을 이어가세요.';
-  document.querySelector('#auth-submit').textContent = mode === 'signup' ? '계정 만들고 시작하기 ↗' : '로그인 ↗';
+  setActionLabel(document.querySelector('#auth-submit'), mode === 'signup' ? '계정 만들고 시작하기' : '로그인');
   document.querySelector('#auth-note').textContent = mode === 'signup' ? '이메일은 로그인 식별자로 사용됩니다. 비밀번호는 10자 이상으로 설정해주세요.' : '내 계정에 저장된 기억만 볼 수 있습니다.';
   form.setAttribute('aria-labelledby', mode + '-tab');
   for (const tab of document.querySelectorAll('[data-mode]')) {
@@ -77,7 +80,7 @@ form.addEventListener('submit', async event => {
       document.querySelector('#auth-title').textContent = '한 단계만 더 확인할게요.';
       document.querySelector('#auth-subtitle').textContent = '인증 앱의 6자리 코드 또는 복구 코드를 입력하세요.';
       document.querySelector('#auth-note').textContent = '인증 코드는 한 번만 사용할 수 있으며 5분 후 로그인이 만료됩니다.';
-      button.disabled = false; button.textContent = '인증하고 로그인 ↗';
+      button.disabled = false; setActionLabel(button, '인증하고 로그인');
       document.querySelector('#otp-code').focus();
       return;
     }
@@ -87,7 +90,7 @@ form.addEventListener('submit', async event => {
   } catch (error) {
     errorBox.textContent = error instanceof TypeError ? '서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.' : error.message;
     errorBox.hidden = false;
-    button.disabled = false; button.textContent = otpChallenge ? '인증하고 로그인 ↗' : mode === 'signup' ? '계정 만들고 시작하기 ↗' : '로그인 ↗';
+    button.disabled = false; setActionLabel(button, otpChallenge ? '인증하고 로그인' : mode === 'signup' ? '계정 만들고 시작하기' : '로그인');
   }
 });
 fetch('/auth/me').then(response => { if (response.ok) window.location.replace(destination); }).catch(() => {});

@@ -9,14 +9,14 @@ d:"$Sreact.suspense"
 12:"MetadataBoundary"
 13:I[97367,["$2"],"$12"]
 14:I[27201,["$2"],"IconMark"]
-:HL["/assets/style.css?v=20261030-v020-5","style"]
-:HL["/assets/i18n.css?v=20261030-v020-5","style"]
-:HL["/assets/console-fixes.css?v=20261030-v020-5","style"]
-:HL["/assets/console.css?v=20261030-v020-5","style"]
+:HL["/assets/style.css?v=20261030-v020-6","style"]
+:HL["/assets/i18n.css?v=20261030-v020-6","style"]
+:HL["/assets/console-fixes.css?v=20261030-v020-6","style"]
+:HL["/assets/console.css?v=20261030-v020-6","style"]
 6:X
 9:X
 9:C
-b:T706,
+b:T79e,
   <a class="auth-brand brand" href="/console"><img src="/assets/favicon.svg" alt="" width="30" height="30"><span>vibe<span class="brand-light">memory</span></span></a>
   <main class="capture-layout">
     <section class="auth-card capture-card" aria-labelledby="capture-title">
@@ -31,14 +31,14 @@ b:T706,
         <label>비밀값<textarea id="capture-value" name="value" required minlength="1" maxlength="65536" rows="5" autocomplete="off" spellcheck="false" placeholder="API 키 또는 토큰을 붙여넣으세요"></textarea></label>
         <p class="auth-note">입력값은 암호화되어 Vault에 직접 저장되며 에이전트·채팅·응답에는 표시되지 않습니다.</p>
         <p id="capture-error" class="form-error" role="alert" hidden></p>
-        <button class="button primary" id="capture-submit" type="submit">Vault에 안전하게 저장 <span aria-hidden="true">↗</span></button>
+        <button class="button primary" id="capture-submit" type="submit">Vault에 안전하게 저장 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button>
       </form>
-      <div class="capture-success" id="capture-success" hidden><strong>저장했습니다.</strong><p>이 링크는 사용 완료되어 다시 열 수 없습니다. 이제 이 창을 닫아도 됩니다.</p><a class="button primary" href="/console">콘솔로 이동 ↗</a></div>
+      <div class="capture-success" id="capture-success" hidden><strong>저장했습니다.</strong><p>이 링크는 사용 완료되어 다시 열 수 없습니다. 이제 이 창을 닫아도 됩니다.</p><a class="button primary" href="/console">콘솔로 이동 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a></div>
     </section>
   </main>
-a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/console.css",{"rel":"stylesheet","href":"/assets/console.css?v=20261030-v020-5"}]],["$","div",null,{"className":"auth-page capture-page","dangerouslySetInnerHTML":{"__html":"$b"}}],[["$","script","/assets/capture.js",{"src":"/assets/capture.js?v=20261030-v020-5","defer":true}]]],null,["$","$Lc",null,{"children":["$","$d",null,{"name":"Next.MetadataOutlet","children":"$@e"}]}]]}],"p":"$@f","v":null,"s":"$6"}}]]
+a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/console.css",{"rel":"stylesheet","href":"/assets/console.css?v=20261030-v020-6"}]],["$","div",null,{"className":"auth-page capture-page","dangerouslySetInnerHTML":{"__html":"$b"}}],[["$","script","/assets/capture.js",{"src":"/assets/capture.js?v=20261030-v020-6","defer":true}]]],null,["$","$Lc",null,{"children":["$","$d",null,{"name":"Next.MetadataOutlet","children":"$@e"}]}]]}],"p":"$@f","v":null,"s":"$6"}}]]
 7:[["children",{"s":"capture","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]]}],"p":"$@8","v":"$9","s":"$6"},"c":"$Qa"}]]
-0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v020-5"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v020-5"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v020-5"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v020-5","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v020-5","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[[],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L11",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L13",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$d",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Secure Vault Capture — Vibe Memory"}],["$","meta","1",{"name":"description","content":"One shared memory layer for your AI agents."}],["$","meta","2",{"name":"robots","content":"noindex, nofollow"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L14","4",{}]]}]}],null]}],null]}],"p":"$@15","v":null,"s":"$6"}},"a":"$@16","u":"$@17","b":"V3cf6ihPjM1DzvPS9ESHW"}
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v020-6"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v020-6"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v020-6"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v020-6","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v020-6","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[[],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 <svg class=\"svg-icon\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#arrow-right\"></use></svg></a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L11",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L13",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$d",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Secure Vault Capture — Vibe Memory"}],["$","meta","1",{"name":"description","content":"One shared memory layer for your AI agents."}],["$","meta","2",{"name":"robots","content":"noindex, nofollow"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L14","4",{}]]}]}],null]}],null]}],"p":"$@15","v":null,"s":"$6"}},"a":"$@16","u":"$@17","b":"egpW94qLExr2CytDWTlvG"}
 e:null
 6:300
 17:true

@@ -15,7 +15,7 @@
 <body class="admin-page">
   <header class="admin-header">
     <a class="brand" href="/admin" aria-label="Vibe Memory 관리자 홈"><img src="/assets/favicon.svg" width="28" height="28" alt=""><span>vibe<span class="brand-light">memory</span></span><em>ADMIN</em></a>
-    <nav><a href="/console">내 콘솔</a><a href="/guide.html" target="_blank" rel="noopener">문서 ↗</a><button id="admin-logout" type="button">로그아웃</button></nav>
+    <nav><a href="/console">내 콘솔</a><a href="/guide.html" target="_blank" rel="noopener">문서 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a><button id="admin-logout" type="button">로그아웃</button></nav>
   </header>
 
   <main class="admin-main">
@@ -33,7 +33,7 @@
         <div class="admin-filters"><label><span>상태</span><select id="status-filter"><option value="">전체 상태</option><option value="received">접수됨</option><option value="reviewing">검토 중</option><option value="planned">계획됨</option><option value="in_progress">처리 중</option><option value="completed">완료</option><option value="declined">보류</option></select></label><label class="admin-search"><span>검색</span><input id="request-search" type="search" placeholder="제목·사용자·결과 검색"></label><button id="admin-refresh" type="button">새로고침</button></div>
       </div>
       <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>요청</th><th>요청자</th><th>우선순위</th><th>상태</th><th>처리 결과</th><th>최종 갱신</th><th></th></tr></thead><tbody id="request-rows"><tr><td colspan="7" class="admin-loading">불러오는 중…</td></tr></tbody></table></div>
-      <div class="admin-pager"><button id="admin-previous" type="button">← 이전</button><span id="admin-page-number">1 페이지</span><button id="admin-next" type="button">다음 →</button></div>
+      <div class="admin-pager"><button id="admin-previous" type="button"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg> 이전</button><span id="admin-page-number">1 페이지</span><button id="admin-next" type="button">다음 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button></div>
     </section>
 
     <section class="admin-panel admin-users-panel">
@@ -42,13 +42,13 @@
         <div class="admin-filters"><label class="admin-search"><span>사용자 검색</span><input id="user-search" type="search" placeholder="이름·이메일 검색"></label><button id="users-refresh" type="button">새로고침</button></div>
       </div>
       <div class="admin-table-scroll"><table class="admin-table admin-users-table"><thead><tr><th>사용자</th><th>권한</th><th>보안</th><th>가입 시각</th><th>연결</th><th>기록</th><th>저장 용량</th></tr></thead><tbody id="user-rows"><tr><td colspan="7" class="admin-loading">불러오는 중…</td></tr></tbody></table></div>
-      <div class="admin-pager"><button id="users-previous" type="button">← 이전</button><span id="users-page-number">1 페이지</span><button id="users-next" type="button">다음 →</button></div>
+      <div class="admin-pager"><button id="users-previous" type="button"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg> 이전</button><span id="users-page-number">1 페이지</span><button id="users-next" type="button">다음 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button></div>
     </section>
   </main>
 
   <dialog class="ui-modal" id="request-editor">
     <form id="request-editor-form">
-      <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-title">요청 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기">×</button></div>
+      <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-title">요청 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div>
       <div class="admin-request-context"><div><span>요청자</span><strong id="requester-name"></strong><small id="requester-email"></small></div><div><span>우선순위</span><strong id="request-priority"></strong></div></div>
       <section><span>요청 내용</span><p id="request-description"></p></section>
       <section id="request-use-case-section"><span>사용 사례</span><p id="request-use-case"></p></section>

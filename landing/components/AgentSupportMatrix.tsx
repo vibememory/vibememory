@@ -15,6 +15,10 @@ const statusLabels: Record<string, string> = {
   unverified: "미검증",
 };
 
+function UiIcon({ name, className = "" }: { name: string; className?: string }) {
+  return <svg className={`svg-icon ${className}`} aria-hidden="true"><use href={`/assets/icons.svg#${name}`} /></svg>;
+}
+
 export function AgentSupportMatrix() {
   return (
     <section className="agent-support-section section wrap" id="agent-support">
@@ -37,12 +41,12 @@ export function AgentSupportMatrix() {
             <dl className="agent-capabilities">
               {Object.entries(labels).map(([key, label]) => {
                 const status = agent.capabilities[key as keyof typeof labels];
-                return <div key={key}><dt>{label}</dt><dd className={`is-${status}`}>{statusLabels[status]}</dd></div>;
+                return <div key={key}><dt>{label}</dt><dd className={`is-${status}`}><UiIcon name={status === "supported" ? "check" : "alert"} />{statusLabels[status]}</dd></div>;
               })}
             </dl>
             <p className="agent-hook-map">{agent.hook_mapping}</p>
             <div className="agent-support-meta"><span>{agent.verified_version}</span><span>{agent.environment}</span></div>
-            <a href={agent.installation_url}>설치·제한사항 보기 <span aria-hidden="true">↗</span></a>
+            <a href={agent.installation_url}>설치·제한사항 보기 <UiIcon name="arrow-right" /></a>
           </article>
         ))}
       </div>

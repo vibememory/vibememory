@@ -10,7 +10,7 @@
       "name": "vibe-memory",
       "source": "./claude-plugins/vibe-memory",
       "description": "Durable project memory with automatic session recall and deduplicated checkpoint reminders",
-      "version": "0.20.5"
+      "version": "0.20.6"
     }
   ]
 }

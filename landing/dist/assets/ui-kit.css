@@ -69,3 +69,4 @@ body.ui-layer-open{overflow:hidden}
   .ui-choice-state{grid-column:2;justify-self:start;margin-top:1px}
 }
 @media(prefers-reduced-motion:reduce){.ui-modal[open],.ui-modal::backdrop{animation:none}.ui-scrim,.ui-flyout{transition:none}}
+.ui-icon-button .svg-icon{width:18px;height:18px}.ui-confirm-icon .svg-icon{width:23px;height:23px}

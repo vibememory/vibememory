@@ -1,1 +1,47 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>로그인 — Vibe Memory</title><meta name="robots" content="noindex"><link rel="icon" href="/assets/favicon.svg"><link rel="stylesheet" href="/assets/style.css"><link rel="stylesheet" href="/assets/console.css"><script src="/assets/login.js" defer></script></head><body class="auth-page"><a class="auth-brand brand" href="/"><img src="/assets/favicon.svg" alt="" width="30" height="30"><span>vibe<span class="brand-light">memory</span></span></a><main class="auth-layout"><section class="auth-story"><p class="eyebrow">YOUR CONTEXT. YOUR CONTINUITY.</p><h1>다음 대화도,<br>이어지는 나의 기억.</h1><p>하나의 계정으로 기억을 관리하고,<br>내 에이전트에게 같은 맥락을 연결하세요.</p><div class="auth-orbit" aria-hidden="true"><span><img src="/assets/brands/claude-code.png" alt="" width="20" height="20">Claude Code</span><span><img src="/assets/brands/codex.png" alt="" width="20" height="20">Codex</span><strong>나의 기억</strong><span><img src="/assets/brands/openclaw.svg" alt="" width="20" height="20">OpenClaw</span><span><img src="/assets/brands/hermes.png" alt="" width="20" height="20">Hermes</span></div><a href="/">← 서비스 소개로 돌아가기</a></section><section class="auth-card" aria-labelledby="auth-title"><p class="eyebrow">WELCOME TO VIBE MEMORY</p><h2 id="auth-title">다시 만나 반가워요.</h2><p id="auth-subtitle">로그인하고 나의 기억을 이어가세요.</p><div class="auth-tabs" role="tablist" aria-label="계정"><button id="login-tab" role="tab" aria-selected="true" aria-controls="auth-form" data-mode="login">로그인</button><button id="signup-tab" role="tab" aria-selected="false" aria-controls="auth-form" data-mode="signup" tabindex="-1">회원가입</button></div><form id="auth-form" aria-labelledby="login-tab"><label id="name-field" hidden>이름<input id="name" name="name" autocomplete="name" maxlength="80" placeholder="어떻게 불러드릴까요?"></label><label id="email-field">이메일<input id="email" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com"></label><label id="password-field">비밀번호<div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128" placeholder="10자 이상 입력해주세요"><button type="button" id="show-password" aria-label="비밀번호 표시">보기</button></div></label><label id="otp-field" hidden>인증 코드<input id="otp-code" name="otp-code" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="32" placeholder="6자리 코드 또는 복구 코드"></label><p id="auth-error" class="form-error" role="alert" hidden></p><button class="button primary" id="auth-submit" type="submit">로그인 <span aria-hidden="true">↗</span></button><p class="auth-note" id="auth-note">내 계정에 저장된 기억만 볼 수 있습니다.</p></form></section></main><footer class="auth-footer">A little context. A lasting connection. <a href="/guide.html">연결 가이드 ↗</a></footer></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>로그인 — Vibe Memory</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" href="/assets/favicon.svg">
+  <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/console.css">
+  <script src="/assets/login.js" defer></script>
+</head>
+<body class="auth-page">
+  <a class="auth-brand brand" href="/"><img src="/assets/favicon.svg" alt="" width="30" height="30"><span>vibe<span class="brand-light">memory</span></span></a>
+  <main class="auth-layout">
+    <section class="auth-story">
+      <p class="eyebrow">YOUR CONTEXT. YOUR CONTINUITY.</p>
+      <h1>다음 대화도,<br>이어지는 나의 기억.</h1>
+      <p>하나의 계정으로 기억을 관리하고,<br>내 에이전트에게 같은 맥락을 연결하세요.</p>
+      <div class="auth-orbit" aria-hidden="true">
+        <span><img src="/assets/brands/claude-code.png" alt="" width="20" height="20">Claude Code</span>
+        <span><img src="/assets/brands/codex.png" alt="" width="20" height="20">Codex</span>
+        <strong>나의 기억</strong>
+        <span><img src="/assets/brands/openclaw.svg" alt="" width="20" height="20">OpenClaw</span>
+        <span><img src="/assets/brands/hermes.png" alt="" width="20" height="20">Hermes</span>
+      </div>
+      <a href="/"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg> 서비스 소개로 돌아가기</a>
+    </section>
+    <section class="auth-card" aria-labelledby="auth-title">
+      <p class="eyebrow">WELCOME TO VIBE MEMORY</p>
+      <h2 id="auth-title">다시 만나 반가워요.</h2>
+      <p id="auth-subtitle">로그인하고 나의 기억을 이어가세요.</p>
+      <div class="auth-tabs" role="tablist" aria-label="계정"><button id="login-tab" role="tab" aria-selected="true" aria-controls="auth-form" data-mode="login">로그인</button><button id="signup-tab" role="tab" aria-selected="false" aria-controls="auth-form" data-mode="signup" tabindex="-1">회원가입</button></div>
+      <form id="auth-form" aria-labelledby="login-tab">
+        <label id="name-field" hidden>이름<input id="name" name="name" autocomplete="name" maxlength="80" placeholder="어떻게 불러드릴까요?"></label>
+        <label id="email-field">이메일<input id="email" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com"></label>
+        <label id="password-field">비밀번호<div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128" placeholder="10자 이상 입력해주세요"><button type="button" id="show-password" aria-label="비밀번호 표시">보기</button></div></label>
+        <label id="otp-field" hidden>인증 코드<input id="otp-code" name="otp-code" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="32" placeholder="6자리 코드 또는 복구 코드"></label>
+        <p id="auth-error" class="form-error" role="alert" hidden></p>
+        <button class="button primary" id="auth-submit" type="submit">로그인 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button>
+        <p class="auth-note" id="auth-note">내 계정에 저장된 기억만 볼 수 있습니다.</p>
+      </form>
+    </section>
+  </main>
+  <footer class="auth-footer">A little context. A lasting connection. <a href="/guide.html">연결 가이드 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a></footer>
+</body>
+</html>

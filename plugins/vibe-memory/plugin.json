@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "vibe-memory",
-  "version": "0.24.0",
+  "version": "0.24.1",
   "description": "A shared, durable memory layer for ChatGPT Work, Codex, and other connected agents.",
   "homepage": "https://vibememory.io",
   "repository": "https://github.com/vibememory/vibememory",

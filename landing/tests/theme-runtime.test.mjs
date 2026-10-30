@@ -60,11 +60,13 @@ globalThis.document = {
   addEventListener(type, listener) { documentListeners.set(type, listener); },
 };
 
+const initSource = fs.readFileSync(new URL('../public/assets/theme-init.js', import.meta.url), 'utf8');
+eval(initSource);
 const source = fs.readFileSync(new URL('../public/assets/theme.js', import.meta.url), 'utf8');
 eval(source);
 documentListeners.get('DOMContentLoaded')();
 
-test('defaults to the system theme before mounting an accessible toggle', () => {
+test('the blocking initializer follows the system theme before mounting a toggle', () => {
   assert.equal(document.documentElement.dataset.theme, 'dark');
   assert.equal(document.documentElement.style.colorScheme, 'dark');
   assert.equal(themeMeta.content, '#0b1020');

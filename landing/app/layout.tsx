@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-const assetVersion = "20261030-v024-0";
-const themeBootstrap = `(function(){try{var t=localStorage.getItem('vm-theme');if(t!=='light'&&t!=='dark')t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t}catch(e){document.documentElement.dataset.theme='light'}})()`;
+const assetVersion = "20261030-v024-1";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://vibememory.io"),
@@ -24,7 +23,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
+        <script src={`/assets/theme-init.js?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/style.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/i18n.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/console-fixes.css?v=${assetVersion}`} />

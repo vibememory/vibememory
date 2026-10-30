@@ -11,7 +11,7 @@
     "build": "next build && python3 scripts/finalize_next_build.py",
     "test:i18n": "node --test tests/i18n-runtime.test.mjs",
     "test:theme": "node --test tests/theme-runtime.test.mjs",
-    "check": "npm run typecheck && npm run test:i18n && npm run test:theme && npm run build && node --check public/assets/theme.js && node --check public/assets/i18n.js && node --check public/assets/install-prompt.js && node --check public/assets/app.js && node --check public/assets/login.js && node --check public/assets/connect.js && node --check public/assets/capture.js && node --check public/assets/ui-kit.js && node --check public/assets/console.js && node --check public/assets/admin.js && node --check src/worker.js && wrangler deploy --dry-run",
+    "check": "npm run typecheck && npm run test:i18n && npm run test:theme && npm run build && node --check public/assets/theme-init.js && node --check public/assets/theme.js && node --check public/assets/i18n.js && node --check public/assets/install-prompt.js && node --check public/assets/app.js && node --check public/assets/login.js && node --check public/assets/connect.js && node --check public/assets/capture.js && node --check public/assets/ui-kit.js && node --check public/assets/console.js && node --check public/assets/admin.js && node --check src/worker.js && wrangler deploy --dry-run",
     "deploy": "npm run check && wrangler deploy"
   },
   "dependencies": {

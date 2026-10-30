@@ -1,0 +1,12 @@
+{
+  "name": "vibe-memory-hooks",
+  "version": "0.20.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test bridge.test.mjs"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}

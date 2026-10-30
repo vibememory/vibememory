@@ -1,0 +1,44 @@
+{
+  "description": "Vibe Memory recall and deduplicated checkpoint guidance for Codex",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory hook session-start",
+            "commandWindows": "vibe-memory.exe hook session-start",
+            "timeout": 10,
+            "statusMessage": "Recalling Vibe Memory context",
+            "additionalContextLimit": 1200
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory hook stop",
+            "commandWindows": "vibe-memory.exe hook stop",
+            "timeout": 5,
+            "additionalContextLimit": 700
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory hook pre-compact",
+            "commandWindows": "vibe-memory.exe hook pre-compact",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

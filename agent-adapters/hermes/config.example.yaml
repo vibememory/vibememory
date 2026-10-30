@@ -1,0 +1,18 @@
+# Merge these entries into the active Hermes profile config.yaml after reviewing
+# agent-adapters/hermes/vibe_memory_hook.py. Replace /ABSOLUTE/PATH with this repo.
+hooks:
+  pre_llm_call:
+    - command: "python3 /ABSOLUTE/PATH/agent-adapters/hermes/vibe_memory_hook.py pre_llm_call"
+      timeout: 10
+  pre_verify:
+    - command: "python3 /ABSOLUTE/PATH/agent-adapters/hermes/vibe_memory_hook.py pre_verify"
+      timeout: 10
+  post_compaction:
+    - command: "python3 /ABSOLUTE/PATH/agent-adapters/hermes/vibe_memory_hook.py post_compaction"
+      timeout: 10
+  on_session_finalize:
+    - command: "python3 /ABSOLUTE/PATH/agent-adapters/hermes/vibe_memory_hook.py on_session_finalize"
+      timeout: 10
+
+# Keep false so Hermes asks for first-use consent for every event/command pair.
+hooks_auto_accept: false

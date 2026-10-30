@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AgentSupportMatrix } from "@/components/AgentSupportMatrix";
 import { LegacyPage } from "@/components/LegacyPage";
 import { legacyDocument } from "@/lib/legacy";
 
@@ -10,5 +11,5 @@ export const metadata: Metadata = {
 
 export default function Home() {
   const page = legacyDocument("index");
-  return <LegacyPage {...page} scripts={["/assets/app.js"]} />;
+  return <LegacyPage {...page} scripts={["/assets/app.js"]} slot={{ marker: "<!-- AGENT_SUPPORT_MATRIX -->", node: <AgentSupportMatrix /> }} />;
 }

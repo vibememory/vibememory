@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vibe-memory"
-version = "0.20.3"
+version = "0.20.4"
 description = "Agent-authored data graph and keyword-only embedding endpoints"
 readme = "README.md"
 license = "MIT"
@@ -53,9 +53,9 @@ include = [
   "/landing/templates", "/landing/dist", "/landing/src", "/landing/scripts/package_skill.py",
   "/landing/scripts/finalize_next_build.py", "/landing/next.config.ts",
   "/landing/next-env.d.ts", "/landing/tsconfig.json", "/landing/package.json",
-  "/landing/package-lock.json", "/landing/wrangler.example.jsonc",
+  "/landing/package-lock.json", "/landing/wrangler.example.jsonc", "/landing/data",
   "/landing/brand-assets.json", "/skills", "/docs", "/tests", "/scripts", "/ops/*.py",
-  "/README.md", "/README.ko.md", "/LICENSE", "/THIRD_PARTY_NOTICES.md",
+  "/agent-adapters", "/README.md", "/README.ko.md", "/LICENSE", "/THIRD_PARTY_NOTICES.md",
   "/CONTRIBUTING.md", "/SECURITY.md", "/pyproject.toml", "/uv.lock",
   "/Dockerfile", "/compose*.yaml", "/.env.example", "/.dockerignore", "/deploy", "/.github"
 ]

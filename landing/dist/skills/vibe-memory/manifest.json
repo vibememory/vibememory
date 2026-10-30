@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "revision": "4284d636192cd75e6251e6c8b9c807c0a9389a337bf3d5fe5fb79df14207ab62",
+  "revision": "1b05d7b80932ad35e6d5a51cddab9cfbda1c108dc39c12a2d065f4d2ab7268b3",
   "files": {
-    "SKILL.md": "c86a5693e94911cb24f073d5f20732ccb0e2599848422057f03984d4b7c07bb2",
+    "SKILL.md": "1e4c8dd3a1b1f7a1b41470255880b6a0eda70663eff786755ae89ba89b2937bc",
     "scripts/memory.py": "7fa1814e9e3e26b464b0b6393996c57ae6522265189acf86b2599e8d55934c19"
   },
   "release_assets": {
@@ -37,7 +37,7 @@
     }
   },
   "archive": "/downloads/vibe-memory-skill.zip",
-  "archive_sha256": "fb89c8c3d6b5e0878be55f1ade2fe67f4c5db084c64c665f8d50eebcc1fdcf4c",
+  "archive_sha256": "8906e936464459e4f281b24164a93de9026ec5526dbad6e406ee7d2ee8e36582",
   "official_archive_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip",
   "official_manifest_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
 }

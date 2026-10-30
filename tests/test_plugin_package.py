@@ -11,6 +11,8 @@ def test_chatgpt_work_plugin_package():
     manifest = json.loads((PLUGIN / "plugin.json").read_text())
     assert manifest["$schema"] == "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
     assert manifest["name"] == "vibe-memory"
+    # Public-directory packages must remain usable without local lifecycle hooks.
+    assert "hooks" not in manifest
     assert len(manifest["extensions"]["com.openai"]["interface"]["shortDescription"]) <= 30
     assert (PLUGIN / manifest["extensions"]["com.openai"]["interface"]["logo"]).is_file()
 

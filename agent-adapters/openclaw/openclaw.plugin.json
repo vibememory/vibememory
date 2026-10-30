@@ -1,0 +1,16 @@
+{
+  "id": "vibe-memory-hooks",
+  "name": "Vibe Memory Hooks",
+  "description": "Recall shared project context and prompt deduplicated durable checkpoints through the native Vibe Memory CLI.",
+  "activation": {"onStartup": true},
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "cliPath": {"type": "string", "default": "vibe-memory"},
+      "autoRecall": {"type": "boolean", "default": true},
+      "autoCheckpoint": {"type": "boolean", "default": true},
+      "projectRoots": {"type": "array", "items": {"type": "string"}, "default": []}
+    }
+  }
+}

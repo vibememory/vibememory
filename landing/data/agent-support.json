@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-10-30T04:40:00Z",
+  "time_basis": "UTC",
+  "sse_required": false,
+  "agents": [
+    {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "icon": "/assets/brands/claude-code.png",
+      "overall_status": "supported",
+      "minimum_version": "2.1.275",
+      "verified_version": "2.1.275+ marketplace hook contract",
+      "environment": "Claude Code CLI on Linux, macOS, or Windows",
+      "installation_url": "/guide.html#claude-code-hooks",
+      "capabilities": {
+        "skill": "supported",
+        "mcp": "supported",
+        "recall_hook": "supported",
+        "checkpoint_hook": "supported"
+      },
+      "hook_mapping": "SessionStart → recall, Stop → checkpoint reminder, PreCompact → pending marker",
+      "limitations": "Install the marketplace plugin or the manual hooks, never both. The native CLI must be available on PATH and hooks remain fail-open."
+    },
+    {
+      "id": "codex",
+      "name": "OpenAI Codex",
+      "icon": "/assets/brands/codex.png",
+      "overall_status": "supported",
+      "minimum_version": "0.166.0",
+      "verified_version": "codex-cli 0.166.0",
+      "environment": "Codex CLI or desktop with local command execution",
+      "installation_url": "/guide.html#codex-hooks",
+      "capabilities": {
+        "skill": "supported",
+        "mcp": "supported",
+        "recall_hook": "supported",
+        "checkpoint_hook": "supported"
+      },
+      "hook_mapping": "SessionStart → recall, Stop → checkpoint reminder, PreCompact → pending marker",
+      "limitations": "The user must review and trust the hooks. Command hooks do not run in Work Cloud without local execution."
+    },
+    {
+      "id": "hermes",
+      "name": "Hermes Agent",
+      "icon": "/assets/brands/hermes.png",
+      "overall_status": "supported",
+      "minimum_version": "0.22.5 verified floor; earlier hook release not established",
+      "verified_version": "Hermes Agent 0.22.5 official contract + adapter tests",
+      "environment": "Hermes CLI, Gateway, Desktop, TUI, or dashboard chat",
+      "installation_url": "/guide.html#hermes-hooks",
+      "capabilities": {
+        "skill": "supported",
+        "mcp": "supported",
+        "recall_hook": "supported",
+        "checkpoint_hook": "supported"
+      },
+      "hook_mapping": "pre_llm_call → recall/next-turn checkpoint, pre_verify → coding checkpoint, post_compaction → pending marker",
+      "limitations": "Shell hooks require first-use consent. Non-coding final turns may checkpoint on the next prompt because on_session_end is observation-only."
+    },
+    {
+      "id": "openclaw",
+      "name": "OpenClaw",
+      "icon": "/assets/brands/openclaw.svg",
+      "overall_status": "supported",
+      "minimum_version": "2026.10.9",
+      "verified_version": "OpenClaw 2026.10.9 isolated runtime load + adapter tests",
+      "environment": "OpenClaw Gateway with native plugins enabled",
+      "installation_url": "/guide.html#openclaw-hooks",
+      "capabilities": {
+        "skill": "supported",
+        "mcp": "supported",
+        "recall_hook": "supported",
+        "checkpoint_hook": "supported"
+      },
+      "hook_mapping": "before_prompt_build → recall, before_agent_finalize → checkpoint revision, before_compaction → pending marker",
+      "limitations": "Conversation access and prompt injection must be explicitly allowed. A harness that does not emit before_agent_finalize cannot force the checkpoint pass."
+    }
+  ]
+}

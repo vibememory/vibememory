@@ -95,7 +95,9 @@ native CLI is available on `PATH`:
 It adds non-blocking session recall and deduplicated checkpoint hooks. See
 [agent lifecycle hooks](docs/agent-hooks.md) for behavior, privacy boundaries,
 older Claude Code installation steps, and equivalent workflows for Codex,
-OpenClaw, Hermes, and other hosts.
+OpenClaw, Hermes, and other hosts. The generated [agent support matrix](docs/agent-support.md)
+lists the verified host/version, Skill, MCP, recall/checkpoint hook status, and
+current limitations from the same data shown on the landing page.
 
 ## Connect ChatGPT or Claude with MCP
 

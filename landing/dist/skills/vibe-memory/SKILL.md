@@ -69,17 +69,33 @@ interactive data commands still use `VM_CLI`. A missing binary, disconnected
 account, timeout, or network failure must never block Claude Code. Do not add
 duplicate manual hooks when the plugin is enabled.
 
-For Codex, OpenClaw, Hermes, or another host without that plugin, keep using this
-Skill's Working loop. If the host supports lifecycle command hooks, it may invoke
-`hook session-start`, `hook stop`, and `hook pre-compact` with JSON on stdin;
-otherwise perform recall and checkpoint checks at the natural boundaries listed
-above. The hook commands do not infer or save conversation content themselves.
+Codex, Hermes Agent, and OpenClaw have reviewed, opt-in adapters in the official
+repository under `agent-adapters/`. Codex maps `SessionStart`, `Stop`, and
+`PreCompact` from its trusted `hooks.json`; Hermes uses its consent-gated shell
+hooks; OpenClaw uses a native typed-hook plugin with explicit conversation-access
+and prompt-injection grants. Ask the user to review the adapter and choose its
+user, project, profile, or `projectRoots` scope before enabling it. Do not install
+or modify host configuration silently. The current support matrix, exact install,
+update, disable, and uninstall instructions live at
+`https://vibememory.io/guide.html#agent-hooks`.
+
+These adapters send only a session identifier, working directory, lifecycle
+source, and Stop-active flag to the fixed CLI hook commands. They never forward
+prompts, transcripts, model replies, tool input/output, environment variables,
+or Vault values, and they fail open on missing binaries, expired login, timeouts,
+or malformed output. Hook automation does not require SSE and supplements this
+Skill rather than replacing its Working loop. The hook commands only return
+bounded recall/checkpoint guidance; the connected agent still decides what is
+durable and performs any authorized save.
+
+On a host without a verified adapter, keep using this Skill's Working loop and
+perform recall and checkpoint checks at the natural boundaries listed above.
 
 ## Session checkpoints
 
 When Vibe Memory use is authorized for the workspace, proactively maintain a compact, append-only checkpoint for an active project or task without requiring the user to ask again. Use a stable project or repository name, `session checkpoint`, and a few specific topics as keywords. Use `agent-session` as the source and `session-checkpoint` as a tag.
 
-A checkpoint contains only the current goal, accepted decisions, verified completed work with useful evidence, current state or blockers, next action, and relevant record IDs or file paths. Keep it short enough to serve as a handoff, not a transcript. Save only after the represented operation succeeds. If recall shows no meaningful delta, do not write.
+A checkpoint contains only the current goal, accepted decisions, verified completed work with useful evidence, current state or blockers, next action, and relevant record IDs or file paths. For work in a Git repository, include the verified repository/project, current branch, abbreviated commit, and whether uncommitted changes remain; Git cannot recover uncommitted content, so describe the useful delta without copying file contents. Add stable branch/commit keywords when they help another agent locate the checkpoint. Keep it short enough to serve as a handoff, not a transcript. Save only after the represented operation succeeds. If recall shows no meaningful delta, do not write.
 
 Create a new checkpoint rather than editing history. When a previous checkpoint exists, relate the new record to the previous one with `SUPERSEDES` and a short reason. Retain the new ID in working context so the next checkpoint can find it. For example:
 

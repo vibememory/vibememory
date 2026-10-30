@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-const assetVersion = "20261030-v029-1";
+const assetVersion = "20261030-v029-2";
 
 const siteDescription =
   "Claude Code, Codex, Cursor 등 여러 AI 에이전트가 기억과 관계를 공유하도록 연결하는 오픈소스 메모리 레이어입니다. MCP, Skill, Rust CLI와 self-hosting을 지원합니다.";

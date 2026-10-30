@@ -12,6 +12,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 from urllib.error import HTTPError, URLError
+from urllib.parse import urlsplit, urlunsplit
 from urllib.request import urlopen
 
 DEFAULT_RELEASE = "https://github.com/vibememory/vibememory/releases/latest/download"
@@ -36,6 +37,11 @@ def fetch(url, limit):
         raise RuntimeError(f"download failed with HTTP {error.code}: {body}") from error
     except URLError as error:
         raise RuntimeError(f"download failed: {error.reason}") from error
+
+
+def public_url(url):
+    parsed = urlsplit(url)
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def main():
@@ -65,8 +71,8 @@ def main():
             if hashlib.sha256(content).hexdigest() != digest:
                 raise RuntimeError(f"Skill file checksum mismatch: {relative}")
 
-    print(f"PASS generic archive download {archive_url}")
-    print(f"PASS generic manifest download {manifest_url}")
+    print(f"PASS generic archive download {public_url(archive_url)}")
+    print(f"PASS generic manifest download {public_url(manifest_url)}")
     print(f"PASS archive SHA-256 {archive_digest}")
     print("PASS archive contents and per-file SHA-256")
 

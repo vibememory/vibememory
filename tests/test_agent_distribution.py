@@ -32,3 +32,10 @@ def test_distribution_check_explains_cloudflare_1010_without_unsafe_bypass(monke
     with pytest.raises(RuntimeError, match="path-scoped Browser Integrity Check") as failure:
         checker.fetch("https://vibememory.io/downloads/vibe-memory-skill.zip", 1024)
     assert "do not disable TLS verification" in str(failure.value)
+
+
+def test_distribution_check_hides_temporary_release_query_parameters():
+    checker = load_checker()
+    assert checker.public_url(
+        "https://release-assets.githubusercontent.com/object?sig=temporary&jwt=temporary"
+    ) == "https://release-assets.githubusercontent.com/object"

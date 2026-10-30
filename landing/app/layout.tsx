@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-const assetVersion = "20261030-v020-2";
+const assetVersion = "20261030-v020-3";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://vibememory.io"),

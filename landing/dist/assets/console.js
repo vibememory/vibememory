@@ -59,6 +59,11 @@ async function copyText(value) {
   const copied = document.execCommand('copy'); field.remove();
   if (!copied) throw new Error('copy failed');
 }
+async function copyInstallPrompt() {
+  const prompt = window.vibeMemoryInstallPrompt();
+  try { await copyText(prompt); toast('설치·최신화 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.'); }
+  catch { detail('에이전트 설치·최신화 프롬프트', `<p class="dialog-help">자동 복사가 차단됐습니다. 아래 내용을 선택해 복사하세요.</p><pre class="detail-pre">${h(prompt)}</pre>`); }
+}
 function empty(title, description, action = '') {
   return `<div class="empty-state"><span class="empty-icon">◈</span><h3>${h(title)}</h3><p>${h(description)}</p>${action}</div>`;
 }
@@ -191,7 +196,7 @@ async function bindRelationshipGraph(records, relations) {
   relationshipResizeObserver.observe(stage);
 }
 const viewInfo = {
-  overview: ['대시보드','WORKSPACE CONSOLE','대시보드','워크스페이스 데이터 · 연결 상태 · 최근 활동'],
+  overview: ['대시보드','WORKSPACE CONSOLE','대시보드','워크스페이스 데이터 · 연결 상태 · 최근 활동','설치 프롬프트 복사 ⧉'],
   memories: ['기억','YOUR PERSONAL CONTEXT','기억','내가 남긴 사실과 취향, 에이전트가 구성한 엔티티를 확인하세요.','+ 기억 추가'],
   documents: ['문서 · 파일','YOUR KNOWLEDGE, CONNECTED','문서 · 파일','원본과 에이전트가 분석한 문서 메타정보를 관리하세요.','↑ 원본 업로드'],
   relations: ['관계 그래프','CONNECTIONS WITH A REASON','관계 그래프','에이전트가 구성한 기억의 연결과 근거를 살펴보세요.'],
@@ -391,6 +396,7 @@ async function editMcpVaultGrants(clientId, clientName) {
   },'권한 저장');
 }
 function primaryAction() {
+  if (currentView === 'overview') return copyInstallPrompt();
   if (currentView === 'keys') return createKey();
   if (currentView === 'vault') return editVault();
   if (currentView === 'memories') return editor('새 기억 남기기','<label>기억할 내용<textarea name="content" maxlength="10000" required placeholder="기억할 사실이나 선호를 입력하세요."></textarea></label><label>종류<select name="kind"><option value="fact">사실</option><option value="preference">선호</option><option value="event">이벤트</option><option value="instruction">지침</option></select></label><label>키워드<input name="keywords" required placeholder="예: Python, 개발 언어"></label><p class="dialog-help">키워드를 쉼표로 구분해주세요. 입력한 키워드만 임베딩하며, 원문은 분석하지 않습니다.</p>',async data => {
@@ -437,10 +443,7 @@ document.addEventListener('click', async event => {
     if (action === 'add-memory') { await navigate('memories'); return primaryAction(); }
     if (action === 'upload-file') { await navigate('documents'); return primaryAction(); }
     if (action === 'copy-install-prompt') {
-      const prompt = window.vibeMemoryInstallPrompt();
-      try { await copyText(prompt); toast('설치·최신화 프롬프트를 복사했습니다. 에이전트 대화에 붙여넣으세요.'); }
-      catch { detail('에이전트 설치·최신화 프롬프트', `<p class="dialog-help">자동 복사가 차단됐습니다. 아래 내용을 선택해 복사하세요.</p><pre class="detail-pre">${h(prompt)}</pre>`); }
-      return;
+      return copyInstallPrompt();
     }
     if (action === 'copy-mcp-url') {
       try { await copyText(url); toast('MCP 서버 주소를 복사했습니다.'); }

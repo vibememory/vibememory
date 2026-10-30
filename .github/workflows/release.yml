@@ -37,8 +37,9 @@ jobs:
           cp landing/dist/downloads/vibe-memory-skill.zip release/
           cp landing/dist/skills/vibe-memory/manifest.json release/
           cp skills/vibe-memory/SKILL.md release/
+          cp skills/vibe-memory/scripts/memory.py release/
           cd release
-          sha256sum vibe-memory-skill.zip manifest.json SKILL.md > SHA256SUMS
+          sha256sum vibe-memory-skill.zip manifest.json SKILL.md memory.py > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

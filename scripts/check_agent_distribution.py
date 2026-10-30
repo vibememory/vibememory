@@ -54,6 +54,8 @@ def main():
     )
     args = parser.parse_args()
     release = args.release.rstrip("/")
+    print("INFO service API origin is separate and is not contacted during public installation")
+    print(f"INFO distribution release origin {public_url(release)}")
 
     _, archive_url, archive = fetch(release + "/vibe-memory-skill.zip", 16 * 1024 * 1024)
     _, manifest_url, manifest_bytes = fetch(release + "/manifest.json", 256 * 1024)
@@ -108,6 +110,10 @@ def main():
                 raise RuntimeError("native CLI is missing browser-approval login options")
             print("PASS native CLI download, checksum verification, and startup")
             print("PASS browser-approval login command is available")
+            print(
+                "INFO account login and Vault access were not attempted; they require "
+                "the service origin and browser approval"
+            )
 
     return 0
 

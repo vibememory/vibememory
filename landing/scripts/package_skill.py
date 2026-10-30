@@ -42,6 +42,10 @@ manifest = {
     "schema_version": 1,
     "revision": revision,
     "files": files,
+    "release_assets": {
+        "SKILL.md": "SKILL.md",
+        "scripts/memory.py": "memory.py",
+    },
     "cli": legacy_cli,
     "native_cli": native_cli,
     "archive": "/downloads/vibe-memory-skill.zip",

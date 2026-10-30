@@ -61,6 +61,10 @@ is the [latest GitHub release asset](https://github.com/vibememory/vibememory/re
 The release also includes `manifest.json`, `SKILL.md`, and `SHA256SUMS`. This avoids
 vanity-domain Browser Integrity Check false positives without disabling TLS,
 spoofing a browser, or relaxing protection for authenticated application routes.
+For the hosted service, the bootstrap and native Skill sync read this GitHub
+Release manifest and its checksummed assets; account login and data calls still
+use `vibememory.io`. An explicit self-hosted `MEMORY_URL` instead uses that
+deployment's same-origin manifest.
 
 ```sh
 # Download and verify the current native Rust CLI, then refresh the Skill.

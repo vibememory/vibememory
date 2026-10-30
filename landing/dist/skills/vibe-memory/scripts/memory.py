@@ -14,6 +14,10 @@ from urllib.parse import urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "https://github.com/vibememory/cli"
+OFFICIAL_SERVICE_ORIGIN = "https://vibememory.io"
+OFFICIAL_MANIFEST_URL = (
+    "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
+)
 
 
 def config_path():
@@ -58,12 +62,33 @@ def read_response(response, limit):
     return data
 
 
-def fetch_manifest(base):
+def manifest_url(base):
+    if base == OFFICIAL_SERVICE_ORIGIN:
+        return OFFICIAL_MANIFEST_URL
+    return base + "/skills/vibe-memory/manifest.json"
+
+
+def fetch_manifest(url):
     request = urllib.request.Request(
-        base + "/skills/vibe-memory/manifest.json",
+        url,
         headers={"Cache-Control": "no-cache", "User-Agent": "VibeMemoryBootstrap/3.0"},
     )
-    with urllib.request.build_opener(NoRedirect).open(request, timeout=20) as response:
+    if url == OFFICIAL_MANIFEST_URL:
+        response = urllib.request.urlopen(request, timeout=20)
+        final = urlsplit(response.geturl())
+        if final.scheme != "https" or final.hostname not in (
+            "github.com",
+            "release-assets.githubusercontent.com",
+            "objects.githubusercontent.com",
+        ):
+            response.close()
+            raise ValueError("Official manifest redirected to an unsupported origin")
+    else:
+        response = urllib.request.build_opener(NoRedirect).open(request, timeout=20)
+        if response.geturl() != url:
+            response.close()
+            raise ValueError("Self-hosted manifest redirects are not supported")
+    with response:
         return json.loads(read_response(response, 65536))
 
 
@@ -143,11 +168,39 @@ def validate_native(manifest):
     return digest, url
 
 
+def installed_skill_matches(manifest):
+    files = manifest.get("files", {})
+    expected = {"SKILL.md", "scripts/memory.py"}
+    if set(files) != expected:
+        raise ValueError("Unsupported Skill file manifest")
+    return all(
+        (ROOT / name).is_file()
+        and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == files[name]
+        for name in expected
+    )
+
+
 def ensure_cli():
-    manifest = fetch_manifest(origin())
+    service = origin()
+    distribution_manifest = manifest_url(service)
+    print("Vibe Memory bootstrap: service API origin " + service, file=sys.stderr)
+    print(
+        "Vibe Memory bootstrap: distribution manifest " + distribution_manifest,
+        file=sys.stderr,
+    )
+    manifest = fetch_manifest(distribution_manifest)
     digest, url = validate_native(manifest)
+    print("Vibe Memory bootstrap: manifest verified", file=sys.stderr)
+    if installed_skill_matches(manifest):
+        print("Vibe Memory bootstrap: installed Skill files verified", file=sys.stderr)
+    else:
+        print(
+            "Vibe Memory bootstrap: installed Skill differs; native sync will verify and update it",
+            file=sys.stderr,
+        )
     target = executable_path()
     if target.is_file() and hashlib.sha256(target.read_bytes()).hexdigest() == digest:
+        print("Vibe Memory bootstrap: native CLI SHA-256 verified", file=sys.stderr)
         return target
     data = fetch_release(url)
     if hashlib.sha256(data).hexdigest() != digest:
@@ -163,6 +216,7 @@ def ensure_cli():
         temporary_path.replace(target)
     finally:
         temporary_path.unlink(missing_ok=True)
+    print("Vibe Memory bootstrap: native CLI downloaded and SHA-256 verified", file=sys.stderr)
     return target
 
 

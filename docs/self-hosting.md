@@ -235,6 +235,13 @@ or disable the site's security policy globally.
 Agents run `python3 scripts/memory.py sync` at the beginning of each task. This
 small compatibility bootstrap selects and verifies the current native Rust binary,
 then executes its `sync` command. Agents reread the instructions after an update.
+The hosted default obtains the public manifest and Skill files from the official
+GitHub Release, separately from the `vibememory.io` account API. An explicit
+self-hosted `MEMORY_URL` obtains both the manifest and immutable Skill files from
+that deployment's origin. Redirects from a self-hosted manifest are rejected;
+official GitHub redirects are restricted to GitHub release asset hosts. A
+successful software download does not imply that account login or Vault access
+succeeded; those remain separate service-origin and browser-approval steps.
 The compact CLI wraps API details and emits compact JSON by default. Every data
 operation checks the Skill revision and stops before the operation if instructions
 changed. A failed update check stops the operation. Updating the service deployment

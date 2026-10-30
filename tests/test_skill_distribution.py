@@ -26,6 +26,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     manifest = response.json()
     assert set(manifest["files"]) == {"SKILL.md", "scripts/memory.py"}
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
+    assert manifest["native_cli"]["version"] == "3.7.1"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",
@@ -47,6 +48,10 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
         "vibe-memory-skill.zip"
     )
     assert manifest["official_manifest_mirror"].endswith("/manifest.json")
+    assert manifest["release_assets"] == {
+        "SKILL.md": "SKILL.md",
+        "scripts/memory.py": "memory.py",
+    }
     with zipfile.ZipFile(io.BytesIO(archive_response.content)) as archive:
         assert set(archive.namelist()) == {
             "vibe-memory/SKILL.md",
@@ -83,6 +88,7 @@ def test_bootstrap_selects_and_verifies_native_binary(tmp_path, monkeypatch):
     digest = hashlib.sha256(binary).hexdigest()
     target_name = launcher.platform_target()
     manifest = {
+        "files": {"SKILL.md": "0" * 64, "scripts/memory.py": "0" * 64},
         "native_cli": {
             "version": "3.0.0",
             "repository": "https://github.com/vibememory/cli",
@@ -99,7 +105,7 @@ def test_bootstrap_selects_and_verifies_native_binary(tmp_path, monkeypatch):
             },
         }
     }
-    monkeypatch.setattr(launcher, "fetch_manifest", lambda base: manifest)
+    monkeypatch.setattr(launcher, "fetch_manifest", lambda url: manifest)
     monkeypatch.setattr(launcher, "fetch_release", lambda url: binary)
     monkeypatch.setattr(launcher, "origin", lambda: "https://vibememory.io")
     target = launcher.ensure_cli()
@@ -139,6 +145,7 @@ def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monke
     launcher = load_launcher(installed / "scripts/memory.py", "tampered_bootstrap")
     target_name = launcher.platform_target()
     manifest = {
+        "files": {"SKILL.md": "0" * 64, "scripts/memory.py": "0" * 64},
         "native_cli": {
             "version": "3.0.0",
             "repository": "https://github.com/vibememory/cli",
@@ -150,7 +157,7 @@ def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monke
             },
         }
     }
-    monkeypatch.setattr(launcher, "fetch_manifest", lambda base: manifest)
+    monkeypatch.setattr(launcher, "fetch_manifest", lambda url: manifest)
     monkeypatch.setattr(launcher, "fetch_release", lambda url: b"tampered")
     monkeypatch.setattr(launcher, "origin", lambda: "https://vibememory.io")
     with pytest.raises(ValueError, match="checksum mismatch"):
@@ -160,6 +167,20 @@ def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monke
     monkeypatch.setenv("MEMORY_URL", "http://untrusted.example")
     with pytest.raises(ValueError, match="HTTPS"):
         launcher.origin()
+
+
+def test_bootstrap_separates_official_distribution_from_service_origin(tmp_path):
+    installed = tmp_path / "installed"
+    (installed / "scripts").mkdir(parents=True)
+    shutil.copyfile(ROOT / "skills/vibe-memory/scripts/memory.py", installed / "scripts/memory.py")
+    launcher = load_launcher(installed / "scripts/memory.py", "distribution_origin_bootstrap")
+    assert launcher.manifest_url("https://vibememory.io") == launcher.OFFICIAL_MANIFEST_URL
+    assert launcher.manifest_url("https://memory.example.com") == (
+        "https://memory.example.com/skills/vibe-memory/manifest.json"
+    )
+    assert launcher.manifest_url("http://localhost:8080") == (
+        "http://localhost:8080/skills/vibe-memory/manifest.json"
+    )
 
 
 def test_published_revision_is_reproducible_and_releases_are_immutable(tmp_path):

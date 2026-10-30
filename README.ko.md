@@ -23,6 +23,8 @@ http://localhost:8080 에서 회원가입하고 콘솔의 **에이전트 API 키
 
 `skills/vibe-memory/`를 에이전트의 skill 디렉터리에 넣고 브라우저 승인으로 연결합니다. Vault 권한은 저장된 모든 비밀을 사용할 수 있으므로 신뢰하는 에이전트에만 허용합니다.
 
+공식 호스팅 설치는 공개 소프트웨어 배포와 계정 API를 분리합니다. Skill ZIP·manifest·검증 대상 파일은 [공식 GitHub Release](https://github.com/vibememory/vibememory/releases/latest)에서 받고, 로그인과 데이터 요청만 `vibememory.io`로 보냅니다. `MEMORY_URL`을 명시한 self-host 환경은 자기 서버의 동일 origin manifest를 사용합니다. 설치 성공은 로그인이나 Vault 승인 성공을 의미하지 않으며, 두 단계는 웹 승인으로 별도 확인합니다.
+
 ```sh
 MEMORY_URL=http://localhost:8080 python3 skills/vibe-memory/scripts/memory.py sync
 skills/vibe-memory/bin/vibe-memory login --url http://localhost:8080 \

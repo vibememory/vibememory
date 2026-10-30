@@ -82,8 +82,12 @@ each lifecycle event will run twice.
 ### Hook behavior
 
 - `vibe-memory hook session-start` extracts only the repository directory name,
-  recalls up to four matching records/checkpoints, and checks up to four queued
-  handoffs. It injects a compact untrusted-data reminder before the first prompt.
+  fetches a bounded candidate set, excludes only session checkpoints whose
+  server-provided `correction_status` is exactly `superseded`, and puts the
+  newest current checkpoint before related facts and decisions. Conflicts,
+  cycles, partial corrections, and unresolved claims remain eligible for the
+  four-record output. It also checks up to four queued handoffs and injects a
+  compact untrusted-data reminder before the first prompt.
 - `vibe-memory hook stop` fingerprints `HEAD` plus porcelain Git status. It emits
   one checkpoint reminder when that fingerprint changes or 20 minutes elapse,
   and records its state in the local Vibe Memory config directory. An immediately

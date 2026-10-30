@@ -18,6 +18,26 @@ body.ui-layer-open{overflow:hidden}
 .ui-modal[data-tone="danger"] .ui-confirm-icon{background:#fff0f2;color:#bd4055}
 .ui-modal[data-tone="danger"] #confirm-submit{background:#bd4055;box-shadow:none}
 
+.ui-choice-card{position:relative;display:grid!important;grid-template-columns:26px minmax(0,1fr) auto;align-items:start;gap:13px;margin:0 0 20px!important;padding:16px!important;border:1px solid #dce3ef!important;border-radius:13px!important;background:#fff!important;color:#354158!important;cursor:pointer;transition:border-color .16s,background .16s,box-shadow .16s,transform .16s}
+.ui-choice-card:hover{border-color:#bdc9de!important;box-shadow:0 7px 20px rgba(31,45,75,.06);transform:translateY(-1px)}
+.ui-choice-card:focus-within{border-color:#8fa7ec!important;box-shadow:0 0 0 3px rgba(49,91,251,.1)}
+.ui-choice-card--sensitive{border-color:#ead9ad!important;background:linear-gradient(120deg,#fffdf8,#fffaf0)!important}
+.ui-choice-card--sensitive:hover{border-color:#d9bd75!important}
+.ui-choice-card--sensitive:has(.ui-choice-input:checked){border-color:#aebff2!important;background:linear-gradient(120deg,#fff,#f4f7ff)!important}
+.ui-choice-input{position:absolute;width:1px!important;height:1px!important;margin:0!important;padding:0!important;overflow:hidden;opacity:0;pointer-events:none}
+.ui-choice-control{width:24px;height:24px;display:grid;place-items:center;margin-top:1px;border:1.5px solid #c8b274;border-radius:7px;background:#fff;color:transparent;box-shadow:inset 0 0 0 1px rgba(255,255,255,.4);transition:border-color .16s,background .16s,box-shadow .16s,color .16s}
+.ui-choice-control svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.ui-choice-input:checked+.ui-choice-control{border-color:#315bfb;background:#315bfb;color:#fff;box-shadow:0 4px 10px rgba(49,91,251,.24)}
+.ui-choice-input:focus-visible+.ui-choice-control{outline:3px solid rgba(49,91,251,.18);outline-offset:2px}
+.ui-choice-copy{display:block;min-width:0}
+.ui-choice-eyebrow{display:block;margin:0 0 5px;color:#9b7425;font:8px var(--mono,monospace);letter-spacing:.75px;text-transform:uppercase}
+.ui-choice-copy strong{display:block;color:#354158;font-size:12px;line-height:1.45}
+.ui-choice-copy small{display:block;margin-top:5px;color:#78849a;font-size:10px;line-height:1.65}
+.ui-choice-state{align-self:center;padding:5px 8px;border:1px solid #e0d4b4;border-radius:99px;background:#fffdf7;color:#987329;font-size:9px;white-space:nowrap}
+.ui-choice-state:after{content:"선택 안 함"}
+.ui-choice-input:checked~.ui-choice-state{border-color:#cad5f7;background:#eef3ff;color:#315bfb}
+.ui-choice-input:checked~.ui-choice-state:after{content:"허용됨"}
+
 .ui-scrim{position:fixed;inset:0;z-index:var(--ui-layer-z);border:0;background:rgba(20,29,47,.32);opacity:0;backdrop-filter:blur(2px);transition:opacity .2s ease}
 .ui-scrim.is-open{opacity:1}
 .ui-scrim[hidden]{display:none}
@@ -45,5 +65,7 @@ body.ui-layer-open{overflow:hidden}
   .ui-flyout-header h2{font-size:20px}
   .ui-flyout-body{padding:22px 20px}
   .ui-flyout-footer{padding:14px 20px}
+  .ui-choice-card{grid-template-columns:26px minmax(0,1fr);padding:15px!important}
+  .ui-choice-state{grid-column:2;justify-self:start;margin-top:1px}
 }
 @media(prefers-reduced-motion:reduce){.ui-modal[open],.ui-modal::backdrop{animation:none}.ui-scrim,.ui-flyout{transition:none}}

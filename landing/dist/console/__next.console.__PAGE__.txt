@@ -8,11 +8,11 @@
 14:I[97367,["$2"],"$13"]
 15:"$Sreact.suspense"
 16:I[27201,["$2"],"IconMark"]
-:HL["/assets/style.css?v=20261030-v019-1","style"]
-:HL["/assets/i18n.css?v=20261030-v019-1","style"]
-:HL["/assets/console-fixes.css?v=20261030-v019-1","style"]
-:HL["/assets/console.css?v=20261030-v019-1","style"]
-:HL["/assets/ui-kit.css?v=20261030-v019-1","style"]
+:HL["/assets/style.css?v=20261030-v019-2","style"]
+:HL["/assets/i18n.css?v=20261030-v019-2","style"]
+:HL["/assets/console-fixes.css?v=20261030-v019-2","style"]
+:HL["/assets/console.css?v=20261030-v019-2","style"]
+:HL["/assets/ui-kit.css?v=20261030-v019-2","style"]
 6:X
 9:X
 9:C
@@ -84,13 +84,13 @@ b:T1ec3,
     <form><div class="ui-confirm-icon" aria-hidden="true">!</div><div class="dialog-heading"><div><p class="dialog-kicker">PLEASE CONFIRM</p><h2 id="confirm-title">계속할까요?</h2></div><button type="button" class="ui-icon-button" id="confirm-cancel-top" data-ui-confirm-cancel aria-label="닫기">×</button></div><p class="ui-confirm-message" id="confirm-message"></p><div class="dialog-actions"><button class="secondary-button" id="confirm-cancel" data-ui-confirm-cancel type="button">취소</button><button class="button primary" id="confirm-submit" type="submit">확인</button></div></form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/console.css",{"rel":"stylesheet","href":"/assets/console.css?v=20261030-v019-1"}],["$","link","/assets/ui-kit.css",{"rel":"stylesheet","href":"/assets/ui-kit.css?v=20261030-v019-1"}]],["$","div",null,{"className":"console-page","dangerouslySetInnerHTML":{"__html":"$b"}}],["$Lc","$Ld","$Le"]],null,"$Lf"]}],"p":"$@10","v":null,"s":"$6"}}]]
+a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/console.css",{"rel":"stylesheet","href":"/assets/console.css?v=20261030-v019-2"}],["$","link","/assets/ui-kit.css",{"rel":"stylesheet","href":"/assets/ui-kit.css?v=20261030-v019-2"}]],["$","div",null,{"className":"console-page","dangerouslySetInnerHTML":{"__html":"$b"}}],["$Lc","$Ld","$Le"]],null,"$Lf"]}],"p":"$@10","v":null,"s":"$6"}}]]
 7:[["children",{"s":"console","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]]}],"p":"$@8","v":"$9","s":"$6"},"c":"$Qa"}]]
-0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v019-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v019-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v019-1"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v019-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v019-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[[],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L12",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L14",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$15",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Workspace — Vibe Memory"}],["$","meta","1",{"name":"description","content":"One shared memory layer for your AI agents."}],["$","meta","2",{"name":"robots","content":"noindex, nofollow"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L16","4",{}]]}]}],null]}],null]}],"p":"$@17","v":null,"s":"$6"}},"a":"$@18","u":"$@19","b":"BCNq0-Yt2S1UkvfFI0BUz"}
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v019-2"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v019-2"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v019-2"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v019-2","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v019-2","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[[],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$L12",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L14",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$15",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Workspace — Vibe Memory"}],["$","meta","1",{"name":"description","content":"One shared memory layer for your AI agents."}],["$","meta","2",{"name":"robots","content":"noindex, nofollow"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L16","4",{}]]}]}],null]}],null]}],"p":"$@17","v":null,"s":"$6"}},"a":"$@18","u":"$@19","b":"LCa4uJHNlRHqbF86m1JN9"}
 1a:I[97367,["$2"],"OutletBoundary"]
-c:["$","script","/assets/vendor/cytoscape.min.js",{"src":"/assets/vendor/cytoscape.min.js?v=20261030-v019-1","defer":true}]
-d:["$","script","/assets/ui-kit.js",{"src":"/assets/ui-kit.js?v=20261030-v019-1","defer":true}]
-e:["$","script","/assets/console.js",{"src":"/assets/console.js?v=20261030-v019-1","defer":true}]
+c:["$","script","/assets/vendor/cytoscape.min.js",{"src":"/assets/vendor/cytoscape.min.js?v=20261030-v019-2","defer":true}]
+d:["$","script","/assets/ui-kit.js",{"src":"/assets/ui-kit.js?v=20261030-v019-2","defer":true}]
+e:["$","script","/assets/console.js",{"src":"/assets/console.js?v=20261030-v019-2","defer":true}]
 f:["$","$L1a",null,{"children":["$","$15",null,{"name":"Next.MetadataOutlet","children":"$@1b"}]}]
 6:300
 1b:null

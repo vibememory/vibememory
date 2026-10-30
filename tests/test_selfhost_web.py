@@ -25,6 +25,7 @@ def test_console_and_api_share_one_origin(settings):
         landing = client.get("/").text
         console = client.get("/console").text
         admin = client.get("/admin").text
+        connect = client.get("/connect").text
         install_script = client.get("/assets/install-prompt.js")
         locale_script = client.get("/assets/i18n.js")
         console_script = client.get("/assets/console.js")
@@ -90,14 +91,14 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v019-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v019-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v019-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v019-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v019-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v019-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v019-1" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v019-1" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-v019-2" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v019-2" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v019-2" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v019-2" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v019-2" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v019-2" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v019-2" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v019-2" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -127,7 +128,13 @@ def test_console_and_api_share_one_origin(settings):
         assert "/downloads/vibe-memory-skill.zip" in install_script.text
         assert "login --url" in install_script.text
         assert "--vault-access --no-browser" in install_script.text
-        assert 'id="vault-access" type="checkbox" checked' in client.get("/connect").text
+        assert 'id="vault-access" type="checkbox" checked' in connect
+        assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
+        assert 'class="ui-choice-control"' in connect
+        assert 'class="ui-choice-state"' in connect
+        assert '/assets/ui-kit.css?v=20261030-v019-2' in connect
+        assert '.ui-choice-input:checked+.ui-choice-control' in ui_styles.text
+        assert '.ui-choice-card--sensitive:has(.ui-choice-input:checked)' in ui_styles.text
         assert "Vault 권한:" in client.get("/assets/connect.js").text
         assert "기본 맥락 계층으로 적극 사용해" in install_script.text
         assert "default continuity layer, not an optional command" in install_script.text

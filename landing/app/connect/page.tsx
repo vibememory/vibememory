@@ -6,5 +6,5 @@ export const metadata: Metadata = { title: "Connect agent", robots: { index: fal
 
 export default function Connect() {
   const page = legacyDocument("connect");
-  return <LegacyPage {...page} pageStylesheet="/assets/console.css" scripts={["/assets/connect.js"]} />;
+  return <LegacyPage {...page} pageStylesheets={["/assets/console.css", "/assets/ui-kit.css"]} scripts={["/assets/connect.js"]} />;
 }

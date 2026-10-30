@@ -8,14 +8,14 @@ f:I[97367,["$2"],"$e"]
 11:I[97367,["$2"],"$10"]
 12:"$Sreact.suspense"
 13:I[27201,["$2"],"IconMark"]
-:HL["/assets/style.css?v=20261030-v022-1","style"]
-:HL["/assets/i18n.css?v=20261030-v022-1","style"]
-:HL["/assets/console-fixes.css?v=20261030-v022-1","style"]
-:HL["/assets/guide.css?v=20261030-v022-1","style"]
+:HL["/assets/style.css?v=20261030-v022-2","style"]
+:HL["/assets/i18n.css?v=20261030-v022-2","style"]
+:HL["/assets/console-fixes.css?v=20261030-v022-2","style"]
+:HL["/assets/guide.css?v=20261030-v022-2","style"]
 6:X
 9:X
 9:C
-b:T50a3,
+b:T5224,
 <a class="skip" href="#main">본문으로 바로가기</a>
 <header class="header wrap">
 <a href="/" class="brand">
@@ -98,6 +98,7 @@ export MEMORY_API_KEY=your-agent-key</code>
 <section id="agent-hooks">
 <h2>에이전트별 Hook 자동화</h2>
 <p>Hook은 Vibe Memory CLI에 세션 식별정보와 작업 폴더만 전달합니다. CLI는 로컬에서 프로젝트명·브랜치·축약 커밋·clean/dirty 상태만 확인하며 파일 내용은 읽지 않습니다. 미커밋 내용은 Git에서 복구할 수 없다는 경계를 체크포인트 안내에 포함합니다. 대화 원문, 모델 응답, 도구 출력, 환경변수, Vault 값은 전달하지 않습니다. 실패와 타임아웃은 에이전트 작업을 막지 않으며 이 기능에 SSE 연결은 필요하지 않습니다. 최신 지원 상태는 랜딩의 <a href="/#agent-support">에이전트 지원 표</a>와 저장소의 <a href="https://github.com/vibememory/vibememory/blob/main/docs/agent-support.md" target="_blank" rel="noopener">지원 문서</a>에서 같은 데이터로 관리됩니다.</p>
+<p>먼저 현재 에이전트 도구를 확인하고 아래 분기 중 하나만 적용하세요. 도구마다 이벤트명·설정 위치·승인 방식이 다르므로 한 도구의 Hook을 다른 도구 설정으로 변환하지 않습니다. 기존 설정을 통째로 교체하지 말고 Vibe Memory 항목의 정확한 diff와 적용 범위를 검토한 뒤 병합하세요.</p>
 <h3 id="claude-code-hooks">Claude Code</h3>
 <pre><code>/plugin install vibe-memory --marketplace vibememory/vibememory</code></pre>
 <p>Claude Code 2.1.275 이상에서 설치 범위를 검토하세요. 기존 수동 Hook과 플러그인을 동시에 켜면 이벤트가 두 번 실행되므로 하나만 사용합니다.</p>
@@ -316,9 +317,9 @@ openclaw plugins inspect vibe-memory-hooks --runtime --json</code></pre>
 <span>© 2026 Vibe Memory</span>
 </div>
 </footer>
-a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/guide.css",{"rel":"stylesheet","href":"/assets/guide.css?v=20261030-v022-1"}]],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$b"}}],[]],null,"$Lc"]}],"p":"$@d","v":null,"s":"$6"}}]]
+a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/guide.css",{"rel":"stylesheet","href":"/assets/guide.css?v=20261030-v022-2"}]],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$b"}}],[]],null,"$Lc"]}],"p":"$@d","v":null,"s":"$6"}}]]
 7:[["children",{"s":"guide","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]]}],"p":"$@8","v":"$9","s":"$6"},"c":"$Qa"}]]
-0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v022-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v022-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v022-1"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v022-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v022-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[[],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 <svg class=\"svg-icon\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#arrow-right\"></use></svg></a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$Lf",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Connection guide — Vibe Memory"}],["$","meta","1",{"name":"description","content":"Connect Vibe Memory CLI Skills, keyword search, and byte-stream uploads."}],["$","link","2",{"rel":"canonical","href":"https://vibememory.io/guide.html"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L13","4",{}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"vibe-memory-20261030-v022-1"}
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v022-2"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v022-2"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v022-2"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v022-2","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v022-2","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[[],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 <svg class=\"svg-icon\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#arrow-right\"></use></svg></a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$Lf",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Connection guide — Vibe Memory"}],["$","meta","1",{"name":"description","content":"Connect Vibe Memory CLI Skills, keyword search, and byte-stream uploads."}],["$","link","2",{"rel":"canonical","href":"https://vibememory.io/guide.html"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L13","4",{}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"vibe-memory-20261030-v022-2"}
 17:I[97367,["$2"],"OutletBoundary"]
 c:["$","$L17",null,{"children":["$","$12",null,{"name":"Next.MetadataOutlet","children":"$@18"}]}]
 6:300

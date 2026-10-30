@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "packageVersion": "0.30.1",
+  "intendedPublisher": "SEOKSONG SONG",
+  "countryTargeting": {
+    "mode": "all-supported-countries",
+    "manifestCountries": [],
+    "portalVerified": false
+  },
+  "commerce": {
+    "payments": false,
+    "purchases": false,
+    "portalVerified": false
+  },
+  "knownBlockers": [
+    {
+      "id": "privacyPolicyURL",
+      "reason": "An operator-reviewed privacy policy covering actual collection, use, sharing, retention, deletion, and Vault MCP disclosure has not been published."
+    },
+    {
+      "id": "termsOfServiceURL",
+      "reason": "Operator-approved terms of service have not been published."
+    },
+    {
+      "id": "demo_recording_url",
+      "reason": "No real reviewer-accessible recording of the packaged version has been produced and verified."
+    },
+    {
+      "id": "reviewer_access",
+      "reason": "A dedicated reviewer account, sample workspace, and fake Vault fixture have not been created and verified."
+    },
+    {
+      "id": "portal_identity",
+      "reason": "The intended publisher identity must still be selected and verified in the Developer Portal."
+    },
+    {
+      "id": "portal_countries",
+      "reason": "All-supported-country targeting must still be inspected after the ZIP is saved in the Developer Portal."
+    }
+  ]
+}

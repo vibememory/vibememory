@@ -25,6 +25,11 @@ jobs:
           python3 landing/scripts/package_skill.py
           git diff --exit-code -- landing/dist/skills landing/dist/downloads
       - run: uv run pytest -q
+      - name: Verify public plugin source and explicit submission gates
+        run: >-
+          uv run python scripts/check_plugin_submission.py
+          --site-dir landing/dist
+          --acknowledge-blockers
       - run: uv build
       - name: Verify wheel contains the self-hosted console
         run: |

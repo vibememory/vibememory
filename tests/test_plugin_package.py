@@ -14,7 +14,15 @@ def test_chatgpt_work_plugin_package():
     # Public-directory packages must remain usable without local lifecycle hooks.
     assert "hooks" not in manifest
     assert len(manifest["extensions"]["com.openai"]["interface"]["shortDescription"]) <= 30
-    assert (PLUGIN / manifest["extensions"]["com.openai"]["interface"]["logo"]).is_file()
+    interface = manifest["extensions"]["com.openai"]["interface"]
+    assert interface["developerName"] == "SEOKSONG SONG"
+    assert interface["supportURL"] == "https://vibememory.io/support"
+    assert interface["logo"].endswith(".png")
+    assert (PLUGIN / interface["logo"]).is_file()
+    cases = manifest["extensions"]["com.openai"]["review"]["test_cases"]
+    assert len(cases["positive"]) == 5
+    assert len(cases["negative"]) == 3
+    assert manifest["extensions"]["com.openai"]["publication"]["countries"] == []
 
     mcp = json.loads((PLUGIN / "mcp.json").read_text())
     server = mcp["mcpServers"]["vibe-memory"]

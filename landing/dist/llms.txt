@@ -9,6 +9,7 @@ License: MIT
 ## Public documentation
 
 - Connection guide: https://vibememory.io/guide
+- Support: https://vibememory.io/support
 - OpenAPI schema: https://vibememory.io/openapi.json
 - Live Skill: https://vibememory.io/skills/vibe-memory/SKILL.md
 - Skill manifest: https://vibememory.io/skills/vibe-memory/manifest.json

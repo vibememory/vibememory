@@ -9,7 +9,15 @@ root = Path(__file__).resolve().parents[1]
 exported = root / "out"
 destination = root / "dist"
 
-required = ["index.html", "login.html", "connect.html", "console.html", "guide.html", "404.html"]
+required = [
+    "index.html",
+    "login.html",
+    "connect.html",
+    "console.html",
+    "guide.html",
+    "support.html",
+    "404.html",
+]
 missing = [name for name in required if not (exported / name).is_file()]
 if missing:
     raise RuntimeError("Next.js export is incomplete: " + ", ".join(missing))

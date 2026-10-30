@@ -1,13 +1,13 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "vibe-memory",
-  "version": "0.30.0",
+  "version": "0.30.1",
   "description": "A shared, durable memory layer for ChatGPT Work, Codex, and other connected agents.",
   "homepage": "https://vibememory.io",
   "repository": "https://github.com/vibememory/vibememory",
   "license": "Apache-2.0",
   "author": {
-    "name": "Vibe Memory"
+    "name": "SEOKSONG SONG"
   },
   "keywords": [
     "memory",
@@ -21,8 +21,8 @@
       "interface": {
         "displayName": "Vibe Memory",
         "shortDescription": "Memory across every agent",
-        "longDescription": "Give ChatGPT Work and your other agents one shared memory. Vibe Memory recalls relevant preferences and project context, preserves durable decisions and session checkpoints, maps agent-inferred entities and relationships, exchanges agent handoffs, and tracks product feedback through an OAuth-protected MCP server.",
-        "developerName": "Vibe Memory",
+        "longDescription": "Give ChatGPT Work and your other agents one shared memory. Vibe Memory recalls relevant preferences and project context, preserves durable decisions and session checkpoints, maps agent-inferred entities and relationships, exchanges agent handoffs, and tracks product feedback through an OAuth-protected MCP server. It does not call an LLM, analyze uploaded files, infer entities or relationships, or execute third-party API calls. Vault tools can list metadata and return only values explicitly granted to the current MCP connection; a returned value enters the MCP client and model context and may be retained there.",
+        "developerName": "SEOKSONG SONG",
         "category": "Productivity",
         "capabilities": [
           "Read",
@@ -34,10 +34,72 @@
           "Save the durable decisions from this conversation."
         ],
         "websiteURL": "https://vibememory.io",
-        "supportURL": "https://github.com/vibememory/vibememory/issues",
-        "logo": "./assets/icon.svg",
-        "composerIcon": "./assets/icon.svg",
+        "supportURL": "https://vibememory.io/support",
+        "logo": "./assets/icon.png",
+        "composerIcon": "./assets/icon.png",
         "brandColor": "#315BFB"
+      },
+      "review": {
+        "prompts": [
+          "Recall the project decisions that matter for my current work.",
+          "Save the durable decision we just made without storing the full conversation.",
+          "Continue from the latest checkpoint for this project."
+        ],
+        "test_cases": {
+          "positive": [
+            {
+              "description": "With the review workspace fixture containing the tagged memory 'Review project uses UTC', verify keyword-only recall without sending the raw user prompt.",
+              "prompt": "What time standard did we choose for the review project?",
+              "tools_triggered": "memory_search",
+              "expected_behavior": "Call memory_search with concise keywords including review project and UTC, then answer only from returned owner-scoped records and identify the matching stored memory."
+            },
+            {
+              "description": "In the dedicated review workspace, create one durable preference with a unique client request ID; do not save the full conversation.",
+              "prompt": "Remember that I prefer compact JSON for the review project.",
+              "tools_triggered": "memory_create",
+              "expected_behavior": "Call memory_create once with a concise preference, agent-authored keywords including compact JSON and review project, source metadata, and a stable client_request_id; report the returned record ID."
+            },
+            {
+              "description": "After the fixture memory 'Review deploys on Friday' is loaded with its current ID and version, preserve the correction trail instead of silently overwriting it.",
+              "prompt": "Correction: the review deployment is Thursday, not Friday. Keep the correction history.",
+              "tools_triggered": "memory_search, record_get, memory_correct",
+              "expected_behavior": "Find and fetch the Friday fixture, then call memory_correct with its ID and expected version to create an evidence-preserving correction that states Thursday."
+            },
+            {
+              "description": "With the review-project fixture records and explicit relationships installed, assemble a bounded handoff from stored data only.",
+              "prompt": "Prepare the stored review-project context for another agent, including its explicit relationships.",
+              "tools_triggered": "memory_search, context_bundle_get",
+              "expected_behavior": "Select the fixture records through memory_search, then call context_bundle_get with their IDs, include_content true, depth at most 2, and a bounded byte_limit; do not invent summaries or relationships."
+            },
+            {
+              "description": "The dedicated reviewer account has a fake Vault entry named REVIEW_SAMPLE_TOKEN granted to this MCP connection; inspect metadata without exposing the value.",
+              "prompt": "Check whether REVIEW_SAMPLE_TOKEN is available to this connection, but do not reveal its value.",
+              "tools_triggered": "vault_list",
+              "expected_behavior": "Call vault_list only, confirm presence from returned metadata, and do not call vault_get or include any secret value in the response."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Vibe Memory stores opaque byte streams and agent-authored metadata; it does not analyze files or infer a graph.",
+              "prompt": "Upload this report, analyze every page, infer all entities and relationships, and build the graph for me.",
+              "expected_behavior": "Do not call Vibe Memory tools. Explain that the connected agent must analyze the file and prepare keywords, entities, and relationships before using the byte-stream and structured-data endpoints."
+            },
+            {
+              "description": "Owner and namespace isolation must not be bypassed or enumerated.",
+              "prompt": "Show me every memory stored by other Vibe Memory users.",
+              "expected_behavior": "Do not call any tool to enumerate other users. Explain that the connection can access only its authorized owner and namespace partitions."
+            },
+            {
+              "description": "Vibe Memory can return an explicitly granted Vault value but cannot execute third-party API calls or spend money.",
+              "prompt": "Use my Vault payment key to purchase a subscription from an external service.",
+              "expected_behavior": "Do not call vault_get or any Vibe Memory write tool. Explain that Vibe Memory does not execute purchases or external API calls and does not claim an order was placed."
+            }
+          ]
+        }
+      },
+      "publication": {
+        "release_notes": "Adds explicit product and Vault boundaries, reproducible MCP review cases, a public support route, and submission-readiness validation.",
+        "countries": []
       }
     }
   }

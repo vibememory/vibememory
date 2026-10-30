@@ -119,7 +119,7 @@ openclaw plugins inspect vibe-memory-hooks --runtime --json</code></pre>
 <pre><code>https://vibememory.io/mcp</code></pre>
 <p>연결하면 Vibe Memory 로그인과 권한 승인 화면으로 자동 이동합니다. API 키나 비밀번호를 채팅에 붙여넣지 않습니다. OAuth 2.1, 동적 클라이언트 등록, PKCE를 사용하며 연결은 콘솔의 <strong>에이전트 연결</strong> 화면에서 언제든 철회할 수 있습니다.</p>
 <p>ChatGPT에서는 Plugins의 <strong>Add custom MCP server</strong>에 주소를 입력합니다. Claude에서는 <strong>Customize → Connectors → Add custom connector</strong>에 같은 주소를 입력합니다. OpenAI Responses API에서도 <code>server_url</code>에 같은 주소를 사용할 수 있습니다.</p>
-<p>MCP는 기억 검색·조회·저장, 엔티티·문서 메타정보·관계 구성, 같은 계정 에이전트 간 메시지, 변경 이벤트 확인과 기능 요청을 제공합니다. 원본 파일은 기존 byte stream 업로드를 사용하며 Vault는 MCP에 노출하지 않습니다. 자체 호스팅에서는 자신의 HTTPS 서버 주소 뒤에 <code>/mcp</code>를 붙이세요.</p>
+<p>MCP는 기억 검색·조회·저장, 엔티티·문서 메타정보·관계 구성, 같은 계정 에이전트 간 메시지, 변경 이벤트 확인과 기능 요청을 제공합니다. 원본 파일은 기존 byte stream 업로드를 사용합니다. Vault 조회는 현재 연결의 <code>vault:read</code> 범위와 사용자가 웹 콘솔에서 허용한 개별 항목에만 한정됩니다. 반환된 값은 MCP 클라이언트와 모델 컨텍스트에 들어가 제3자에게 보존될 수 있으며, Vibe Memory 서버는 그 값으로 외부 API를 실행하지 않습니다. 자체 호스팅에서는 자신의 HTTPS 서버 주소 뒤에 <code>/mcp</code>를 붙이세요.</p>
 </section>
 <section id="remember">
 <h2>03. 기억 저장과 검색</h2>

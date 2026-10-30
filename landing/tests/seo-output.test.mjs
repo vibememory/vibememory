@@ -30,6 +30,15 @@ test('guide has its own canonical, metadata, and article schema', () => {
   assert.match(html, /"dateModified":"2026-10-30"/);
 });
 
+test('support page is public, canonical, and identifies its purpose', () => {
+  const html = read('dist/support.html');
+  assert.match(html, /<title>지원 \| Vibe Memory<\/title>/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/vibememory\.io\/support"/);
+  assert.match(html, /Vibe Memory Support/);
+  assert.match(html, /GitHub Issues/);
+  assert.match(html, /"@type":"ContactPage"/);
+});
+
 test('private product routes are explicitly excluded from indexing', () => {
   for (const page of ['admin', 'capture', 'connect', 'console', 'login']) {
     const html = read(`dist/${page}.html`);
@@ -49,6 +58,7 @@ test('crawl discovery files expose only canonical public pages', () => {
   assert.match(robots, /Sitemap: https:\/\/vibememory\.io\/sitemap\.xml/);
   assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/guide<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/support<\/loc>/);
   assert.doesNotMatch(sitemap, /\/console/);
   assert.match(llms, /Vibe Memory does not call an LLM/);
   assert.equal(manifest.name, 'Vibe Memory');

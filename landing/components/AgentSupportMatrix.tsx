@@ -33,7 +33,7 @@ export function AgentSupportMatrix() {
         {support.agents.map((agent) => (
           <article className="agent-support-card" key={agent.id}>
             <div className="agent-support-card-top">
-              <span className={`agent-support-icon ${agent.id === "codex" || agent.id === "hermes" ? "is-dark" : ""}`}>
+              <span className={`agent-support-icon ${agent.id === "codex" || agent.id === "hermes" || agent.id === "cursor" ? "is-dark" : ""}`}>
                 <img src={agent.icon} alt="" width="28" height="28" />
               </span>
               <div><h3>{agent.name}</h3><span className={`support-status is-${agent.overall_status}`}>{statusLabels[agent.overall_status]}</span></div>

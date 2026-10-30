@@ -44,7 +44,11 @@ def test_console_and_api_share_one_origin(settings):
         assert "Identify the current agent host first" in install_script.text
         assert "tree/main/agent-adapters" in install_script.text
         assert "${adapterRoot}/codex" in install_script.text
+        assert "${adapterRoot}/cursor" in install_script.text
+        assert "${adapterRoot}/muse" in install_script.text
         assert "${adapterRoot}/hermes" in install_script.text
+        assert "loop_limit: 1" in install_script.text
+        assert "nonexistent muse hooks command" in install_script.text
         assert "hooks_auto_accept: false" in install_script.text
         assert "openclaw plugins install --link ./agent-adapters/openclaw" in install_script.text
         assert "openclaw plugins inspect vibe-memory-hooks --runtime --json" in install_script.text
@@ -88,8 +92,12 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="skill-agent-tools"' in landing
         assert "Claude Code" in landing
         assert "Codex" in landing
+        assert "Cursor" in landing
+        assert "Muse Code" in landing
         assert "OpenClaw" in landing
         assert "Hermes" in landing
+        assert '/assets/brands/cursor.svg' in landing
+        assert '/assets/brands/muse.svg' in landing
         assert "edge-support" not in landing
         assert 'class="mini-graph"' not in landing
         assert 'class="relation-preview"' not in landing
@@ -108,14 +116,14 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v022-2" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v022-2" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v022-2" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v022-2" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v022-2" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v022-2" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v022-2" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v022-2" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-v023-0" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v023-0" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v023-0" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v023-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v023-0" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v023-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v023-0" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v023-0" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -154,7 +162,7 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v022-2' in connect
+        assert '/assets/ui-kit.css?v=20261030-v023-0' in connect
         assert '.ui-choice-input:checked+.ui-choice-control' in ui_styles.text
         assert '.ui-choice-card--sensitive:has(.ui-choice-input:checked)' in ui_styles.text
         assert "Vault 권한:" in client.get("/assets/connect.js").text

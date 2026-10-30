@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "python3 /ABSOLUTE/PATH/agent-adapters/cursor/vibe_memory_hook.py session-start",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ],
+    "stop": [
+      {
+        "command": "python3 /ABSOLUTE/PATH/agent-adapters/cursor/vibe_memory_hook.py stop",
+        "timeout": 10,
+        "loop_limit": 1,
+        "failClosed": false
+      }
+    ],
+    "preCompact": [
+      {
+        "command": "python3 /ABSOLUTE/PATH/agent-adapters/cursor/vibe_memory_hook.py pre-compact",
+        "timeout": 10,
+        "failClosed": false
+      }
+    ]
+  }
+}

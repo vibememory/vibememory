@@ -71,19 +71,22 @@ interactive data commands still use `VM_CLI`. A missing binary, disconnected
 account, timeout, or network failure must never block Claude Code. Do not add
 duplicate manual hooks when the plugin is enabled.
 
-Codex, Hermes Agent, and OpenClaw have reviewed, opt-in adapters in the official
-repository under `agent-adapters/`. Codex maps `SessionStart`, `Stop`, and
-`PreCompact` from its trusted `hooks.json`; Hermes uses its consent-gated shell
-hooks; OpenClaw uses a native typed-hook plugin with explicit conversation-access
-and prompt-injection grants. Ask the user to review the adapter and choose its
-user, project, profile, or `projectRoots` scope before enabling it. Do not install
-or modify host configuration silently. The current support matrix, exact install,
-update, disable, and uninstall instructions live at
+Codex, Cursor, Muse Code, Hermes Agent, and OpenClaw have reviewed, opt-in
+adapters in the official repository under `agent-adapters/`. Codex maps
+`SessionStart`, `Stop`, and `PreCompact` from its trusted `hooks.json`; Cursor
+uses a response-schema translation adapter for lowercase lifecycle events; Muse
+Code uses its native Claude-compatible hook contract; Hermes uses its
+consent-gated shell hooks; OpenClaw uses a native typed-hook plugin with explicit
+conversation-access and prompt-injection grants. Ask the user to review the
+adapter and choose its user, project, profile, or `projectRoots` scope before
+enabling it. Do not install or modify host configuration silently. The current
+support matrix, exact install, update, disable, and uninstall instructions live at
 `https://vibememory.io/guide.html#agent-hooks`.
 
 Identify the current host before proposing lifecycle automation and apply exactly
 one host-specific branch. Hook manifests, event names, consent models, and config
-locations are not portable between Claude Code, Codex, Hermes Agent, and OpenClaw.
+locations are not portable between Claude Code, Codex, Cursor, Muse Code, Hermes
+Agent, and OpenClaw.
 Never translate one host's hooks into another host's configuration. Show the exact
 merge diff and scope before requesting approval, preserve unrelated settings, and
 use the ordinary Working loop instead when the verified adapter cannot run.

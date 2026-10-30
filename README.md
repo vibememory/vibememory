@@ -2,7 +2,7 @@
   <img src="landing/dist/assets/favicon.svg" width="64" alt="Vibe Memory">
   <h1>Vibe Memory</h1>
   <p><strong>One memory. All your agents. Your infrastructure.</strong></p>
-  <p>A self-hosted memory graph and keyword index for Claude Code, Codex, OpenClaw, Hermes, and any REST-capable agent.</p>
+  <p>A self-hosted memory graph and keyword index for Claude Code, Codex, Cursor, Muse Code, OpenClaw, Hermes, and any REST-capable agent.</p>
   <p><a href="https://vibememory.io">Website</a> · <a href="docs/self-hosting.md">Self-hosting</a> · <a href="docs/api.md">API</a> · <a href="README.ko.md">한국어</a></p>
 </div>
 
@@ -97,7 +97,7 @@ native CLI is available on `PATH`:
 It adds non-blocking session recall and deduplicated checkpoint hooks. See
 [agent lifecycle hooks](docs/agent-hooks.md) for behavior, privacy boundaries,
 older Claude Code installation steps, and equivalent workflows for Codex,
-OpenClaw, Hermes, and other hosts. The generated [agent support matrix](docs/agent-support.md)
+Cursor, Muse Code, OpenClaw, Hermes, and other hosts. The generated [agent support matrix](docs/agent-support.md)
 lists the verified host/version, Skill, MCP, recall/checkpoint hook status, and
 current limitations from the same data shown on the landing page.
 

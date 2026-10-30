@@ -9,6 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 HERMES_ADAPTER = ROOT / "agent-adapters/hermes/vibe_memory_hook.py"
+CURSOR_ADAPTER = ROOT / "agent-adapters/cursor/vibe_memory_hook.py"
 
 
 def make_fake_cli(tmp_path: Path) -> tuple[Path, Path]:
@@ -49,6 +50,18 @@ def run_hermes(event: str, payload: dict, env: dict) -> tuple[dict, subprocess.C
     return json.loads(completed.stdout), completed
 
 
+def run_cursor(event: str, payload: dict, env: dict) -> tuple[dict, subprocess.CompletedProcess]:
+    completed = subprocess.run(
+        [sys.executable, str(CURSOR_ADAPTER), event],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    return json.loads(completed.stdout), completed
+
+
 def test_codex_hooks_use_only_fixed_cli_commands():
     manifest = json.loads((ROOT / "agent-adapters/codex/hooks.json").read_text())
     expected = {
@@ -62,6 +75,91 @@ def test_codex_hooks_use_only_fixed_cli_commands():
         assert hook["type"] == "command"
         assert hook["command"] == command
         assert hook["timeout"] <= 10
+
+
+def test_muse_hooks_use_native_compatible_contract():
+    manifest = json.loads((ROOT / "agent-adapters/muse/hooks.json").read_text())
+    expected = {
+        "SessionStart": "vibe-memory hook session-start",
+        "Stop": "vibe-memory hook stop",
+        "PreCompact": "vibe-memory hook pre-compact",
+    }
+    assert set(manifest["hooks"]) == set(expected)
+    for event, command in expected.items():
+        hook = manifest["hooks"][event][0]["hooks"][0]
+        assert hook["type"] == "command"
+        assert hook["command"] == command
+        assert hook["commandWindows"].startswith("vibe-memory.exe hook ")
+        assert hook["timeout"] <= 10
+
+
+def test_cursor_adapter_translates_lifecycle_and_minimizes_input(tmp_path):
+    executable, capture = make_fake_cli(tmp_path)
+    env = {
+        **os.environ,
+        "VIBE_MEMORY_CLI": str(executable),
+        "FAKE_VIBE_MEMORY_CAPTURE": str(capture),
+        "CURSOR_HOME": str(tmp_path / "cursor-home"),
+    }
+    payload = {
+        "conversation_id": "cursor-session-1",
+        "workspace_roots": [str(tmp_path)],
+        "status": "completed",
+        "loop_count": 0,
+        "prompt": "must not be forwarded",
+        "transcript_path": "/private/transcript.jsonl",
+        "user_email": "must-not-be-forwarded@example.invalid",
+    }
+
+    recalled, completed = run_cursor("session-start", payload, env)
+    assert completed.returncode == 0
+    assert recalled == {"additional_context": "recalled context"}
+
+    compacted, completed = run_cursor("pre-compact", payload, env)
+    assert completed.returncode == 0
+    assert compacted == {}
+
+    checkpoint, completed = run_cursor("stop", payload, env)
+    assert completed.returncode == 0
+    assert checkpoint == {
+        "followup_message": "recalled context\n\ncheckpoint instruction"
+    }
+
+    calls = [json.loads(line) for line in capture.read_text().splitlines()]
+    assert [call["args"] for call in calls] == [
+        ["hook", "session-start"],
+        ["hook", "pre-compact"],
+        ["hook", "session-start"],
+        ["hook", "stop"],
+    ]
+    for call in calls:
+        assert set(call["payload"]) == {"session_id", "cwd", "source", "stop_hook_active"}
+    serialized = json.dumps(calls)
+    assert "must not be forwarded" not in serialized
+    assert "transcript" not in serialized
+    assert "user_email" not in serialized
+
+
+def test_cursor_manifest_is_bounded_and_adapter_fails_open(tmp_path):
+    manifest = json.loads((ROOT / "agent-adapters/cursor/hooks.example.json").read_text())
+    assert manifest["version"] == 1
+    assert set(manifest["hooks"]) == {"sessionStart", "stop", "preCompact"}
+    assert manifest["hooks"]["stop"][0]["loop_limit"] == 1
+    for hooks in manifest["hooks"].values():
+        assert hooks[0]["timeout"] <= 10
+        assert hooks[0]["failClosed"] is False
+
+    failed, completed = run_cursor(
+        "session-start",
+        {"conversation_id": "cursor-session-2", "workspace_roots": [str(tmp_path)]},
+        {
+            **os.environ,
+            "VIBE_MEMORY_CLI": str(tmp_path / "missing"),
+            "CURSOR_HOME": str(tmp_path / "cursor-home"),
+        },
+    )
+    assert completed.returncode == 0
+    assert failed == {}
 
 
 def test_hermes_adapter_recall_checkpoint_and_input_minimization(tmp_path):

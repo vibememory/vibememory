@@ -13,6 +13,8 @@ def test_agent_support_matrix_is_shared_and_honest():
     assert {agent["id"] for agent in data["agents"]} == {
         "claude-code",
         "codex",
+        "cursor",
+        "muse",
         "hermes",
         "openclaw",
     }

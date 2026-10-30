@@ -2,13 +2,15 @@
 
 > 이 문서는 `landing/data/agent-support.json`에서 생성됩니다. 직접 수정하지 마세요.
 
-최종 검증: **2026-10-30T04:40:00Z** (UTC)
+최종 검증: **2026-10-30T07:54:06Z** (UTC)
 이 기능에 SSE 필요: **아니요**
 
 | 에이전트 | Skill | MCP | Hook 불러오기 | Hook 체크포인트 | 상태 | 설치 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Claude Code | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide.html#claude-code-hooks) |
 | OpenAI Codex | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide.html#codex-hooks) |
+| Cursor | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide.html#cursor-hooks) |
+| Muse Code | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide.html#muse-hooks) |
 | Hermes Agent | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide.html#hermes-hooks) |
 | OpenClaw | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide.html#openclaw-hooks) |
 
@@ -29,6 +31,22 @@
 - 실행 환경: Codex CLI or desktop with local command execution
 - 이벤트 매핑: SessionStart → recall, Stop → checkpoint reminder, PreCompact → pending marker
 - 제한사항: The user must review and trust the hooks. Command hooks do not run in Work Cloud without local execution.
+
+### Cursor
+
+- 최소 버전: 1.7.0
+- 검증 기준: Cursor 1.7+ official hooks contract + adapter tests
+- 실행 환경: Cursor desktop or CLI with local command hooks and Python 3
+- 이벤트 매핑: sessionStart → recall, stop → one bounded checkpoint follow-up, preCompact → pending marker
+- 제한사항: Cursor uses its own lowercase events and response schema, so the translation adapter is required. stop loop_limit stays at 1; preCompact is observation-only.
+
+### Muse Code
+
+- 최소 버전: 1.3.0
+- 검증 기준: Muse Code 1.3.0 official hook contract + manifest tests
+- 실행 환경: Muse Code terminal or CI on Linux, macOS, or Windows
+- 이벤트 매핑: SessionStart → recall, Stop → checkpoint reminder, PreCompact → pending marker
+- 제한사항: Project hooks run only after workspace trust. Muse Code has no per-hook trust command; restart a session after edits and inspect startup diagnostics.
 
 ### Hermes Agent
 

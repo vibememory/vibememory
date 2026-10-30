@@ -43,8 +43,9 @@ the shared support matrix.
 ## Consent and scope
 
 Adapters are disabled until the user installs and trusts the relevant hook or
-plugin. User/project hook scope, Hermes profiles, OpenClaw `projectRoots`, or an
-equivalent host setting limits where the adapter runs. Users can disable recall
+plugin. User/project hook scope, Cursor hook files, Muse workspace trust, Hermes
+profiles, OpenClaw `projectRoots`, or an equivalent host setting limits where the
+adapter runs. Users can disable recall
 and checkpoint hooks independently where the host supports it. Host hook
 inspection and activity logs remain the source of truth; Vibe Memory does not
 add a second telemetry stream or require SSE.

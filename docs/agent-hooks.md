@@ -119,6 +119,47 @@ Vibe Memory groups from the chosen file, to opt out. Re-copy the shipped file
 after an upgrade and review its new hash. Command hooks require local execution;
 they do not run in Work Cloud without local access.
 
+## Cursor
+
+Cursor 1.7.0 or later loads user hooks from `~/.cursor/hooks.json` and project
+hooks from `.cursor/hooks.json`. Cursor's lowercase event names and JSON answer
+schema are not compatible with the native CLI output, so use the reviewed
+translation adapter instead of copying the Codex or Muse manifest.
+
+Copy `agent-adapters/cursor/vibe_memory_hook.py` to an operator-reviewed absolute
+path. Merge only the three Vibe Memory entries from `hooks.example.json` into the
+chosen Cursor hooks file and replace `/ABSOLUTE/PATH`. On Windows, replace
+`python3` with `py`. Keep `failClosed: false` and the Stop hook's `loop_limit: 1`.
+
+The adapter maps `sessionStart` output to `additional_context`, maps a
+deduplicated `stop` reminder to one bounded `followup_message`, and records
+`preCompact` without trying to block compaction. When compaction occurred, the
+next supported Stop boundary combines compact recall and checkpoint guidance in
+that single follow-up. It forwards only the conversation identifier, first
+workspace root, lifecycle source, and Stop-active flag; prompt text, transcript
+paths, user email, model output, and tool data are discarded.
+
+Open **Customize → Hooks** and the Hooks output channel to inspect executions and
+errors. Update by replacing the adapter and re-merging the reviewed manifest.
+Uninstall by removing only these three entries and the copied adapter file.
+
+## Muse Code
+
+Muse Code 1.3.0 or later accepts the native CLI's hook events, stdin payload, and
+`hookSpecificOutput.additionalContext` answer directly. Put the verified
+`vibe-memory` CLI on `PATH`, then merge the groups from
+`agent-adapters/muse/hooks.json` into either the project file
+`.muse/hooks.json` or the top-level `hooks` object in
+`~/.config/muse/settings.json`. Preserve the settings file's `schema_version`
+and every unrelated group.
+
+Project hooks run only after workspace trust. Muse Code has no active
+`muse hooks` command family or per-hook trust command. Start a new session after
+editing the file and inspect its startup hook diagnostics for three runnable
+handlers without warnings. `SessionStart`, `Stop`, and `PreCompact` map directly
+to recall, checkpoint guidance, and a pending compact marker. Update by replacing
+the three reviewed groups; uninstall by removing only those groups.
+
 ## Hermes Agent
 
 Hermes Agent 0.22.5 is the verified floor; an earlier first release for every
@@ -185,10 +226,10 @@ not emit `before_agent_finalize` cannot force the final checkpoint pass.
 
 ## MCP and fallback behavior
 
-MCP is available independently of lifecycle hooks. Hermes can configure the
+MCP is available independently of lifecycle hooks. Muse Code and Hermes can configure the
 remote URL under `mcp_servers`; OpenClaw can run
 `openclaw mcp add vibe-memory --url https://vibememory.io/mcp --transport streamable-http`;
-Codex and Claude can use their existing MCP connection flows. OAuth approval is
+Cursor, Codex, and Claude can use their existing MCP connection flows. OAuth approval is
 handled by the host. Hook adapters do not require or introduce SSE.
 
 When a lifecycle adapter is unavailable, follow the proactive loop in the

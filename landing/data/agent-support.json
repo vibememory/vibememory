@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-10-30T04:40:00Z",
+  "verified_at": "2026-10-30T07:54:06Z",
   "time_basis": "UTC",
   "sse_required": false,
   "agents": [
@@ -39,6 +39,42 @@
       },
       "hook_mapping": "SessionStart → recall, Stop → checkpoint reminder, PreCompact → pending marker",
       "limitations": "The user must review and trust the hooks. Command hooks do not run in Work Cloud without local execution."
+    },
+    {
+      "id": "cursor",
+      "name": "Cursor",
+      "icon": "/assets/brands/cursor.svg",
+      "overall_status": "supported",
+      "minimum_version": "1.7.0",
+      "verified_version": "Cursor 1.7+ official hooks contract + adapter tests",
+      "environment": "Cursor desktop or CLI with local command hooks and Python 3",
+      "installation_url": "/guide.html#cursor-hooks",
+      "capabilities": {
+        "skill": "supported",
+        "mcp": "supported",
+        "recall_hook": "supported",
+        "checkpoint_hook": "supported"
+      },
+      "hook_mapping": "sessionStart → recall, stop → one bounded checkpoint follow-up, preCompact → pending marker",
+      "limitations": "Cursor uses its own lowercase events and response schema, so the translation adapter is required. stop loop_limit stays at 1; preCompact is observation-only."
+    },
+    {
+      "id": "muse",
+      "name": "Muse Code",
+      "icon": "/assets/brands/muse.svg",
+      "overall_status": "supported",
+      "minimum_version": "1.3.0",
+      "verified_version": "Muse Code 1.3.0 official hook contract + manifest tests",
+      "environment": "Muse Code terminal or CI on Linux, macOS, or Windows",
+      "installation_url": "/guide.html#muse-hooks",
+      "capabilities": {
+        "skill": "supported",
+        "mcp": "supported",
+        "recall_hook": "supported",
+        "checkpoint_hook": "supported"
+      },
+      "hook_mapping": "SessionStart → recall, Stop → checkpoint reminder, PreCompact → pending marker",
+      "limitations": "Project hooks run only after workspace trust. Muse Code has no per-hook trust command; restart a session after edits and inspect startup diagnostics."
     },
     {
       "id": "hermes",

@@ -1,7 +1,7 @@
 'use strict';
 const $ = selector => document.querySelector(selector);
 const h = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-const utcDate = value => value ? new Date(value).toLocaleString('ko-KR', {timeZone:'UTC',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) + ' UTC' : '—';
+const utcDate = value => value ? new Date(value).toLocaleString(window.vmLocaleTag?.() || 'ko-KR', {timeZone:'UTC',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}) + ' UTC' : '—';
 const statusInfo = status => ({
   received:['접수됨','received'], reviewing:['검토 중','reviewing'], planned:['계획됨','planned'],
   in_progress:['처리 중','in-progress'], completed:['완료','completed'], declined:['보류','declined']
@@ -160,6 +160,9 @@ $('#request-editor-form').addEventListener('submit',async event => {
   finally { save.disabled = false; }
 });
 $('#admin-logout').addEventListener('click',async () => { try { await api('/auth/logout',{method:'POST'}); location.replace('/login'); } catch (error) { showError(error); } });
+window.addEventListener('vm-language-change',() => {
+  renderStats(); renderRows(); renderUsers(); renderOperators();
+});
 function showError(error) { $('#admin-error').textContent = error.message; $('#admin-error').hidden = false; }
 
 (async () => {

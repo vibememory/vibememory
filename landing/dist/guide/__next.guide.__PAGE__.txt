@@ -8,14 +8,14 @@ f:I[97367,["$2"],"$e"]
 11:I[97367,["$2"],"$10"]
 12:"$Sreact.suspense"
 13:I[27201,["$2"],"IconMark"]
-:HL["/assets/style.css?v=20261030-totp-1","style"]
-:HL["/assets/i18n.css?v=20261030-totp-1","style"]
-:HL["/assets/console-fixes.css?v=20261030-totp-1","style"]
-:HL["/assets/guide.css?v=20261030-totp-1","style"]
+:HL["/assets/style.css?v=20261030-v016-1","style"]
+:HL["/assets/i18n.css?v=20261030-v016-1","style"]
+:HL["/assets/console-fixes.css?v=20261030-v016-1","style"]
+:HL["/assets/guide.css?v=20261030-v016-1","style"]
 6:X
 9:X
 9:C
-b:T3d82,
+b:T427d,
 <a class="skip" href="#main">본문으로 바로가기</a>
 <header class="header wrap">
 <a href="/" class="brand">
@@ -85,7 +85,7 @@ VM_CLI="$VM_SKILL_DIR/bin/vibe-memory"
 "$VM_CLI" login --url https://vibememory.io --no-browser --name "My agent"</code>
 </pre>
 <p>Windows PowerShell에서는 <code>$VmSkillDir</code>에 같은 절대 경로를 넣고 <code>py (Join-Path $VmSkillDir "scripts\memory.py") sync</code>를 실행한 뒤 <code>$VmCli = Join-Path $VmSkillDir "bin\vibe-memory.exe"</code>를 사용합니다. sync가 Skill을 갱신하면 새 <code>SKILL.md</code>를 다시 읽습니다.</p>
-<p>사용자는 링크를 열고 웹에서 로그인한 뒤 코드와 에이전트 이름을 확인하고 <strong>연결 승인</strong>을 누릅니다. API 키를 복사하거나 터미널에 입력할 필요가 없으며 연결 요청은 5분 후 만료됩니다. 이후 에이전트는 작업 전에 최신 Rust CLI와 Skill을 확인합니다. 자체 호스팅은 해당 서버가 제공하는 Skill 매니페스트를 사용합니다.</p>
+<p>사용자는 링크를 열고 웹에서 로그인한 뒤 코드와 에이전트 이름을 확인하고 <strong>연결 승인</strong>을 누릅니다. Vault를 요청한 경우 별도 체크가 기본 선택되며 사용자가 해제할 수 있고, CLI는 실제로 허용된 권한을 명확히 출력합니다. API 키를 복사하거나 터미널에 입력할 필요가 없습니다. 연결 요청은 기본 5분이며 <code>--approval-timeout 60..900</code>으로 조절할 수 있고, 이미 연결된 에이전트가 <code>login --vault-access</code>를 실행하면 새 키 없이 기존 연결의 Vault 권한만 승인받습니다. 이후 에이전트는 작업 전에 최신 Rust CLI와 Skill을 확인합니다. 자체 호스팅은 해당 서버가 제공하는 Skill 매니페스트를 사용합니다.</p>
 <a class="button primary" href="/downloads/vibe-memory-skill.zip" download>Skill 내려받기 ↓</a>
 <p>수동 API 키 연결은 고급 설정용입니다. 서버용 <code>MEMORY_API_KEYS</code>는 JSON 객체, 클라이언트용 <code>MEMORY_API_KEY</code>는 단일 키 문자열입니다.</p>
 <pre>
@@ -164,9 +164,11 @@ export MEMORY_API_KEY=your-agent-key</code>
 <code>"$VM_CLI" from-json entity prepared-entity.json
 "$VM_CLI" relate ENTITY_ID DOCUMENT_ID \
   --relation WORKS_ON --reason '사용자 원문에 명시됨'
+"$VM_CLI" template relation
+"$VM_CLI" from-json relation prepared-relation.json
 "$VM_CLI" graph ENTITY_ID</code>
 </pre>
-<p>관계는 에이전트가 정의한 대문자 식별자를 사용합니다. <code>WORKS_ON</code>, <code>PREFERS</code>, <code>MENTIONED_IN</code> 등이 가능하며 내부용 <code>KEYWORD_OF</code>, <code>CHUNK_OF</code>는 예약되어 있습니다. 앱은 소유권과 형식을 검증하고 관계 이력을 보관합니다. 의미와 사실 여부는 에이전트가 판단합니다.</p>
+<p>관계는 에이전트가 정의한 대문자 식별자를 사용합니다. <code>WORKS_ON</code>, <code>PREFERS</code>, <code>MENTIONED_IN</code> 등이 가능하며 내부용 <code>KEYWORD_OF</code>, <code>CHUNK_OF</code>는 예약되어 있습니다. 중요한 claim은 에이전트가 선택한 기록의 <code>record_id</code>, <code>version</code>, <code>content_hash</code>, UTC <code>observed_at</code>과 선택 위치를 <code>evidence</code>에 고정합니다. 검토 범위는 <code>selected</code>, <code>partial</code>, <code>unknown</code> 중 하나이며 완전 검토로 자동 추론하지 않습니다. 필요하면 입력 목록을 짧은 일반 기록으로 저장한 뒤 <code>input_manifest_id</code>로 연결합니다. 조회 응답의 <code>evidence_status</code>는 당시 좌표와 현재 버전·해시, active/archived/deleted 상태, current/changed/unavailable 비교를 함께 보여줍니다. 영구 삭제 후에는 과거 원문을 복원할 수 없으므로 보통 보관 처리를 사용하세요. 원문 프롬프트·내부 추론·비밀값은 manifest에 넣지 않습니다. 앱은 소유권과 형식을 검증·저장할 뿐 관계를 추론하지 않습니다.</p>
 </section>
 <section id="messages">
 <h2>06. 에이전트끼리 메시지 보내기</h2>
@@ -297,9 +299,9 @@ export MEMORY_API_KEY=your-agent-key</code>
 <span>© 2026 Vibe Memory</span>
 </div>
 </footer>
-a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[["$","link",null,{"rel":"stylesheet","href":"/assets/guide.css?v=20261030-totp-1"}],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$b"}}],[]],null,"$Lc"]}],"p":"$@d","v":null,"s":"$6"}}]]
+a:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[[["$","link",null,{"rel":"stylesheet","href":"/assets/guide.css?v=20261030-v016-1"}],["$","div",null,{"dangerouslySetInnerHTML":{"__html":"$b"}}],[]],null,"$Lc"]}],"p":"$@d","v":null,"s":"$6"}}]]
 7:[["children",{"s":"guide","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}]}]]}],"p":"$@8","v":"$9","s":"$6"},"c":"$Qa"}]]
-0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-totp-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-totp-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-totp-1"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-totp-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-totp-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[null,["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$Lf",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Connection guide — Vibe Memory"}],["$","meta","1",{"name":"description","content":"Connect Vibe Memory CLI Skills, keyword search, and byte-stream uploads."}],["$","link","2",{"rel":"canonical","href":"https://vibememory.io/guide.html"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L13","4",{}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"Y7vUpFJk-VDV1AXA-cF7x"}
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-v016-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-v016-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-v016-1"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-v016-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-v016-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","template":["$","$L4",null,{}],"notFound":[[null,["$","div",null,{"dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]]}]}]]}]]}],"p":"$@5","v":null,"s":"$6"},"c":"$Q7"},"h":{"r":["$","$1","h",{"children":[null,["$","$Lf",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Connection guide — Vibe Memory"}],["$","meta","1",{"name":"description","content":"Connect Vibe Memory CLI Skills, keyword search, and byte-stream uploads."}],["$","link","2",{"rel":"canonical","href":"https://vibememory.io/guide.html"}],["$","link","3",{"rel":"icon","href":"/assets/favicon.svg"}],["$","$L13","4",{}]]}]}],null]}],null]}],"p":"$@14","v":null,"s":"$6"}},"a":"$@15","u":"$@16","b":"Ge3_6l38852QFJvS6DQdG"}
 17:I[97367,["$2"],"OutletBoundary"]
 c:["$","$L17",null,{"children":["$","$12",null,{"name":"Next.MetadataOutlet","children":"$@18"}]}]
 6:300

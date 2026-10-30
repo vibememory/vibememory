@@ -33,11 +33,14 @@ RELATION_FIELDS = (
     "creator_agent_name",
     "confidence",
     "evidence_record_ids",
+    "evidence",
+    "evidence_coverage",
+    "input_manifest_id",
     "extraction_method",
     "extraction_version",
 )
 
-JSON_FIELDS = {"metadata", "provenance", "security_history", "history"}
+JSON_FIELDS = {"metadata", "provenance", "security_history", "history", "evidence"}
 
 
 def value_bytes(value) -> int:

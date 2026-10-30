@@ -213,6 +213,15 @@ def read_legacy(data_dir: Path):
                     "version": relation["version"],
                     "created_at": relation["created_at"],
                     "history": json.loads(relation["history"]),
+                    "creator_agent_id": relation.get("creator_agent_id") or "unknown",
+                    "creator_agent_name": relation.get("creator_agent_name") or "Unknown agent",
+                    "confidence": relation.get("confidence"),
+                    "evidence_record_ids": relation.get("evidence_record_ids") or [],
+                    "evidence": json.loads(relation.get("evidence") or "[]"),
+                    "evidence_coverage": relation.get("evidence_coverage") or "unknown",
+                    "input_manifest_id": relation.get("input_manifest_id") or None,
+                    "extraction_method": relation.get("extraction_method") or "",
+                    "extraction_version": relation.get("extraction_version") or "",
                 }
             )
         for row in _kuzu_rows(connection, "MATCH (e:ChangeEvent) RETURN e ORDER BY e.id"):
@@ -362,8 +371,10 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
             for relation in payload["relations"]:
                 connection.execute(
                     """INSERT INTO relations(
-                        owner,id,source_id,target_id,relation,reason,status,version,created_at,history
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        owner,id,source_id,target_id,relation,reason,status,version,created_at,history,
+                        creator_agent_id,creator_agent_name,confidence,evidence_record_ids,evidence,
+                        evidence_coverage,input_manifest_id,extraction_method,extraction_version
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
                         relation["owner"],
                         relation["id"],
@@ -375,6 +386,15 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                         relation["version"],
                         relation["created_at"],
                         Jsonb(relation["history"]),
+                        relation.get("creator_agent_id") or "unknown",
+                        relation.get("creator_agent_name") or "Unknown agent",
+                        relation.get("confidence"),
+                        relation.get("evidence_record_ids") or [],
+                        Jsonb(relation.get("evidence") or []),
+                        relation.get("evidence_coverage") or "unknown",
+                        relation.get("input_manifest_id") or None,
+                        relation.get("extraction_method") or "",
+                        relation.get("extraction_version") or "",
                     ),
                 )
             for operation in payload["batch_operations"]:

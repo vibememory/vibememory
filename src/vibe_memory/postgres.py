@@ -119,8 +119,12 @@ class PostgresDatabase:
             state TEXT NOT NULL,
             user_id TEXT REFERENCES users(id) ON DELETE CASCADE,
             polled_at BIGINT NOT NULL,
-            vault_access BOOLEAN NOT NULL DEFAULT FALSE
+            vault_access BOOLEAN NOT NULL DEFAULT FALSE,
+            upgrade_key_id TEXT,
+            upgrade_user_id TEXT
         );
+        ALTER TABLE device_logins ADD COLUMN IF NOT EXISTS upgrade_key_id TEXT;
+        ALTER TABLE device_logins ADD COLUMN IF NOT EXISTS upgrade_user_id TEXT;
         CREATE TABLE IF NOT EXISTS auth_attempts (
             key TEXT PRIMARY KEY,
             count INTEGER NOT NULL,
@@ -273,6 +277,10 @@ class PostgresDatabase:
             creator_agent_name TEXT NOT NULL DEFAULT 'Unknown agent',
             confidence DOUBLE PRECISION CHECK (confidence >= 0 AND confidence <= 1),
             evidence_record_ids TEXT[] NOT NULL DEFAULT '{{}}',
+            evidence JSONB NOT NULL DEFAULT '[]'::jsonb,
+            evidence_coverage TEXT NOT NULL DEFAULT 'unknown'
+                CHECK (evidence_coverage IN ('selected','partial','unknown')),
+            input_manifest_id TEXT,
             extraction_method TEXT NOT NULL DEFAULT '',
             extraction_version TEXT NOT NULL DEFAULT '',
             PRIMARY KEY(owner, id),
@@ -288,6 +296,9 @@ class PostgresDatabase:
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS creator_agent_name TEXT NOT NULL DEFAULT 'Unknown agent';
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS confidence DOUBLE PRECISION;
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence_record_ids TEXT[] NOT NULL DEFAULT '{{}}';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence_coverage TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS input_manifest_id TEXT;
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_method TEXT NOT NULL DEFAULT '';
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_version TEXT NOT NULL DEFAULT '';
 

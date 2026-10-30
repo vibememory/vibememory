@@ -18,17 +18,19 @@ async function start() {
   document.querySelector('#agent-name').textContent = data.name;
   document.querySelector('#user-code').textContent = code.toUpperCase();
   document.querySelector('#vault-scope').hidden = !data.vault_access;
-  statusBox.textContent = '이 에이전트의 연결을 승인할까요?';
+  document.querySelector('#vault-access').checked = Boolean(data.vault_access);
+  statusBox.textContent = data.upgrade ? '기존 에이전트의 Vault 권한 변경을 승인할까요?' : '이 에이전트의 연결을 승인할까요?';
   document.querySelector('#approval').hidden = false;
 }
 async function decide(approved) {
   for (const button of document.querySelectorAll('button')) button.disabled = true;
   try {
-    const response = await fetch('/auth/device/approve', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_code: code, approved})});
+    const vaultAccess = approved && !document.querySelector('#vault-scope').hidden && document.querySelector('#vault-access').checked;
+    const response = await fetch('/auth/device/approve', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({user_code: code, approved, vault_access: vaultAccess})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || '연결을 처리할 수 없습니다.');
     document.querySelector('#approval').hidden = true;
-    statusBox.textContent = approved ? '승인했습니다. 에이전트가 자동으로 연결을 완료합니다. 에이전트 대화로 돌아가세요.' : '연결 요청을 거절했습니다.';
+    statusBox.textContent = approved ? `승인했습니다. Vault 권한: ${data.vault_access ? '허용' : '허용하지 않음'}. 에이전트가 자동으로 결과를 확인합니다.` : '연결 요청을 거절했습니다.';
   } catch (error) {
     statusBox.textContent = error.message;
     for (const button of document.querySelectorAll('button')) button.disabled = false;

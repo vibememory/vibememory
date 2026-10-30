@@ -230,6 +230,97 @@ def test_relation_claims_preserve_authenticated_origin_evidence_and_filters(clie
     assert missing_evidence.status_code == 404
 
 
+def test_relation_evidence_snapshot_preserves_observed_record_version(client):
+    source = memory(client, "source", keywords=["source"])
+    target = memory(client, "target", keywords=["target"])
+    evidence = memory(client, "observed evidence", keywords=["evidence"])
+    manifest = memory(client, "selected inputs only", keywords=["input manifest"])
+    snapshot = {
+        "record_id": evidence["id"],
+        "version": evidence["version"],
+        "content_hash": evidence["content_hash"],
+        "observed_at": "2026-10-30T01:19:37+00:00",
+        "location": "page 3, paragraph 2",
+        "range_start": 10,
+        "range_end": 42,
+    }
+    payload = {
+        "source_id": source["id"],
+        "target_id": target["id"],
+        "relation": "SUPPORTED_BY",
+        "reason": "The selected evidence supports this claim",
+        "evidence": [snapshot],
+        "evidence_coverage": "selected",
+        "input_manifest_id": manifest["id"],
+    }
+    created = client.post("/v1/relations", json=payload)
+    assert created.status_code == 201, created.text
+    claim = created.json()
+    assert claim["evidence"] == [{**snapshot, "observed_at": "2026-10-30T01:19:37Z"}]
+    assert claim["evidence_record_ids"] == [evidence["id"]]
+    assert claim["evidence_coverage"] == "selected"
+    assert claim["input_manifest_id"] == manifest["id"]
+    assert claim["evidence_status"][0]["comparison"] == "current"
+    assert claim["evidence_status"][0]["lifecycle"] == "active"
+
+    updated = client.patch(
+        "/v1/records/" + evidence["id"],
+        json={"expected_version": 1, "content": "changed evidence"},
+    )
+    assert updated.status_code == 200, updated.text
+    current = updated.json()
+    assert current["version"] == 2 and current["content_hash"] != snapshot["content_hash"]
+    stored = client.get("/v1/relations").json()["items"][0]
+    assert stored["evidence"][0]["version"] == 1
+    assert stored["evidence"][0]["content_hash"] == snapshot["content_hash"]
+    assert stored["evidence_status"][0]["comparison"] == "changed"
+    assert stored["evidence_status"][0]["current_version"] == 2
+
+    multi_version = client.post(
+        "/v1/relations",
+        json={
+            **payload,
+            "relation": "CHANGED_FROM",
+            "evidence": [
+                snapshot,
+                {
+                    **snapshot,
+                    "version": 2,
+                    "content_hash": current["content_hash"],
+                    "observed_at": "2026-10-30T01:29:37Z",
+                    "location": "updated record",
+                },
+            ],
+            "evidence_coverage": "partial",
+        },
+    )
+    assert multi_version.status_code == 201, multi_version.text
+    assert [item["version"] for item in multi_version.json()["evidence"]] == [1, 2]
+    assert multi_version.json()["evidence_record_ids"] == [evidence["id"]]
+    assert [item["comparison"] for item in multi_version.json()["evidence_status"]] == [
+        "changed",
+        "current",
+    ]
+
+    bad_hash = client.post(
+        "/v1/relations",
+        json={**payload, "evidence": [{**snapshot, "version": 2, "content_hash": "0" * 64}]},
+    )
+    assert bad_hash.status_code == 422
+    future = client.post(
+        "/v1/relations",
+        json={**payload, "evidence": [{**snapshot, "version": 3}]},
+    )
+    assert future.status_code == 422
+    archived = client.post(
+        "/v1/records/" + evidence["id"] + "/archive",
+        json={"expected_version": 2, "reason": "lifecycle status test"},
+    )
+    assert archived.status_code == 200, archived.text
+    lifecycle = client.get("/v1/relations").json()["items"][0]["evidence_status"][0]
+    assert lifecycle["lifecycle"] == "archived"
+
+
 def test_batch_writes_are_idempotent_partial_and_compact(client):
     entities_payload = {
         "items": [

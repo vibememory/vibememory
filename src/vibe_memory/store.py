@@ -59,6 +59,7 @@ class Store:
             id STRING, relation STRING, reason STRING, status STRING, version INT64,
             created_at STRING, history STRING, creator_agent_id STRING,
             creator_agent_name STRING, confidence DOUBLE, evidence_record_ids STRING[],
+            evidence STRING, evidence_coverage STRING, input_manifest_id STRING,
             extraction_method STRING, extraction_version STRING)""")
         self.query("CREATE NODE TABLE IF NOT EXISTS Meta(key STRING PRIMARY KEY, value STRING)")
         self.query("""CREATE NODE TABLE IF NOT EXISTS FeatureRequest(
@@ -130,6 +131,9 @@ class Store:
             "creator_agent_name": ("STRING", "'Unknown agent'"),
             "confidence": ("DOUBLE", "NULL"),
             "evidence_record_ids": ("STRING[]", "[]"),
+            "evidence": ("STRING", "'[]'"),
+            "evidence_coverage": ("STRING", "'unknown'"),
+            "input_manifest_id": ("STRING", "''"),
             "extraction_method": ("STRING", "''"),
             "extraction_version": ("STRING", "''"),
         }
@@ -936,6 +940,9 @@ class Store:
                     creator_agent_name=edge["creator_agent_name"],
                     confidence=edge["confidence"],
                     evidence_record_ids=edge["evidence_record_ids"],
+                    evidence=edge["evidence"],
+                    evidence_coverage=edge["evidence_coverage"],
+                    input_manifest_id=edge["input_manifest_id"],
                     extraction_method=edge["extraction_method"],
                     extraction_version=edge["extraction_version"],
                 )
@@ -995,6 +1002,9 @@ class Store:
         creator_agent_name="Unknown agent",
         confidence=None,
         evidence_record_ids=None,
+        evidence=None,
+        evidence_coverage="unknown",
+        input_manifest_id="",
         extraction_method="",
         extraction_version="",
     ):
@@ -1018,6 +1028,8 @@ class Store:
                 version: 1, created_at: $created, history: $history,
                 creator_agent_id: $creator_agent_id, creator_agent_name: $creator_agent_name,
                 confidence: $confidence, evidence_record_ids: $evidence_record_ids,
+                evidence: $evidence, evidence_coverage: $evidence_coverage,
+                input_manifest_id: $input_manifest_id,
                 extraction_method: $extraction_method,
                 extraction_version: $extraction_version}]->(b)""",
             dict(
@@ -1033,6 +1045,9 @@ class Store:
                 creator_agent_name=creator_agent_name,
                 confidence=confidence,
                 evidence_record_ids=evidence_record_ids or [],
+                evidence=json.dumps(evidence or [], ensure_ascii=False),
+                evidence_coverage=evidence_coverage,
+                input_manifest_id=input_manifest_id or "",
                 extraction_method=extraction_method,
                 extraction_version=extraction_version,
             ),
@@ -1051,6 +1066,19 @@ class Store:
             self.get(owner, data.target_id)
             for evidence_id in data.evidence_record_ids:
                 self.get(owner, evidence_id)
+            for reference in data.evidence:
+                current = self.get(owner, reference.record_id)
+                if reference.version > current["version"]:
+                    raise ValueError("evidence version is newer than the current record")
+                if (
+                    reference.version == current["version"]
+                    and reference.content_hash != current["content_hash"]
+                ):
+                    raise ValueError("evidence content_hash does not match the record version")
+            if data.input_manifest_id:
+                manifest = self.get(owner, data.input_manifest_id)
+                if manifest["kind"] not in {"memory", "document", "entity"}:
+                    raise ValueError("input_manifest_id must reference a normal memory record")
             if data.source_id == data.target_id:
                 raise ValueError("A relationship must connect two distinct records")
             id = self._link(
@@ -1063,6 +1091,9 @@ class Store:
                 creator_agent_name,
                 data.confidence,
                 data.evidence_record_ids,
+                [reference.model_dump(mode="json") for reference in data.evidence],
+                data.evidence_coverage,
+                data.input_manifest_id or "",
                 data.extraction_method,
                 data.extraction_version,
             )
@@ -1089,6 +1120,53 @@ class Store:
             raise NotFound()
         return edge
 
+    def _attach_evidence_status(self, owner, edges):
+        evidence_ids = list(
+            dict.fromkeys(
+                reference["record_id"]
+                for edge in edges
+                for reference in edge.get("evidence", [])
+            )
+        )
+        current = {}
+        if evidence_ids:
+            rows = self.query(
+                """MATCH (n:Item {owner: $owner}) WHERE n.id IN $ids
+                RETURN n.id AS id,n.version AS version,n.content_hash AS content_hash,
+                    n.archived_at AS archived_at""",
+                {"owner": owner, "ids": evidence_ids},
+            )
+            current = {row["id"]: row for row in rows}
+        for edge in edges:
+            statuses = []
+            for reference in edge.get("evidence", []):
+                record = current.get(reference["record_id"])
+                lifecycle = (
+                    "deleted"
+                    if record is None
+                    else "archived"
+                    if record.get("archived_at")
+                    else "active"
+                )
+                same = bool(
+                    record
+                    and record["version"] == reference["version"]
+                    and record.get("content_hash") == reference["content_hash"]
+                )
+                statuses.append(
+                    {
+                        "record_id": reference["record_id"],
+                        "observed_version": reference["version"],
+                        "observed_content_hash": reference["content_hash"],
+                        "current_version": record["version"] if record else None,
+                        "current_content_hash": record.get("content_hash") if record else None,
+                        "lifecycle": lifecycle,
+                        "comparison": "current" if same else "changed" if record else "unavailable",
+                    }
+                )
+            edge["evidence_status"] = statuses
+        return edges
+
     def relations(
         self,
         owner,
@@ -1113,6 +1191,9 @@ class Store:
                 r.creator_agent_name AS creator_agent_name,
                 r.confidence AS confidence,
                 r.evidence_record_ids AS evidence_record_ids,
+                r.evidence AS evidence,
+                r.evidence_coverage AS evidence_coverage,
+                r.input_manifest_id AS input_manifest_id,
                 r.extraction_method AS extraction_method,
                 r.extraction_version AS extraction_version
             ORDER BY r.created_at,r.id""",
@@ -1124,6 +1205,9 @@ class Store:
             row["creator_agent_id"] = row.get("creator_agent_id") or "unknown"
             row["creator_agent_name"] = row.get("creator_agent_name") or "Unknown agent"
             row["evidence_record_ids"] = row.get("evidence_record_ids") or []
+            row["evidence"] = json.loads(row.get("evidence") or "[]")
+            row["evidence_coverage"] = row.get("evidence_coverage") or "unknown"
+            row["input_manifest_id"] = row.get("input_manifest_id") or ""
             row["extraction_method"] = row.get("extraction_method") or ""
             row["extraction_version"] = row.get("extraction_version") or ""
             if creator_agent_id and row["creator_agent_id"] != creator_agent_id:
@@ -1150,8 +1234,8 @@ class Store:
                 claim_id for claim_id in groups[edge["claim_group"]] if claim_id != edge["id"]
             ]
         if limit is None:
-            return result
-        return result[cursor : cursor + limit]
+            return self._attach_evidence_status(owner, result)
+        return self._attach_evidence_status(owner, result[cursor : cursor + limit])
 
     def update_link(self, owner, id, data):
         with self.transaction():
@@ -1402,6 +1486,9 @@ class Store:
                     r.creator_agent_name AS creator_agent_name,
                     r.confidence AS confidence,
                     r.evidence_record_ids AS evidence_record_ids,
+                    r.evidence AS evidence,
+                    r.evidence_coverage AS evidence_coverage,
+                    r.input_manifest_id AS input_manifest_id,
                     r.extraction_method AS extraction_method,
                     r.extraction_version AS extraction_version""",
                 {"owner": owner},

@@ -28,6 +28,7 @@ from .auth import (
     SESSION_SECONDS,
     AuthStore,
     Credentials,
+    DeviceStartInput,
     KeyAccessUpdate,
     KeyInput,
     LoginSecondFactor,
@@ -102,6 +103,7 @@ class DeviceApproval(BaseModel):
     model_config = ConfigDict(extra="forbid")
     user_code: str = Field(pattern=r"^[A-Fa-f0-9]{10}$")
     approved: bool
+    vault_access: bool | None = None
 
 
 class OAuthRegistration(BaseModel):
@@ -153,7 +155,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.15.0",
+        version="0.16.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -404,9 +406,31 @@ def create_app(settings=None, embedder=None):
         return response
 
     @app.post("/auth/device/start", tags=["account"])
-    def start_device(data: KeyInput, request: Request):
+    def start_device(
+        data: DeviceStartInput,
+        request: Request,
+        credentials: HTTPAuthorizationCredentials | None = Depends(auth),
+    ):
         accounts.throttle("device:" + (request.client.host if request.client else "unknown"), 20)
-        result = accounts.start_device(data.name, data.vault_access)
+        upgrade_key_id = None
+        upgrade_user_id = None
+        if data.upgrade:
+            if not data.vault_access:
+                raise HTTPException(422, "Permission upgrade requires vault_access=true")
+            if not credentials or credentials.scheme.lower() != "bearer":
+                raise HTTPException(401, "An existing agent connection is required for upgrade")
+            principal = accounts.principal_for_key(credentials.credentials)
+            if not principal:
+                raise HTTPException(401, "Existing agent connection is invalid or revoked")
+            upgrade_key_id = principal["key_id"]
+            upgrade_user_id = principal["user_id"]
+        result = accounts.start_device(
+            data.name,
+            data.vault_access,
+            data.expires_in,
+            upgrade_key_id,
+            upgrade_user_id,
+        )
         result["verification_uri_complete"] = (
             settings.public_origin.rstrip("/") + "/connect?code=" + result["user_code"]
         )
@@ -418,11 +442,13 @@ def create_app(settings=None, embedder=None):
 
     @app.get("/auth/device", tags=["account"])
     def device_info(code: str = Query(pattern=r"^[A-Fa-f0-9]{10}$"), user=Depends(browser_user)):
-        return accounts.device_info(code)
+        return accounts.device_info(code, user["id"])
 
     @app.post("/auth/device/approve", tags=["account"])
     def approve_device(data: DeviceApproval, user=Depends(browser_user)):
-        return accounts.approve_device(user["id"], data.user_code, data.approved)
+        return accounts.approve_device(
+            user["id"], data.user_code, data.approved, data.vault_access
+        )
 
     @app.post("/auth/signup", tags=["account"])
     def signup(data: Signup, request: Request):

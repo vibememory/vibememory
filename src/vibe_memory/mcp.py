@@ -38,7 +38,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.15.0"
+SERVER_VERSION = "0.16.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -379,7 +379,8 @@ TOOLS = [
         "Store an inferred relationship",
         "Use this when evidence supports a directed relationship between two existing record "
         "IDs. Supply an uppercase relation identifier, a concise evidence reason, and when known "
-        "a confidence score, evidence record IDs, and extraction method/version. The server "
+        "a confidence score, version/hash/UTC-pinned evidence references, explicit evidence "
+        "coverage, an optional normal-record input manifest, and extraction method/version. The server "
         "records this authenticated connection as the creator and preserves parallel claims.",
         RelationInput,
         "memory:write",

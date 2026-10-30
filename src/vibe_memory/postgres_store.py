@@ -141,6 +141,9 @@ class PostgresStore:
         result["creator_agent_id"] = result.get("creator_agent_id") or "unknown"
         result["creator_agent_name"] = result.get("creator_agent_name") or "Unknown agent"
         result["evidence_record_ids"] = result.get("evidence_record_ids") or []
+        result["evidence"] = result.get("evidence") or []
+        result["evidence_coverage"] = result.get("evidence_coverage") or "unknown"
+        result["input_manifest_id"] = result.get("input_manifest_id") or ""
         result["extraction_method"] = result.get("extraction_method") or ""
         result["extraction_version"] = result.get("extraction_version") or ""
         result["claim_group"] = f"{result['source_id']}:{result['target_id']}"
@@ -838,6 +841,19 @@ class PostgresStore:
             self.get(owner, data.target_id)
             for evidence_id in data.evidence_record_ids:
                 self.get(owner, evidence_id)
+            for reference in data.evidence:
+                current = self.get(owner, reference.record_id)
+                if reference.version > current["version"]:
+                    raise ValueError("evidence version is newer than the current record")
+                if (
+                    reference.version == current["version"]
+                    and reference.content_hash != current["content_hash"]
+                ):
+                    raise ValueError("evidence content_hash does not match the record version")
+            if data.input_manifest_id:
+                manifest = self.get(owner, data.input_manifest_id)
+                if manifest["kind"] not in {"memory", "document", "entity"}:
+                    raise ValueError("input_manifest_id must reference a normal memory record")
             if data.source_id == data.target_id:
                 raise ValueError("A relationship must connect two distinct records")
             id, created = uid(), now()
@@ -855,8 +871,8 @@ class PostgresStore:
                 """INSERT INTO relations(
                     owner,id,source_id,target_id,relation,reason,status,version,created_at,history,
                     creator_agent_id,creator_agent_name,confidence,evidence_record_ids,
-                    extraction_method,extraction_version
-                ) VALUES(%s,%s,%s,%s,%s,%s,'active',1,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    evidence,evidence_coverage,input_manifest_id,extraction_method,extraction_version
+                ) VALUES(%s,%s,%s,%s,%s,%s,'active',1,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     owner,
                     id,
@@ -870,6 +886,9 @@ class PostgresStore:
                     creator_agent_name,
                     data.confidence,
                     data.evidence_record_ids,
+                    Jsonb([reference.model_dump(mode="json") for reference in data.evidence]),
+                    data.evidence_coverage,
+                    data.input_manifest_id,
                     data.extraction_method,
                     data.extraction_version,
                 ),
@@ -893,7 +912,8 @@ class PostgresStore:
             row = connection.execute(
                 """SELECT e.source_id,e.target_id,e.id,e.relation,e.reason,e.status,
                 e.version,e.created_at,e.history,e.creator_agent_id,e.creator_agent_name,
-                e.confidence,e.evidence_record_ids,e.extraction_method,e.extraction_version
+                e.confidence,e.evidence_record_ids,e.evidence,e.evidence_coverage,
+                e.input_manifest_id,e.extraction_method,e.extraction_version
                 FROM relations e
                 JOIN records a ON a.owner=e.owner AND a.id=e.source_id
                 JOIN records b ON b.owner=e.owner AND b.id=e.target_id
@@ -904,6 +924,7 @@ class PostgresStore:
         if not row:
             raise NotFound()
         result = self._relation(row)
+        self._attach_evidence_status(owner, [result])
         result["parallel_claim_ids"] = [
             edge["id"]
             for edge in self.relations(
@@ -915,6 +936,53 @@ class PostgresStore:
             if edge["id"] != id
         ]
         return result
+
+    def _attach_evidence_status(self, owner, edges):
+        evidence_ids = list(
+            dict.fromkeys(
+                reference["record_id"]
+                for edge in edges
+                for reference in edge.get("evidence", [])
+            )
+        )
+        current = {}
+        if evidence_ids:
+            with self._connection() as connection:
+                rows = connection.execute(
+                    """SELECT id,version,content_hash,archived_at FROM records
+                    WHERE owner=%s AND id=ANY(%s)""",
+                    (owner, evidence_ids),
+                ).fetchall()
+            current = {row["id"]: row for row in rows}
+        for edge in edges:
+            statuses = []
+            for reference in edge.get("evidence", []):
+                record = current.get(reference["record_id"])
+                lifecycle = (
+                    "deleted"
+                    if record is None
+                    else "archived"
+                    if record.get("archived_at")
+                    else "active"
+                )
+                same = bool(
+                    record
+                    and record["version"] == reference["version"]
+                    and record.get("content_hash") == reference["content_hash"]
+                )
+                statuses.append(
+                    {
+                        "record_id": reference["record_id"],
+                        "observed_version": reference["version"],
+                        "observed_content_hash": reference["content_hash"],
+                        "current_version": record["version"] if record else None,
+                        "current_content_hash": record.get("content_hash") if record else None,
+                        "lifecycle": lifecycle,
+                        "comparison": "current" if same else "changed" if record else "unavailable",
+                    }
+                )
+            edge["evidence_status"] = statuses
+        return edges
 
     def relations(
         self,
@@ -953,7 +1021,8 @@ class PostgresStore:
             rows = connection.execute(
                 """SELECT e.source_id,e.target_id,e.id,e.relation,e.reason,e.status,
                 e.version,e.created_at,e.history,e.creator_agent_id,e.creator_agent_name,
-                e.confidence,e.evidence_record_ids,e.extraction_method,e.extraction_version
+                e.confidence,e.evidence_record_ids,e.evidence,e.evidence_coverage,
+                e.input_manifest_id,e.extraction_method,e.extraction_version
                 FROM relations e
                 JOIN records a ON a.owner=e.owner AND a.id=e.source_id
                 JOIN records b ON b.owner=e.owner AND b.id=e.target_id
@@ -969,7 +1038,7 @@ class PostgresStore:
                 + page,
                 parameters,
             ).fetchall()
-        result = [self._relation(row) for row in rows]
+        result = self._attach_evidence_status(owner, [self._relation(row) for row in rows])
         groups = {}
         for edge in result:
             groups.setdefault(edge["claim_group"], []).append(edge["id"])
@@ -1358,6 +1427,8 @@ class PostgresStore:
                     + octet_length(creator_agent_name)
                     + octet_length(COALESCE(confidence::text,''))
                     + octet_length(to_jsonb(evidence_record_ids)::text)
+                    + octet_length(evidence::text) + octet_length(evidence_coverage)
+                    + octet_length(COALESCE(input_manifest_id,''))
                     + octet_length(extraction_method) + octet_length(extraction_version)
                 ),0)::bigint AS bytes FROM relations WHERE owner=%s""",
                 (owner,),

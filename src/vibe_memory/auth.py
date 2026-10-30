@@ -61,6 +61,11 @@ class KeyInput(BaseModel):
     vault_access: bool = False
 
 
+class DeviceStartInput(KeyInput):
+    expires_in: int = Field(default=300, ge=60, le=900)
+    upgrade: bool = False
+
+
 class KeyAccessUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     vault_access: bool
@@ -161,7 +166,8 @@ class AuthStore:
                     device_hash TEXT PRIMARY KEY, user_hash TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL,
                     user_id TEXT REFERENCES users(id) ON DELETE CASCADE, polled_at INTEGER NOT NULL,
-                    vault_access INTEGER NOT NULL DEFAULT 0);
+                    vault_access INTEGER NOT NULL DEFAULT 0,
+                    upgrade_key_id TEXT, upgrade_user_id TEXT);
                 CREATE TABLE IF NOT EXISTS auth_attempts (
                     key TEXT PRIMARY KEY, count INTEGER NOT NULL, resets_at INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS user_totp (
@@ -190,6 +196,10 @@ class AuthStore:
                 db.execute(
                     "ALTER TABLE device_logins ADD COLUMN vault_access INTEGER NOT NULL DEFAULT 0"
                 )
+            if "upgrade_key_id" not in device_columns:
+                db.execute("ALTER TABLE device_logins ADD COLUMN upgrade_key_id TEXT")
+            if "upgrade_user_id" not in device_columns:
+                db.execute("ALTER TABLE device_logins ADD COLUMN upgrade_user_id TEXT")
         path.chmod(0o600)
         self.dummy_salt = secrets.token_hex(16)
         self.dummy_hash = password_hash("not-a-real-password", self.dummy_salt)
@@ -608,16 +618,25 @@ class AuthStore:
                 raise HTTPException(404, "키를 찾을 수 없습니다.")
         return {"id": id, "vault_access": bool(vault_access)}
 
-    def start_device(self, name, vault_access=False):
+    def start_device(
+        self,
+        name,
+        vault_access=False,
+        expires_in=300,
+        upgrade_key_id=None,
+        upgrade_user_id=None,
+    ):
         device = secrets.token_urlsafe(36)
         code = secrets.token_hex(5).upper()
-        expires = utc_epoch_seconds() + 300
+        expires_in = max(60, min(int(expires_in), 900))
+        expires = utc_epoch_seconds() + expires_in
         with self.connection() as db:
             db.execute("DELETE FROM device_logins WHERE expires_at <= ?", (utc_epoch_seconds(),))
             db.execute(
                 """INSERT INTO device_logins(
-                    device_hash,user_hash,name,expires_at,state,user_id,polled_at,vault_access
-                ) VALUES(?,?,?,?,?,?,?,?)""",
+                    device_hash,user_hash,name,expires_at,state,user_id,polled_at,vault_access,
+                    upgrade_key_id,upgrade_user_id
+                ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
                 (
                     digest(device),
                     digest(code),
@@ -627,36 +646,69 @@ class AuthStore:
                     None,
                     0,
                     bool(vault_access),
+                    upgrade_key_id,
+                    upgrade_user_id,
                 ),
             )
-        return {"device_code": device, "user_code": code, "expires_in": 300, "interval": 3}
+        return {
+            "device_code": device,
+            "user_code": code,
+            "expires_in": expires_in,
+            "interval": 3,
+            "upgrade": bool(upgrade_key_id),
+        }
 
-    def device_info(self, code):
+    def device_info(self, code, user_id=None):
         with self.connection() as db:
             row = db.execute(
-                """SELECT name,expires_at,state,vault_access FROM device_logins
+                """SELECT name,expires_at,state,vault_access,upgrade_key_id,upgrade_user_id
+                FROM device_logins
                 WHERE user_hash=?""",
                 (digest(code.upper()),),
             ).fetchone()
         if not row or row["expires_at"] <= utc_epoch_seconds():
             raise HTTPException(410, "연결 요청이 만료되었거나 존재하지 않습니다.")
-        return {**dict(row), "vault_access": bool(row["vault_access"])}
+        if row["upgrade_user_id"] and row["upgrade_user_id"] != user_id:
+            raise HTTPException(403, "이 권한 변경 요청은 다른 계정에 연결되어 있습니다.")
+        return {
+            "name": row["name"],
+            "expires_at": row["expires_at"],
+            "state": row["state"],
+            "vault_access": bool(row["vault_access"]),
+            "upgrade": bool(row["upgrade_key_id"]),
+        }
 
-    def approve_device(self, user_id, code, approved):
+    def approve_device(self, user_id, code, approved, vault_access=None):
         with self.connection() as db:
+            row = db.execute(
+                """SELECT vault_access,upgrade_user_id FROM device_logins
+                WHERE user_hash=? AND state='pending' AND expires_at>?""",
+                (digest(code.upper()), utc_epoch_seconds()),
+            ).fetchone()
+            if not row:
+                raise HTTPException(410, "이미 처리되었거나 만료된 연결 요청입니다.")
+            if row["upgrade_user_id"] and row["upgrade_user_id"] != user_id:
+                raise HTTPException(403, "이 권한 변경 요청은 다른 계정에 연결되어 있습니다.")
+            granted_vault_access = bool(row["vault_access"])
+            if vault_access is not None:
+                granted_vault_access = bool(vault_access) and granted_vault_access
             result = db.execute(
-                """UPDATE device_logins SET state=?,user_id=? WHERE user_hash=?
+                """UPDATE device_logins SET state=?,user_id=?,vault_access=? WHERE user_hash=?
                 AND state='pending' AND expires_at>?""",
                 (
                     "approved" if approved else "denied",
                     user_id,
+                    granted_vault_access,
                     digest(code.upper()),
                     utc_epoch_seconds(),
                 ),
             )
             if not result.rowcount:
                 raise HTTPException(410, "이미 처리되었거나 만료된 연결 요청입니다.")
-        return {"state": "approved" if approved else "denied"}
+        return {
+            "state": "approved" if approved else "denied",
+            "vault_access": granted_vault_access if approved else False,
+        }
 
     def poll_device(self, device):
         now = utc_epoch_seconds()
@@ -672,6 +724,24 @@ class AuthStore:
             db.execute("UPDATE device_logins SET polled_at=? WHERE device_hash=?", (now, digest(device)))
             if row["state"] == "pending":
                 return {"state": "pending"}
+            if row["upgrade_key_id"]:
+                result = db.execute(
+                    """UPDATE api_keys SET vault_access=?
+                    WHERE id=? AND user_id=?""",
+                    (bool(row["vault_access"]), row["upgrade_key_id"], row["user_id"]),
+                )
+                if not result.rowcount:
+                    raise HTTPException(410, "Agent connection no longer exists")
+                db.execute(
+                    "UPDATE device_logins SET state='used' WHERE device_hash=?",
+                    (digest(device),),
+                )
+                return {
+                    "state": "connected",
+                    "key_id": row["upgrade_key_id"],
+                    "upgraded": True,
+                    "vault_access": bool(row["vault_access"]),
+                }
             if db.execute("SELECT count(*) FROM api_keys WHERE user_id=?", (row["user_id"],)).fetchone()[0] >= 30:
                 raise HTTPException(422, "Too many agent keys; revoke an unused key in the console")
             token = "vm_" + secrets.token_urlsafe(36)
@@ -691,7 +761,13 @@ class AuthStore:
                 ),
             )
             db.execute("UPDATE device_logins SET state='used' WHERE device_hash=?", (digest(device),))
-        return {"state": "connected", "key": token, "key_id": key_id}
+        return {
+            "state": "connected",
+            "key": token,
+            "key_id": key_id,
+            "upgraded": False,
+            "vault_access": bool(row["vault_access"]),
+        }
 
     def revoke_key(self, user_id, id):
         with self.connection() as db:

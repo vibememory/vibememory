@@ -112,6 +112,40 @@ class EntityInput(RecordInput):
     description: str = Field(default="", max_length=10000)
 
 
+class EvidenceReference(Input):
+    """Agent-observed immutable coordinates for one relationship input."""
+
+    record_id: str = Field(min_length=1, max_length=100)
+    version: int = Field(ge=1)
+    content_hash: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
+    observed_at: datetime
+    location: str = Field(default="", max_length=1000)
+    range_start: int | None = Field(default=None, ge=0)
+    range_end: int | None = Field(default=None, ge=0)
+
+    @field_validator("content_hash")
+    @classmethod
+    def normalize_hash(cls, value):
+        return value.lower()
+
+    @field_validator("observed_at")
+    @classmethod
+    def normalize_observed_at(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def valid_range(self):
+        if (
+            self.range_start is not None
+            and self.range_end is not None
+            and self.range_end < self.range_start
+        ):
+            raise ValueError("range_end must be greater than or equal to range_start")
+        return self
+
+
 class RelationInput(Input):
     source_id: str = Field(min_length=1, max_length=100)
     target_id: str = Field(min_length=1, max_length=100)
@@ -121,6 +155,9 @@ class RelationInput(Input):
     evidence_record_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
         default_factory=list, max_length=50
     )
+    evidence: list[EvidenceReference] = Field(default_factory=list, max_length=50)
+    evidence_coverage: Literal["selected", "partial", "unknown"] = "unknown"
+    input_manifest_id: str | None = Field(default=None, min_length=1, max_length=100)
     extraction_method: str = Field(default="", max_length=100)
     extraction_version: str = Field(default="", max_length=100)
 
@@ -137,6 +174,27 @@ class RelationInput(Input):
         if len(values) != len(set(values)):
             raise ValueError("evidence_record_ids must be unique")
         return values
+
+    @model_validator(mode="after")
+    def combine_evidence_ids(self):
+        referenced = [item.record_id for item in self.evidence]
+        snapshots = [
+            (
+                item.record_id,
+                item.version,
+                item.content_hash,
+                item.location,
+                item.range_start,
+                item.range_end,
+            )
+            for item in self.evidence
+        ]
+        if len(snapshots) != len(set(snapshots)):
+            raise ValueError("evidence snapshots must be unique")
+        self.evidence_record_ids = list(
+            dict.fromkeys([*self.evidence_record_ids, *referenced])
+        )
+        return self
 
 
 class EntityCreateManyItem(EntityInput):

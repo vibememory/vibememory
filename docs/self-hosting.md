@@ -221,6 +221,17 @@ its SHA-256 revision manifest at `/skills/vibe-memory/manifest.json`, and the
 install ZIP at `/downloads/vibe-memory-skill.zip`. These public endpoints send
 `Cache-Control: no-store`; they contain no account data or credentials.
 
+The official hosted service additionally publishes the same archive, manifest,
+Skill file, and `SHA256SUMS` as GitHub release assets. Agent onboarding uses the
+stable `releases/latest/download/vibe-memory-skill.zip` URL so ordinary
+non-browser download clients do not depend on Cloudflare's browser-signature
+classification. A hosted `403` body containing `error code: 1010` means
+Cloudflare rejected the client signature before the Worker ran; it is not an API
+authentication failure. Operators should either use the checksummed release mirror or
+add a narrowly scoped Browser Integrity Check exception for only the public Skill
+distribution paths. Do not turn off TLS verification, imitate a browser User-Agent,
+or disable the site's security policy globally.
+
 Agents run `python3 scripts/memory.py sync` at the beginning of each task. This
 small compatibility bootstrap selects and verifies the current native Rust binary,
 then executes its `sync` command. Agents reread the instructions after an update.

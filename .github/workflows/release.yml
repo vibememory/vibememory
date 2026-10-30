@@ -1,0 +1,50 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+permissions:
+  contents: write
+jobs:
+  skill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.13.6"
+      - name: Verify release source
+        run: |
+          uv sync --frozen
+          uv run ruff check src ops tests scripts skills/vibe-memory/scripts
+          uv run pytest -q
+      - name: Verify tag and package Skill
+        run: |
+          python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          version = tomllib.loads(Path("pyproject.toml").read_text())["project"]["version"]
+          tag = "${{ github.ref_name }}"
+          if tag != "v" + version:
+              raise SystemExit(f"tag {tag} does not match project version {version}")
+          PY
+          python3 landing/scripts/package_skill.py
+      - name: Prepare checksummed release assets
+        run: |
+          mkdir release
+          cp landing/dist/downloads/vibe-memory-skill.zip release/
+          cp landing/dist/skills/vibe-memory/manifest.json release/
+          cp skills/vibe-memory/SKILL.md release/
+          cd release
+          sha256sum vibe-memory-skill.zip manifest.json SKILL.md > SHA256SUMS
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" release/* \
+            --repo "${{ github.repository }}" \
+            --title "Vibe Memory ${{ github.ref_name }}" \
+            --generate-notes \
+            --latest

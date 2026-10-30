@@ -1,13 +1,15 @@
 'use strict';
 window.vibeMemoryInstallPrompt = function vibeMemoryInstallPrompt() {
   const base = location.origin;
+  const agentArchive = 'https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip';
+  const agentSkill = 'https://github.com/vibememory/vibememory/releases/latest/download/SKILL.md';
   const locale = window.vmCurrentLocale?.() || 'en';
   const prompts = {
     ko: `Vibe Memory를 이 에이전트에 설치하고 내 계정에 연결해줘.
 
 서비스 URL: ${base}
-Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
-최신 지침: ${base}/skills/vibe-memory/SKILL.md
+Skill 다운로드: ${agentArchive}
+최신 지침: ${agentSkill}
 
 진행 방법:
 1. 위 ZIP 최신판으로 기존 vibe-memory Skill 폴더만 교체하고 새 SKILL.md 전체를 다시 읽어. 다른 Skill이나 프로젝트 파일은 건드리지 마.
@@ -22,8 +24,8 @@ Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
     en: `Install Vibe Memory for this agent and connect it to my account.
 
 Service URL: ${base}
-Skill download: ${base}/downloads/vibe-memory-skill.zip
-Latest instructions: ${base}/skills/vibe-memory/SKILL.md
+Skill download: ${agentArchive}
+Latest instructions: ${agentSkill}
 
 Steps:
 1. Replace only the existing vibe-memory Skill folder with the ZIP above, then read the entire new SKILL.md. Do not alter other Skills or project files.
@@ -38,8 +40,8 @@ Steps:
     zh: `为此智能体安装 Vibe Memory，并连接到我的账户。
 
 服务地址：${base}
-Skill 下载：${base}/downloads/vibe-memory-skill.zip
-最新说明：${base}/skills/vibe-memory/SKILL.md
+Skill 下载：${agentArchive}
+最新说明：${agentSkill}
 
 步骤：
 1. 仅用上述 ZIP 替换现有 vibe-memory Skill 文件夹，然后完整阅读新的 SKILL.md。不要修改其他 Skill 或项目文件。
@@ -54,8 +56,8 @@ Skill 下载：${base}/downloads/vibe-memory-skill.zip
     ja: `このエージェントに Vibe Memory をインストールし、私のアカウントへ接続して。
 
 サービスURL: ${base}
-Skillダウンロード: ${base}/downloads/vibe-memory-skill.zip
-最新の手順: ${base}/skills/vibe-memory/SKILL.md
+Skillダウンロード: ${agentArchive}
+最新の手順: ${agentSkill}
 
 手順:
 1. 上記ZIPで既存の vibe-memory Skill フォルダーだけを置き換え、新しい SKILL.md を最後まで読んで。他のSkillやプロジェクトファイルは変更しないで。
@@ -70,8 +72,8 @@ Skillダウンロード: ${base}/downloads/vibe-memory-skill.zip
     es: `Instala Vibe Memory para este agente y conéctalo con mi cuenta.
 
 URL del servicio: ${base}
-Descarga del Skill: ${base}/downloads/vibe-memory-skill.zip
-Instrucciones actuales: ${base}/skills/vibe-memory/SKILL.md
+Descarga del Skill: ${agentArchive}
+Instrucciones actuales: ${agentSkill}
 
 Pasos:
 1. Sustituye únicamente la carpeta existente del Skill vibe-memory con el ZIP anterior y lee el nuevo SKILL.md completo. No modifiques otros Skills ni archivos del proyecto.
@@ -86,8 +88,8 @@ Pasos:
     vi: `Cài đặt Vibe Memory cho tác nhân này và kết nối với tài khoản của tôi.
 
 URL dịch vụ: ${base}
-Tải Skill: ${base}/downloads/vibe-memory-skill.zip
-Hướng dẫn mới nhất: ${base}/skills/vibe-memory/SKILL.md
+Tải Skill: ${agentArchive}
+Hướng dẫn mới nhất: ${agentSkill}
 
 Các bước:
 1. Chỉ thay thế thư mục Skill vibe-memory hiện có bằng tệp ZIP trên, sau đó đọc toàn bộ SKILL.md mới. Không thay đổi Skill khác hoặc tệp dự án.
@@ -102,8 +104,8 @@ Các bước:
     th: `ติดตั้ง Vibe Memory ให้เอเจนต์นี้และเชื่อมต่อกับบัญชีของฉัน
 
 URL บริการ: ${base}
-ดาวน์โหลด Skill: ${base}/downloads/vibe-memory-skill.zip
-คำแนะนำล่าสุด: ${base}/skills/vibe-memory/SKILL.md
+ดาวน์โหลด Skill: ${agentArchive}
+คำแนะนำล่าสุด: ${agentSkill}
 
 ขั้นตอน:
 1. แทนที่เฉพาะโฟลเดอร์ Skill vibe-memory เดิมด้วย ZIP ด้านบน แล้วอ่าน SKILL.md ใหม่ทั้งหมด ห้ามแก้ไข Skill อื่นหรือไฟล์โครงการ

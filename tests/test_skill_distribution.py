@@ -41,6 +41,12 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
         )
 
     archive_response = client.get(manifest["archive"])
+    assert hashlib.sha256(archive_response.content).hexdigest() == manifest["archive_sha256"]
+    assert manifest["official_archive_mirror"] == (
+        "https://github.com/vibememory/vibememory/releases/latest/download/"
+        "vibe-memory-skill.zip"
+    )
+    assert manifest["official_manifest_mirror"].endswith("/manifest.json")
     with zipfile.ZipFile(io.BytesIO(archive_response.content)) as archive:
         assert set(archive.namelist()) == {
             "vibe-memory/SKILL.md",
@@ -122,6 +128,8 @@ def test_skill_commands_are_anchored_to_the_loaded_skill_directory():
     assert "automatically checkpoint meaningful state changes" in skill
     assert "run `python3 scripts/memory.py" not in skill
     assert "execute `./bin/vibe-memory`" not in skill
+    assert "releases/latest/download/vibe-memory-skill.zip" in skill
+    assert "Cloudflare `1010`" in skill
 
 
 def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monkeypatch):

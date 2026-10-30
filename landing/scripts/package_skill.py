@@ -29,15 +29,6 @@ for name, data in contents.items():
         destination = directory / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(data)
-manifest = {
-    "schema_version": 1,
-    "revision": revision,
-    "files": files,
-    "cli": legacy_cli,
-    "native_cli": native_cli,
-    "archive": "/downloads/vibe-memory-skill.zip",
-}
-(web / "skills/vibe-memory/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 output = web / "downloads/vibe-memory-skill.zip"
 output.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -46,4 +37,22 @@ with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         info.compress_type = zipfile.ZIP_DEFLATED
         info.external_attr = 0o100644 << 16
         archive.writestr(info, data)
+archive_sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
+manifest = {
+    "schema_version": 1,
+    "revision": revision,
+    "files": files,
+    "cli": legacy_cli,
+    "native_cli": native_cli,
+    "archive": "/downloads/vibe-memory-skill.zip",
+    "archive_sha256": archive_sha256,
+    "official_archive_mirror": (
+        "https://github.com/vibememory/vibememory/releases/latest/download/"
+        "vibe-memory-skill.zip"
+    ),
+    "official_manifest_mirror": (
+        "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
+    ),
+}
+(web / "skills/vibe-memory/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 print("Published skill revision " + revision)

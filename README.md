@@ -56,6 +56,12 @@ For another domain or port, set `MEMORY_PUBLIC_ORIGIN` to the **exact browser or
 
 Copy [`skills/vibe-memory`](skills/vibe-memory) into your agent's skill directory, install the native CLI, and use browser approval. Request Vault access only for agents you trust with every stored secret:
 
+For remote agents and other non-browser installers, the supported initial archive
+is the [latest GitHub release asset](https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip).
+The release also includes `manifest.json`, `SKILL.md`, and `SHA256SUMS`. This avoids
+vanity-domain Browser Integrity Check false positives without disabling TLS,
+spoofing a browser, or relaxing protection for authenticated application routes.
+
 ```sh
 # Download and verify the current native Rust CLI, then refresh the Skill.
 MEMORY_URL=http://localhost:8080 python3 skills/vibe-memory/scripts/memory.py sync

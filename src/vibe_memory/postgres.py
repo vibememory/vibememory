@@ -109,8 +109,11 @@ class PostgresDatabase:
             name TEXT NOT NULL,
             prefix TEXT NOT NULL,
             created_at BIGINT NOT NULL,
-            vault_access BOOLEAN NOT NULL DEFAULT FALSE
+            vault_access BOOLEAN NOT NULL DEFAULT FALSE,
+            feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE
         );
+        ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS
+            feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE;
         CREATE TABLE IF NOT EXISTS device_logins (
             device_hash TEXT PRIMARY KEY,
             user_hash TEXT UNIQUE NOT NULL,

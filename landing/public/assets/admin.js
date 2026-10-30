@@ -8,7 +8,7 @@ const statusInfo = status => ({
 }[status] || [status,'received']);
 const priorityLabel = priority => ({high:'높음',medium:'보통',low:'낮음'}[priority] || priority);
 let offset = 0, payload = {items:[],counts:{},total:0}, userOffset = 0;
-let usersPayload = {items:[],total:0}, toastTimer, userSearchTimer;
+let usersPayload = {items:[],total:0}, operatorPayload = {items:[]}, toastTimer, userSearchTimer;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers:{'Content-Type':'application/json'}, credentials:'same-origin', ...options});
@@ -81,6 +81,15 @@ async function loadUsers() {
   usersPayload = await api(`/v1/admin/users?limit=50&offset=${userOffset}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
   renderUsers();
 }
+function renderOperators() {
+  const target = $('#operator-agent-list');
+  target.innerHTML = operatorPayload.items.length ? operatorPayload.items.map(agent => `<article class="admin-operator-card"><div><span class="admin-operator-status ${agent.feature_request_operator ? 'enabled' : ''}">${agent.feature_request_operator ? '운영 권한 활성' : '일반 에이전트'}</span><strong>${h(agent.name)}</strong><small>${h(agent.prefix)} · 연결 ${h(utcDate(new Date(agent.created_at * 1000).toISOString()))}</small></div><dl><div><dt>기능 요청 전체 조회</dt><dd>${agent.feature_request_operator ? '허용' : '차단'}</dd></div><div><dt>기능 요청 처리·수정</dt><dd>${agent.feature_request_operator ? '허용' : '차단'}</dd></div><div><dt>Vault</dt><dd>${agent.vault_access ? '별도 허용됨' : '차단'}</dd></div></dl><button type="button" data-action="toggle-operator" data-id="${h(agent.id)}" data-enabled="${agent.feature_request_operator ? 'true' : 'false'}" class="${agent.feature_request_operator ? 'danger' : 'primary'}">${agent.feature_request_operator ? '운영 권한 회수' : '운영 에이전트로 승인'}</button></article>`).join('') : '<p class="admin-empty">연결된 에이전트가 없습니다. 콘솔에서 에이전트를 먼저 연결하세요.</p>';
+}
+async function loadOperators() {
+  $('#operator-agent-list').innerHTML = '<p class="admin-loading">에이전트 연결을 불러오는 중…</p>';
+  operatorPayload = await api('/v1/admin/operator-agents');
+  renderOperators();
+}
 function editRequest(owner,id) {
   const item = payload.items.find(record => record.owner_id === owner && record.id === id);
   if (!item) return;
@@ -99,13 +108,31 @@ function editRequest(owner,id) {
   $('#request-editor-error').hidden = true; window.VMUI.openModal($('#request-editor'));
 }
 
-document.addEventListener('click', event => {
+document.addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button) return;
   if (button.dataset.status !== undefined) {
     $('#status-filter').value = button.dataset.status; offset = 0; load().catch(showError); return;
   }
   if (button.dataset.action === 'edit') editRequest(button.dataset.owner, button.dataset.id);
+  if (button.dataset.action === 'toggle-operator') {
+    const enabled = button.dataset.enabled === 'true';
+    const accepted = await window.VMUI.confirm({
+      title: enabled ? '운영 권한을 회수할까요?' : '운영 에이전트로 승인할까요?',
+      message: enabled
+        ? '이 에이전트는 즉시 모든 사용자의 기능 요청 조회와 처리를 할 수 없게 됩니다.'
+        : '이 에이전트는 모든 사용자의 기능 요청 내용을 조회하고 처리 상태와 공개 결과를 수정할 수 있습니다. 기억·사용자·Vault 권한은 부여되지 않습니다.',
+      confirmLabel: enabled ? '권한 회수' : '운영 에이전트로 승인',
+      tone: enabled ? 'danger' : 'default'
+    });
+    if (!accepted) return;
+    button.disabled = true;
+    try {
+      await api('/v1/admin/operator-agents/' + encodeURIComponent(button.dataset.id), {method:'PATCH',body:JSON.stringify({feature_request_operator:!enabled})});
+      toast(enabled ? '운영 에이전트 권한을 회수했습니다.' : '운영 에이전트 권한을 승인했습니다.');
+      await loadOperators();
+    } catch (error) { showError(error); button.disabled = false; }
+  }
 });
 document.querySelectorAll('.admin-dialog-close').forEach(button => button.addEventListener('click',() => window.VMUI.closeModal($('#request-editor'))));
 $('#request-editor').addEventListener('click',event => { if (event.target === $('#request-editor')) window.VMUI.closeModal($('#request-editor')); });
@@ -115,6 +142,7 @@ $('#admin-refresh').addEventListener('click',() => load().catch(showError));
 $('#admin-previous').addEventListener('click',() => { offset = Math.max(0,offset-50); load().catch(showError); });
 $('#admin-next').addEventListener('click',() => { offset += 50; load().catch(showError); });
 $('#users-refresh').addEventListener('click',() => loadUsers().catch(showError));
+$('#operators-refresh').addEventListener('click',() => loadOperators().catch(showError));
 $('#users-previous').addEventListener('click',() => { userOffset = Math.max(0,userOffset-50); loadUsers().catch(showError); });
 $('#users-next').addEventListener('click',() => { userOffset += 50; loadUsers().catch(showError); });
 $('#user-search').addEventListener('input',() => {
@@ -139,6 +167,6 @@ function showError(error) { $('#admin-error').textContent = error.message; $('#a
     const account = await api('/auth/me');
     if (!account.is_admin) { location.replace('/console'); return; }
     $('#admin-name').textContent = account.user.name; $('#admin-email').textContent = account.user.email;
-    await Promise.all([load(), loadUsers()]);
+    await Promise.all([load(), loadUsers(), loadOperators()]);
   } catch (error) { showError(error); }
 })();

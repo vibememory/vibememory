@@ -26,7 +26,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     manifest = response.json()
     assert set(manifest["files"]) == {"SKILL.md", "scripts/memory.py"}
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
-    assert manifest["native_cli"]["version"] == "3.7.2"
+    assert manifest["native_cli"]["version"] == "3.8.0"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",
@@ -61,6 +61,8 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
         assert b"native Rust" in skill
         assert b"## Product feedback" in skill
         assert b"feedback-list" in skill
+        assert b"feedback-admin-list" in skill
+        assert b"feature_request_operator" in skill
         assert b"VM_SKILL_DIR" in skill
         assert b"Never test or invoke a bare global" in skill
         assert b"Do not use curl or direct API calls as a fallback" in skill

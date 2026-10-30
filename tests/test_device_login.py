@@ -55,10 +55,12 @@ def test_web_approval_one_time_key_and_no_secret_in_browser(web):
     assert result['vault_access'] is True and result['upgraded'] is False
     me = client.get('/v1/me', headers={'Authorization': 'Bearer '+result['key']})
     assert me.status_code == 200 and me.json()['vault_access'] is True
+    assert me.json()['feature_request_operator'] is False
     assert client.post('/auth/device/poll', json={'device_code': pending['device_code']}).status_code == 410
     keys = client.get('/auth/api-keys').json()['items']
     assert len(keys) == 1 and keys[0]['name'] == 'Claude Code'
     assert keys[0]['vault_access'] is True
+    assert keys[0]['feature_request_operator'] is False
     assert result['key'] not in str(keys)
     with sqlite3.connect(settings.data_dir / 'auth.sqlite') as db:
         dump = '\n'.join(db.iterdump())

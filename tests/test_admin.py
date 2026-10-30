@@ -158,3 +158,65 @@ def test_admin_user_directory_exposes_operational_counts_without_credentials(adm
     assert "password_hash" not in str(payload)
     assert "salt" not in str(payload)
     assert "hash" not in str(payload)
+
+
+def test_admin_can_grant_and_revoke_scoped_feature_request_operator(admin_web):
+    normal = signup(admin_web, "operator-requester@example.com", "요청 사용자")
+    owner_id = normal["user"]["id"]
+    feature = admin_web.post(
+        "/v1/feature-requests",
+        json={
+            "title": "운영 에이전트 테스트",
+            "description": "관리자가 승인한 에이전트만 처리해야 합니다.",
+            "agent_name": "requester-agent",
+        },
+    ).json()
+    assert admin_web.get("/v1/admin/operator-agents").status_code == 403
+    admin_web.post("/auth/logout")
+
+    signup(admin_web, "admin@example.com", "운영자")
+    key = admin_web.post(
+        "/auth/api-keys", json={"name": "Codex operator", "vault_access": False}
+    ).json()
+    agent_headers = {"Authorization": "Bearer " + key["key"], "Origin": ""}
+    assert admin_web.get("/v1/admin/feature-requests", headers=agent_headers).status_code == 403
+    listed = admin_web.get("/v1/admin/operator-agents").json()["items"]
+    assert listed[0]["id"] == key["id"]
+    assert listed[0]["feature_request_operator"] is False
+    grant_path = "/v1/admin/operator-agents/" + key["id"]
+    assert (
+        admin_web.patch(
+            grant_path,
+            headers={"Origin": "https://evil.example"},
+            json={"feature_request_operator": True},
+        ).status_code
+        == 403
+    )
+    granted = admin_web.patch(grant_path, json={"feature_request_operator": True})
+    assert granted.json() == {"id": key["id"], "feature_request_operator": True}
+    assert admin_web.get("/v1/me", headers=agent_headers).json()[
+        "feature_request_operator"
+    ] is True
+
+    admin_web.post("/auth/logout")
+    queue = admin_web.get("/v1/admin/feature-requests", headers=agent_headers)
+    assert queue.status_code == 200
+    assert queue.json()["items"][0]["owner_id"] == owner_id
+    path = f"/v1/admin/feature-requests/{owner_id}/{feature['id']}"
+    updated = admin_web.patch(
+        path,
+        headers=agent_headers,
+        json={"status": "reviewing", "result": "운영 에이전트가 검토 중입니다."},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["result"].startswith("운영 에이전트가")
+    assert admin_web.get("/v1/admin/users", headers=agent_headers).status_code == 401
+
+    login = admin_web.post(
+        "/auth/login", json={"email": "admin@example.com", "password": PASSWORD}
+    )
+    assert login.status_code == 200
+    revoked = admin_web.patch(grant_path, json={"feature_request_operator": False})
+    assert revoked.json()["feature_request_operator"] is False
+    admin_web.post("/auth/logout")
+    assert admin_web.get("/v1/admin/feature-requests", headers=agent_headers).status_code == 403

@@ -8,6 +8,8 @@ Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/
 
 Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
 
+An account listed in `MEMORY_ADMIN_EMAILS` can approve one of its own API-key connections as a feature-request operator from the browser admin console. The permission defaults to false, is checked against the current administrator allowlist on every request, and can be revoked immediately. It grants only cross-workspace feature-request list/update access; it does not grant user-directory, memory, file, message, graph, or Vault access. Approval and revocation use the signed-in administrator session with same-origin protection.
+
 Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. `vault:read` is an optional sensitive MCP scope and still exposes no entry until the user grants individual Vault names to that connection.
 
 ## Endpoints
@@ -52,8 +54,10 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
-| GET | `/v1/admin/feature-requests` | Admin-browser processing queue across workspaces |
-| PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser status and public-result update |
+| GET | `/v1/admin/operator-agents` | Admin-browser list of the administrator's agent keys and operator state |
+| PATCH | `/v1/admin/operator-agents/{id}` | Admin-browser approval/revocation of narrow feature-request operator permission |
+| GET | `/v1/admin/feature-requests` | Admin-browser or approved operator processing queue across workspaces |
+| PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser or approved operator status and public-result update |
 | GET | `/v1/admin/users` | Admin-browser safe user list and usage/connection counts; no auth secrets |
 | GET | `/auth/security` | Browser-only TOTP state and remaining recovery-code count |
 | POST | `/auth/totp/setup` | Password-confirmed, ten-minute authenticator setup |

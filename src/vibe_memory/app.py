@@ -29,6 +29,7 @@ from .auth import (
     AuthStore,
     Credentials,
     DeviceStartInput,
+    FeatureRequestOperatorUpdate,
     KeyAccessUpdate,
     KeyInput,
     LoginSecondFactor,
@@ -157,7 +158,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.20.7",
+        version="0.21.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -205,8 +206,40 @@ def create_app(settings=None, embedder=None):
             raise HTTPException(403, "관리자 권한이 필요합니다.")
         return user
 
+    def feature_request_operator(
+        request: Request,
+        credentials: HTTPAuthorizationCredentials | None = Depends(auth),
+    ):
+        if credentials and credentials.scheme.lower() == "bearer":
+            principal = accounts.principal_for_key(credentials.credentials)
+            if not principal:
+                raise HTTPException(401, "에이전트 연결이 유효하지 않거나 해제되었습니다.")
+            account = accounts.user(principal["user_id"])
+            if (
+                not account
+                or not is_admin(account)
+                or not principal["feature_request_operator"]
+            ):
+                raise HTTPException(403, "기능 요청 운영 권한이 필요합니다.")
+            request.state.vault_access = principal["vault_access"]
+            request.state.feature_request_operator = True
+            request.state.auth_kind = "agent-key"
+            request.state.key_id = principal["key_id"]
+            bind_agent(
+                request,
+                principal["user_id"],
+                "key:" + principal["key_id"],
+                principal["name"],
+                "api-key",
+            )
+            return account
+        if request.headers.get("Authorization"):
+            raise HTTPException(401, "지원하지 않는 인증 방식입니다.")
+        return admin_user(browser_user(request))
+
     def owner(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(auth)):
         request.state.vault_access = False
+        request.state.feature_request_operator = False
         request.state.auth_kind = "none"
         if credentials and credentials.scheme.lower() == "bearer":
             supplied = hashlib.sha256(credentials.credentials.encode()).digest()
@@ -223,6 +256,9 @@ def create_app(settings=None, embedder=None):
             principal = accounts.principal_for_key(credentials.credentials)
             if principal:
                 request.state.vault_access = principal["vault_access"]
+                request.state.feature_request_operator = principal[
+                    "feature_request_operator"
+                ]
                 request.state.auth_kind = "agent-key"
                 request.state.key_id = principal["key_id"]
                 return bind_agent(
@@ -548,6 +584,28 @@ def create_app(settings=None, embedder=None):
     @app.patch("/auth/api-keys/{id}", tags=["account"])
     def update_api_key(id: str, data: KeyAccessUpdate, user=Depends(browser_user)):
         return accounts.set_key_vault_access(user["id"], id, data.vault_access)
+
+    @app.get(
+        "/v1/admin/operator-agents",
+        tags=["admin"],
+        include_in_schema=settings.public_openapi_include_admin,
+    )
+    def admin_operator_agents(user=Depends(admin_user)):
+        return {"items": accounts.list_keys(user["id"])}
+
+    @app.patch(
+        "/v1/admin/operator-agents/{id}",
+        tags=["admin"],
+        include_in_schema=settings.public_openapi_include_admin,
+    )
+    def admin_update_operator_agent(
+        id: str,
+        data: FeatureRequestOperatorUpdate,
+        user=Depends(admin_user),
+    ):
+        return accounts.set_key_feature_request_operator(
+            user["id"], id, data.feature_request_operator
+        )
 
     @app.delete("/auth/api-keys/{id}", status_code=204, tags=["account"])
     def revoke_api_key(id: str, user=Depends(browser_user), db=Depends(store)):
@@ -1142,6 +1200,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             "user_id": user,
             "embedding_model": embedder.model_name,
             "vault_access": bool(request.state.vault_access),
+            "feature_request_operator": bool(request.state.feature_request_operator),
             "agent": {
                 "id": request.state.agent_id,
                 "name": request.state.agent_name,
@@ -1525,7 +1584,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         | None = None,
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
-        _admin=Depends(admin_user),
+        _operator=Depends(feature_request_operator),
         db=Depends(store),
     ):
         counts = {
@@ -1560,7 +1619,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         owner_id: str,
         id: str,
         data: FeatureRequestUpdate,
-        _admin=Depends(admin_user),
+        _operator=Depends(feature_request_operator),
         db=Depends(store),
     ):
         record = db.update_feature_request(owner_id, id, data)

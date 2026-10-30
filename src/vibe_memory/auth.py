@@ -71,6 +71,11 @@ class KeyAccessUpdate(BaseModel):
     vault_access: bool
 
 
+class FeatureRequestOperatorUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    feature_request_operator: bool
+
+
 class PasswordInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     password: str = Field(min_length=10, max_length=128)
@@ -161,7 +166,8 @@ class AuthStore:
                 CREATE TABLE IF NOT EXISTS api_keys (
                     id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, prefix TEXT NOT NULL,
-                    created_at INTEGER NOT NULL, vault_access INTEGER NOT NULL DEFAULT 0);
+                    created_at INTEGER NOT NULL, vault_access INTEGER NOT NULL DEFAULT 0,
+                    feature_request_operator INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS device_logins (
                     device_hash TEXT PRIMARY KEY, user_hash TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL,
@@ -190,6 +196,11 @@ class AuthStore:
             if "vault_access" not in api_columns:
                 db.execute(
                     "ALTER TABLE api_keys ADD COLUMN vault_access INTEGER NOT NULL DEFAULT 0"
+                )
+            if "feature_request_operator" not in api_columns:
+                db.execute(
+                    "ALTER TABLE api_keys ADD COLUMN feature_request_operator "
+                    "INTEGER NOT NULL DEFAULT 0"
                 )
             device_columns = {row[1] for row in db.execute("PRAGMA table_info(device_logins)")}
             if "vault_access" not in device_columns:
@@ -553,7 +564,9 @@ class AuthStore:
     def principal_for_key(self, token):
         with self.connection() as db:
             row = db.execute(
-                "SELECT id,user_id,name,vault_access FROM api_keys WHERE hash=?", (digest(token),)
+                """SELECT id,user_id,name,vault_access,feature_request_operator
+                FROM api_keys WHERE hash=?""",
+                (digest(token),),
             ).fetchone()
         if not row:
             return None
@@ -562,16 +575,25 @@ class AuthStore:
             "user_id": row["user_id"],
             "name": row["name"],
             "vault_access": bool(row["vault_access"]),
+            "feature_request_operator": bool(row["feature_request_operator"]),
         }
 
     def list_keys(self, user_id):
         with self.connection() as db:
             rows = db.execute(
-                """SELECT id,name,prefix,created_at,vault_access FROM api_keys
+                """SELECT id,name,prefix,created_at,vault_access,feature_request_operator
+                FROM api_keys
                 WHERE user_id=? ORDER BY created_at DESC,id""",
                 (user_id,),
             ).fetchall()
-        return [{**dict(row), "vault_access": bool(row["vault_access"])} for row in rows]
+        return [
+            {
+                **dict(row),
+                "vault_access": bool(row["vault_access"]),
+                "feature_request_operator": bool(row["feature_request_operator"]),
+            }
+            for row in rows
+        ]
 
     def create_key(self, user_id, name, vault_access=False):
         token = "vm_" + secrets.token_urlsafe(36)
@@ -581,6 +603,7 @@ class AuthStore:
             prefix=token[:10] + "…",
             created_at=utc_epoch_seconds(),
             vault_access=bool(vault_access),
+            feature_request_operator=False,
         )
         with self.connection() as db:
             if (
@@ -617,6 +640,17 @@ class AuthStore:
             if not result.rowcount:
                 raise HTTPException(404, "키를 찾을 수 없습니다.")
         return {"id": id, "vault_access": bool(vault_access)}
+
+    def set_key_feature_request_operator(self, user_id, id, enabled):
+        with self.connection() as db:
+            result = db.execute(
+                """UPDATE api_keys SET feature_request_operator=?
+                WHERE id=? AND user_id=?""",
+                (bool(enabled), id, user_id),
+            )
+            if not result.rowcount:
+                raise HTTPException(404, "에이전트 연결을 찾을 수 없습니다.")
+        return {"id": id, "feature_request_operator": bool(enabled)}
 
     def start_device(
         self,

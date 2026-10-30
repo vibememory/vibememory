@@ -13,12 +13,12 @@
   <script src="/assets/admin.js" defer></script>
 </head>
 <body class="admin-page">
-  <header class="admin-header">
+  <header class="admin-header" data-ui-shell>
     <a class="brand" href="/admin" aria-label="Vibe Memory 관리자 홈"><img src="/assets/favicon.svg" width="28" height="28" alt=""><span>vibe<span class="brand-light">memory</span></span><em>ADMIN</em></a>
     <nav><a href="/console">내 콘솔</a><a href="/guide.html" target="_blank" rel="noopener">문서 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a><button id="admin-logout" type="button">로그아웃</button></nav>
   </header>
 
-  <main class="admin-main">
+  <main class="admin-main" data-ui-shell>
     <section class="admin-heading">
       <div><p>PRODUCT OPERATIONS</p><h1>기능 요청 관리</h1><span>모든 워크스페이스의 요청을 검토하고 처리 결과를 공개합니다.</span></div>
       <div class="admin-identity"><small>ADMINISTRATOR</small><strong id="admin-name">권한 확인 중…</strong><span id="admin-email"></span></div>
@@ -26,6 +26,15 @@
 
     <div id="admin-error" class="admin-error" role="alert" hidden></div>
     <section class="admin-stats" id="admin-stats" aria-label="기능 요청 현황"></section>
+
+    <section class="admin-panel admin-operators-panel">
+      <div class="admin-toolbar">
+        <div><h2>운영 에이전트</h2><p>선택한 에이전트만 모든 사용자의 기능 요청을 조회하고 처리 결과를 수정할 수 있습니다.</p></div>
+        <button id="operators-refresh" type="button">새로고침</button>
+      </div>
+      <div class="admin-operator-notice"><strong>기능 요청 전용 권한</strong><span>사용자 기억·문서·관계·Vault·사용자 목록에는 관리자 권한이 확대되지 않습니다. 필요할 때만 승인하고 작업 후 회수하세요.</span></div>
+      <div class="admin-operator-list" id="operator-agent-list"><p class="admin-loading">에이전트 연결을 불러오는 중…</p></div>
+    </section>
 
     <section class="admin-panel">
       <div class="admin-toolbar">
@@ -61,6 +70,9 @@
       <p id="request-editor-error" class="admin-form-error" role="alert" hidden></p>
       <div class="admin-dialog-actions"><button class="admin-dialog-close" type="button">취소</button><button class="button primary" id="request-save" type="submit">요청 변경사항 저장</button></div>
     </form>
+  </dialog>
+  <dialog class="ui-modal ui-modal--compact" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form><div class="ui-confirm-icon" aria-hidden="true"><svg class="svg-icon"><use href="/assets/icons.svg#alert"></use></svg></div><div class="admin-dialog-heading"><div><p>PLEASE CONFIRM</p><h2 id="confirm-title">계속할까요?</h2></div><button type="button" class="ui-icon-button" data-ui-confirm-cancel aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div><p class="ui-confirm-message" id="confirm-message"></p><div class="admin-dialog-actions"><button class="secondary-button" id="confirm-cancel" data-ui-confirm-cancel type="button">취소</button><button class="button primary" id="confirm-submit" type="submit">확인</button></div></form>
   </dialog>
   <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
 </body>

@@ -119,6 +119,7 @@ def test_revocable_agent_keys_separate_from_browser_auth(web, web_settings):
     assert len(key["key"]) >= 32
     listed = web.get("/auth/api-keys").json()["items"][0]
     assert "key" not in listed and listed["vault_access"] is False
+    assert listed["feature_request_operator"] is False
     changed = web.patch(
         "/auth/api-keys/" + key["id"], json={"vault_access": True}
     ).json()
@@ -131,6 +132,7 @@ def test_revocable_agent_keys_separate_from_browser_auth(web, web_settings):
         "/v1/memories", headers=headers, json={"content": "agent memory", "keywords": ["차"]}
     )
     assert result.status_code == 201, result.text
+    assert web.get("/v1/me", headers=headers).json()["feature_request_operator"] is False
     assert web.get("/v1/agents").json()["items"][0]["id"] == "key:" + key["id"]
     assert web.get("/v1/records").json()["items"][0]["id"] == result.json()["id"]
     # Invalid explicit keys must not silently fall back to an existing browser session.

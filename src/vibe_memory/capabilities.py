@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from .clock import utc_now_iso
 
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
 
 
 # The registry describes server features independently from the grant carried by
@@ -47,8 +47,11 @@ CAPABILITY_RULES = (
     ("vault", "read", "vault:read", "vault:read", True),
     ("admin", "feature_requests", "feature_request_operator", None, True),
     ("admin", "users", "admin", None, True),
-    ("portable_archive", "export", None, None, False),
-    ("portable_archive", "import", None, None, False),
+    ("portable_archive", "export", "memory:read", None, True),
+    ("portable_archive", "import", "memory:write", None, True),
+    ("namespace", "select", "memory:read", "memory:read", True),
+    ("temporal", "valid_time", "memory:read", "memory:read", True),
+    ("temporal", "historical_recorded_time", None, None, False),
 )
 
 
@@ -67,6 +70,8 @@ def build_auth_context(
     feature_request_operator: bool = False,
     is_admin: bool = False,
     expires_at=None,
+    namespace_id="default",
+    namespace_grants=None,
 ):
     """Return only facts proven by the credential used for this request."""
 
@@ -104,8 +109,11 @@ def build_auth_context(
             "admin": bool(is_admin),
         },
         "project_scope": {
-            "status": "unsupported",
-            "enforcement": "account_owner_scope_only",
+            "status": "enforced",
+            "namespace_id": namespace_id,
+            "selection": "X-Vibe-Memory-Namespace",
+            "enforcement": "isolated_owner_partition",
+            "grants": namespace_grants,
         },
         "external_service_permissions": {
             "status": "not_evaluated",

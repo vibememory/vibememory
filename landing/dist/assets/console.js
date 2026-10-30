@@ -98,7 +98,14 @@ function featureRequestDetail(record) {
   return `<div class="request-detail-head"><span class="request-status ${statusClass}">${h(statusLabel)}</span><span>최종 갱신 ${date(record.updated_at)}</span></div><div class="request-detail-section"><span>요청 내용</span><p>${h(record.description)}</p></div>${record.use_case ? `<div class="request-detail-section"><span>사용 사례</span><p>${h(record.use_case)}</p></div>` : ''}${result}<dl class="request-detail-meta"><div><dt>요청 에이전트</dt><dd>${h(record.agent_name)}</dd></div><div><dt>우선순위</dt><dd>${h(record.priority)}</dd></div><div><dt>접수일</dt><dd>${date(record.created_at)}</dd></div>${record.resolved_at ? `<div><dt>처리일</dt><dd>${date(record.resolved_at)}</dd></div>` : ''}</dl>`;
 }
 function recordRows(items, deletable = true) {
-  return `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 내용</th><th>키워드</th><th>등록일</th><th></th></tr></thead><tbody>${items.map(item => `<tr><td><button class="record-title" data-action="detail" data-id="${h(item.id)}">${h(item.title || item.content?.slice(0, 70) || '이름 없는 기록')}</button><span class="record-subtitle">${h(item.kind === 'entity' ? item.subtype : item.source || ({memory:'기억', document:'문서', file:'원본 파일'}[item.kind] || item.kind))}</span></td><td>${tags(item.keywords)}</td><td>${date(item.created_at)}</td><td><div class="row-actions">${item.kind === 'file' ? `<a href="/v1/files/${h(item.id)}" download>다운로드 ${icon('download')}</a>` : ''}${deletable ? `<button class="danger" data-action="delete" data-id="${h(item.id)}">삭제</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
+  const correction = item => {
+    const status = item.correction_status;
+    if (!status) return '';
+    const labels = {current:'현재 버전 · 미검증',superseded:'대체됨',conflict:'충돌',cycle:'순환 충돌',unresolved:'부분 확인'};
+    return `<span class="correction-badge correction-${h(status)}">${h(labels[status] || status)}</span>`;
+  };
+  const searchReason = item => item.search ? `<div class="search-evidence"><span>유사도 ${Number(item.search.score || 0).toFixed(3)}</span>${(item.search.matched_keywords || []).map(match => `<span>${h(match.query_keyword)} ↔ ${h(match.stored_keyword)}</span>`).join('')}</div>` : '';
+  return `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 내용</th><th>키워드</th><th>등록일</th><th></th></tr></thead><tbody>${items.map(item => `<tr><td data-label="항목"><button class="record-title" data-action="detail" data-id="${h(item.id)}">${h(item.title || item.content?.slice(0, 70) || '이름 없는 기록')}</button><span class="record-subtitle">${h(item.kind === 'entity' ? item.subtype : item.source || ({memory:'기억', document:'문서', file:'원본 파일'}[item.kind] || item.kind))}</span>${correction(item)}${searchReason(item)}</td><td data-label="키워드">${tags(item.keywords)}</td><td data-label="등록일">${date(item.created_at)}</td><td data-label="작업"><div class="row-actions">${item.kind === 'file' ? `<a href="/v1/files/${h(item.id)}" download>다운로드 ${icon('download')}</a>` : ''}${deletable ? `<button class="danger" data-action="delete" data-id="${h(item.id)}">삭제</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
 }
 const graphKindLabel = kind => t(({memory:'기억',entity:'엔티티',document:'문서',file:'파일'}[kind] || kind || '기록'));
 const graphTitle = record => record?.title || record?.content?.slice(0, 46) || '이름 없는 기록';
@@ -117,7 +124,9 @@ function relationshipGraph(records, relations, totals) {
   const recordMap = new Map(records.map(record => [record.id, record]));
   const accessibleNodes = records.map(record => `<button type="button" data-action="graph" data-id="${h(record.id)}">${h(graphTitle(record))}, ${h(graphKindLabel(record.kind))}</button>`).join('');
   const accessibleEdges = relations.map(edge => `<button type="button" data-action="relation-detail" data-source-name="${h(graphTitle(recordMap.get(edge.source_id)))}" data-target-name="${h(graphTitle(recordMap.get(edge.target_id)))}" data-relation="${h(edge.relation)}" data-reason="${h(edge.reason)}">${h(t(`${edge.relation} 관계`))}</button>`).join('');
-  return `<section class="relationship-panel" aria-label="${h(t('관계 그래프.'))} ${h(summary)}"><div class="relationship-graph-stage" role="application" aria-label="기억 관계 그래프. 드래그하여 이동하고 휠로 확대할 수 있습니다."></div><div class="relationship-graph-a11y"><p>${h(summary)}</p>${accessibleNodes}${accessibleEdges}</div><div class="relationship-graph-meta"><span><i></i>${h(summary)}</span><span>노드나 관계를 선택하면 상세 정보를 확인할 수 있습니다.</span></div><div class="relationship-graph-controls" aria-label="그래프 화면 조절"><button type="button" data-graph-command="zoom-in" aria-label="확대">${icon('plus')}</button><button type="button" data-graph-command="zoom-out" aria-label="축소">${icon('minus')}</button><button type="button" data-graph-command="fit" aria-label="그래프 전체 보기">${icon('maximize')}</button></div></section>`;
+  const relationTypes = [...new Set(relations.map(edge => edge.relation))].sort();
+  const creators = [...new Map(relations.map(edge => [edge.creator_agent_id || '',edge.creator_agent_name || edge.creator_agent_id || '알 수 없음'])).entries()].filter(([id]) => id);
+  return `<section class="relationship-panel" aria-label="${h(t('관계 그래프.'))} ${h(summary)}"><div class="relationship-filterbar"><label>관계<select data-graph-filter="relation"><option value="">전체</option>${relationTypes.map(value => `<option>${h(value)}</option>`).join('')}</select></label><label>생성 에이전트<select data-graph-filter="creator"><option value="">전체</option>${creators.map(([id,name]) => `<option value="${h(id)}">${h(name)}</option>`).join('')}</select></label><button type="button" data-graph-command="clear">선택 해제</button><span id="graph-selection">전체 그래프</span></div><div class="relationship-graph-stage" role="application" aria-label="기억 관계 그래프. 드래그하여 이동하고 휠로 확대할 수 있습니다."></div><div class="relationship-graph-a11y"><p>${h(summary)}</p>${accessibleNodes}${accessibleEdges}</div><div class="relationship-graph-meta"><span><i></i>${h(summary)}</span><span>현재 화면 ${records.length}개 노드 · ${relations.length}개 관계</span></div><div class="relationship-graph-controls" aria-label="그래프 화면 조절"><button type="button" data-graph-command="zoom-in" aria-label="확대">${icon('plus')}</button><button type="button" data-graph-command="zoom-out" aria-label="축소">${icon('minus')}</button><button type="button" data-graph-command="fit" aria-label="그래프 전체 보기">${icon('maximize')}</button></div></section>`;
 }
 function relationshipGraphStyles() {
   const dark = document.documentElement.dataset.theme === 'dark';
@@ -162,6 +171,11 @@ async function bindRelationshipGraph(records, relations) {
       target:edge.target_id,
       relation:edge.relation || 'RELATED_TO',
       reason:edge.reason || '',
+      confidence:edge.confidence,
+      status:edge.status || 'active',
+      creatorId:edge.creator_agent_id || '',
+      creatorName:edge.creator_agent_name || '알 수 없음',
+      evidence:JSON.stringify(edge.evidence_status || edge.evidence || edge.evidence_record_ids || []),
       sourceName:graphTitle(recordMap.get(edge.source_id)),
       targetName:graphTitle(recordMap.get(edge.target_id))
     }}))
@@ -204,19 +218,31 @@ async function bindRelationshipGraph(records, relations) {
   relationshipCy.on('tap','node',async event => {
     try {
       const graph = await api('/v1/graph/' + encodeURIComponent(event.target.id()) + '?depth=2');
-      detail('연결된 기억',`<div class="graph-nodes">${graph.nodes.map(node => `<div class="graph-node"><strong>${h(node.kind)}</strong>${h(node.title)}</div>`).join('')}</div><pre class="detail-pre">${h(JSON.stringify(graph.relations.map(edge => ({relation:edge.relation,reason:edge.reason,source:edge.source_id,target:edge.target_id})),null,2))}</pre>`);
+      $('#graph-selection').textContent = `${event.target.data('title')} → 2-hop`;
+      detail('연결된 기억',`<div class="graph-nodes">${graph.nodes.map(node => `<div class="graph-node"><strong>${h(node.kind)}</strong>${h(node.title)}</div>`).join('')}</div><p class="dialog-help">선택 노드 기준 최대 2-hop · ${graph.nodes.length}개 노드 · ${graph.relations.length}개 관계</p><pre class="detail-pre">${h(JSON.stringify(graph.relations.map(edge => ({relation:edge.relation,reason:edge.reason,source:edge.source_id,target:edge.target_id})),null,2))}</pre>`);
     } catch (error) { toast(error.message); }
   });
   relationshipCy.on('tap','edge',event => {
     const edge = event.target.data();
-    detail('관계 근거',`<div class="relation-detail-route"><span>${h(edge.sourceName)}</span><strong>${h(edge.relation)}</strong><span>${h(edge.targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(edge.reason)}</p></div>`);
+    detail('관계 근거',`<div class="relation-detail-route"><span>${h(edge.sourceName)}</span><strong>${h(edge.relation)}</strong><span>${h(edge.targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거 · 사실 검증 아님</span><p>${h(edge.reason)}</p></div><dl class="request-detail-meta"><div><dt>생성 에이전트</dt><dd>${h(edge.creatorName)}</dd></div><div><dt>신뢰도</dt><dd>${edge.confidence == null ? '미제공' : h(edge.confidence)}</dd></div><div><dt>상태</dt><dd>${h(edge.status)}</dd></div><div><dt>근거 상태</dt><dd>${h(edge.evidence)}</dd></div></dl>`);
   });
   for (const button of document.querySelectorAll('[data-graph-command]')) {
     button.addEventListener('click', () => {
       if (!relationshipCy) return;
       if (button.dataset.graphCommand === 'fit') return relationshipCy.fit(undefined, 75);
+      if (button.dataset.graphCommand === 'clear') { clearFocus(); relationshipCy.elements().style('display','element'); $('#graph-selection').textContent = '전체 그래프'; return relationshipCy.fit(undefined,75); }
       const factor = button.dataset.graphCommand === 'zoom-in' ? 1.22 : .82;
       relationshipCy.zoom({level:Math.max(relationshipCy.minZoom(), Math.min(relationshipCy.maxZoom(), relationshipCy.zoom() * factor)),renderedPosition:{x:stage.clientWidth / 2,y:stage.clientHeight / 2}});
+    });
+  }
+  for (const select of document.querySelectorAll('[data-graph-filter]')) {
+    select.addEventListener('change', () => {
+      const relation = document.querySelector('[data-graph-filter="relation"]')?.value || '';
+      const creator = document.querySelector('[data-graph-filter="creator"]')?.value || '';
+      relationshipCy.edges().forEach(edge => edge.style('display', (!relation || edge.data('relation') === relation) && (!creator || edge.data('creatorId') === creator) ? 'element' : 'none'));
+      relationshipCy.nodes().forEach(node => node.style('display', node.connectedEdges(':visible').length || (!relation && !creator) ? 'element' : 'none'));
+      $('#graph-selection').textContent = [relation,creator && select.options[select.selectedIndex]?.text].filter(Boolean).join(' · ') || '전체 그래프';
+      relationshipCy.fit(relationshipCy.elements(':visible'),75);
     });
   }
   relationshipResizeObserver = new ResizeObserver(() => relationshipCy?.resize());
@@ -282,11 +308,14 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const guide = dashboardGuideHidden() ? '' : `<section class="dashboard-guide" aria-label="빠른 시작"><div class="dashboard-guide-copy"><span>QUICK START</span><strong>워크스페이스 빠른 작업</strong></div><div class="dashboard-guide-actions"><button data-action="add-memory">${icon('plus')} 기억 추가</button><button data-action="upload-file">${icon('upload')} 파일 업로드</button><button data-view="agents">${icon('network')} 에이전트 연결</button><button class="dashboard-guide-dismiss" data-action="dismiss-dashboard-guide">다시 보지 않기 ${icon('close')}</button></div></section>`;
       const agentBrands = [['claude-code.png','Claude Code'],['codex.png','Codex'],['cursor.svg','Cursor'],['muse.svg','Muse Code'],['openclaw.svg','OpenClaw'],['hermes.png','Hermes']];
       const storageCard = `<section class="storage-usage-card" aria-labelledby="storage-usage-title"><div class="storage-usage-main"><span class="storage-usage-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span><div><span class="storage-usage-label" id="storage-usage-title">내 기억 용량</span><strong>${formatBytes(stats.storage_bytes)}</strong><small>현재 논리 사용량 · 휴지통 포함</small></div></div><div class="storage-usage-breakdown"><div><span>기억 데이터</span><strong>${formatBytes(stats.memory_bytes)}</strong></div><div><span>원본 파일</span><strong>${formatBytes(stats.file_bytes)}</strong></div><p>앱 저장 한도 미설정</p></div></section>`;
-      html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target],index) => `<article class="stat-card"><div class="stat-card-top"><span class="stat-card-label">${h(label)}</span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div>${storageCard}<div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 ${icon('arrow-right')}</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>연결 상태</h2><p>Workspace runtime</p></div><span class="console-live-badge"><i></i>LIVE</span></div><div class="console-status-list"><div><span>API</span><strong class="status-ok">정상</strong></div><div><span>에이전트 키</span><strong>${keys.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div><div><span>관계</span><strong>${stats.relations}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
+      const checkedAt = dateTime(new Date().toISOString());
+      html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target],index) => `<article class="stat-card"><div class="stat-card-top"><span class="stat-card-label">${h(label)}</span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div>${storageCard}<div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 ${icon('arrow-right')}</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 확인</h2><p>실제 API 응답 기준</p></div><span class="console-live-badge"><i></i>CHECKED</span></div><div class="console-status-list"><div><span>확인 범위</span><strong class="status-ok">통계 · 기록 · 키</strong></div><div><span>확인 시각</span><strong>${h(checkedAt)}</strong></div><div><span>에이전트 키</span><strong>${keys.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
     } else if (view === 'memories' || view === 'documents') {
       const result = await api(`/v1/records?kind=${recordKind}&limit=50&offset=${pageOffset}`);
       const options = view === 'memories' ? [['memory','기억'],['entity','엔티티']] : [['document','문서 메타정보'],['file','원본 파일']];
-      html = `<section class="console-panel"><form id="search-records" class="list-toolbar"><select id="kind-filter" aria-label="기록 종류">${options.map(([value,label]) => `<option value="${value}" ${recordKind === value ? 'selected' : ''}>${label}</option>`).join('')}</select><input name="keywords" placeholder="검색 키워드를 쉼표로 구분" aria-label="검색 키워드"><button class="secondary-button" type="submit">키워드 검색</button><button class="secondary-button" type="button" data-action="reload">초기화</button></form><div id="record-results">${result.items.length ? recordRows(result.items) : empty('아직 기록이 없어요.',view === 'documents' ? '에이전트에서 파일을 등록하거나 원본을 업로드해보세요. 분석과 키워드 추출은 에이전트가 담당합니다.' : '기억을 직접 남기거나 에이전트에서 데이터를 보내보세요.')}</div><div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
+      const params = new URLSearchParams(location.search);
+      const searchMode = ['exact','semantic','hybrid'].includes(params.get('mode')) ? params.get('mode') : 'hybrid';
+      html = `<section class="console-panel"><form id="search-records" class="list-toolbar search-toolbar"><select id="kind-filter" aria-label="기록 종류">${options.map(([value,label]) => `<option value="${value}" ${recordKind === value ? 'selected' : ''}>${label}</option>`).join('')}</select><input name="keywords" value="${h(params.get('q') || '')}" placeholder="검색 키워드를 쉼표로 구분" aria-label="검색 키워드"><select name="match_mode" aria-label="검색 방식"><option value="exact" ${searchMode === 'exact' ? 'selected' : ''}>정확</option><option value="semantic" ${searchMode === 'semantic' ? 'selected' : ''}>의미</option><option value="hybrid" ${searchMode === 'hybrid' ? 'selected' : ''}>혼합</option></select><button class="secondary-button" type="submit">검색</button><button class="secondary-button" type="button" data-action="toggle-search-advanced">고급 필터</button><button class="secondary-button" type="button" data-action="context-bundle">다른 에이전트에서 이어가기</button><div class="search-advanced" id="search-advanced" hidden><label>필수 키워드<input name="must_keywords" placeholder="쉼표로 구분"></label><label>제외 키워드<input name="exclude_keywords" placeholder="쉼표로 구분"></label><label>태그<input name="tags" placeholder="쉼표로 구분"></label><label>프로젝트 metadata<input name="project" value="${h(params.get('project') || '')}" placeholder="예: alpha"></label><label>최소 유사도<input name="min_score" type="number" min="-1" max="1" step="0.01" value="0"></label></div></form><p class="search-disclaimer">점수는 키워드 임베딩 유사도이며 사실성·신뢰도 점수가 아닙니다. 프로젝트 보기는 metadata 분류이며 접근 권한은 namespace에서 별도로 강제됩니다.</p><div id="record-results">${result.items.length ? recordRows(result.items) : empty('아직 기록이 없어요.',view === 'documents' ? '에이전트에서 파일을 등록하거나 원본을 업로드해보세요. 분석과 키워드 추출은 에이전트가 담당합니다.' : '기억을 직접 남기거나 에이전트에서 데이터를 보내보세요.')}</div><div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
     } else if (view === 'vault') {
       const [result, audit] = await Promise.all([api('/v1/vault'), api('/v1/vault-access-audit?limit=100')]);
       const auditRows = audit.items.map(item => { const [outcomeLabel,outcomeClass] = vaultAuditOutcome(item.outcome); return `<tr><td><strong>${h(item.name === '*' ? 'Vault 목록' : item.name)}</strong><span class="record-subtitle">비밀값 원문은 감사 기록에 저장되지 않습니다.</span></td><td><strong>${h(item.client_name)}</strong><span class="record-subtitle">${h(vaultClientType(item.client_type))}</span></td><td><span class="vault-audit-status ${h(outcomeClass)}"><i></i>${h(outcomeLabel)}</span></td><td><time datetime="${h(new Date(item.accessed_at * 1000).toISOString())}">${h(dateTime(item.accessed_at))}</time></td></tr>`; }).join('');
@@ -294,11 +323,11 @@ async function navigate(view, reset = true, historyMode = 'push') {
     } else if (view === 'mcp') {
       const mcp = await api('/auth/mcp-connections');
       const scopeName = Object.fromEntries(Object.entries(mcpScopeInfo).map(([scope,[label]]) => [scope,label]));
-      const mcpRows = mcp.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>MCP 클라이언트</th><th>허용 범위</th><th>마지막 사용</th><th></th></tr></thead><tbody>${mcp.items.map(connection => `<tr><td><strong>${h(connection.client_name)}</strong><span class="record-subtitle" title="${h(connection.client_id)}">OAuth · ${h(connection.client_id)} · 연결 ${date(connection.created_at)}</span></td><td>${connection.scopes.length ? connection.scopes.map(scope => `<span class="tag">${h(scopeName[scope] || scope)}</span>`).join('') : '<span class="permission-toggle">모든 기능 차단</span>'}</td><td>${date(connection.last_used_at)}</td><td><div class="row-actions"><button data-action="manage-mcp-permissions" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}" data-permissions="${h(connection.scopes.join('|'))}">권한 관리</button>${connection.scopes.includes('vault:read') ? `<button data-action="grant-mcp-vault" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}">Vault 항목</button>` : ''}<button class="danger" data-action="revoke-mcp" data-id="${h(connection.client_id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="mcp-empty">아직 연결된 원격 MCP 클라이언트가 없습니다.</p>';
+      const mcpRows = mcp.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>MCP 클라이언트</th><th>허용 범위</th><th>마지막 사용</th><th></th></tr></thead><tbody>${mcp.items.map(connection => `<tr><td data-label="MCP 연결"><strong>${h(connection.client_name)}</strong><span class="record-subtitle" title="${h(connection.client_id)}">OAuth · ${h(connection.client_id)} · 연결 ${date(connection.created_at)}</span></td><td data-label="권한">${connection.scopes.length ? connection.scopes.map(scope => `<span class="tag">${h(scopeName[scope] || scope)}</span>`).join('') : '<span class="permission-toggle">모든 기능 차단</span>'}<span class="record-subtitle">namespace ${(connection.namespace_grants || []).filter(grant => grant.can_read).length}개</span></td><td data-label="마지막 사용">${dateTime(connection.last_used_at)}</td><td data-label="작업"><div class="row-actions"><button data-action="manage-mcp-permissions" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}" data-permissions="${h(connection.scopes.join('|'))}">기능 권한</button><button data-action="manage-namespaces" data-type="mcp" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}" data-grants="${h(JSON.stringify(connection.namespace_grants || []))}">Namespace</button>${connection.scopes.includes('vault:read') ? `<button data-action="grant-mcp-vault" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}">Vault 항목</button>` : ''}<button class="danger" data-action="revoke-mcp" data-id="${h(connection.client_id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="mcp-empty">아직 연결된 원격 MCP 클라이언트가 없습니다.</p>';
       html = `<section class="mcp-connect-card"><div class="mcp-connect-copy"><span>CHATGPT WORK PLUGIN · OAUTH 2.1</span><h2>ChatGPT Work에 바로 설치하세요.</h2><p>Plugin을 설치하면 Vibe Memory 로그인과 권한 승인이 이어집니다. Claude나 다른 MCP 클라이언트는 아래 주소로 연결할 수 있습니다.</p><code>${h(mcp.server_url)}</code></div><div class="mcp-connect-actions"><a class="button primary" href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec" target="_blank" rel="noopener"><img src="/assets/brands/codex.png" alt="">ChatGPT Work에 설치 ${icon('external-link')}</a><button class="button" type="button" data-action="copy-mcp-url" data-url="${h(mcp.server_url)}"><img src="/assets/brands/claude-code.png" alt="">다른 MCP용 주소 복사 ${icon('copy')}</button><a href="/guide#mcp" target="_blank" rel="noopener">연결 방법 보기 ${icon('external-link')}</a></div></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>원격 MCP 연결</h2><p>${mcp.items.length}개의 GPT·Claude 연결이 활성 상태입니다.</p></div></div>${mcpRows}</section>`;
     } else if (view === 'agents') {
       const result = await api('/auth/api-keys');
-      html = `<div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['Cursor','cursor.svg'],['Muse Code','muse.svg'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>CLI·Skill 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 ${icon('download')}</a></div><p class="key-note">발급된 키의 기능 권한과 Vault 권한을 따로 추가하거나 회수할 수 있습니다. 변경 내용은 즉시 적용되고 감사 이력에 남습니다.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>허용 권한</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><div class="agent-permission-summary"><span>${h((key.permissions || []).length)}개 기능</span><span class="permission-toggle ${key.vault_access ? 'enabled' : ''}">Vault ${key.vault_access ? '허용' : '차단'}</span></div></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button data-action="manage-agent-permissions" data-id="${h(key.id)}" data-name="${h(key.name)}" data-permissions="${h((key.permissions || []).join('|'))}" data-vault-access="${key.vault_access}">권한 관리</button><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.',`<a class="secondary-button" href="/guide" target="_blank">연결 방법 보기 ${icon('external-link')}</a>`)}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
+      html = `<div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['Cursor','cursor.svg'],['Muse Code','muse.svg'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>CLI·Skill 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 ${icon('download')}</a></div><p class="key-note">기능·namespace·Vault 권한은 서로 독립적입니다. 변경 내용은 즉시 적용됩니다.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>허용 권한</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td data-label="에이전트"><strong>${h(key.name)}</strong></td><td data-label="키"><code>${h(key.prefix)}</code></td><td data-label="권한"><div class="agent-permission-summary"><span>${h((key.permissions || []).length)}개 기능 · namespace ${(key.namespace_grants || []).filter(grant => grant.can_read).length}개</span><span class="permission-toggle ${key.vault_access ? 'enabled' : ''}">Vault ${key.vault_access ? '허용' : '차단'}</span></div></td><td data-label="연결일">${date(key.created_at)}</td><td data-label="작업"><div class="row-actions"><button data-action="manage-agent-permissions" data-id="${h(key.id)}" data-name="${h(key.name)}" data-permissions="${h((key.permissions || []).join('|'))}" data-vault-access="${key.vault_access}">기능 권한</button><button data-action="manage-namespaces" data-type="agent" data-id="${h(key.id)}" data-name="${h(key.name)}" data-grants="${h(JSON.stringify(key.namespace_grants || []))}">Namespace</button><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.',`<a class="secondary-button" href="/guide" target="_blank">연결 방법 보기 ${icon('external-link')}</a>`)}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
     } else if (view === 'security') {
       const security = await api('/auth/security');
       const status = security.totp_enabled
@@ -348,14 +377,36 @@ async function navigate(view, reset = true, historyMode = 'push') {
 }
 async function searchRecords(event) {
   event.preventDefault();
-  const keywords = new FormData(event.target).get('keywords').split(',').map(word => word.trim()).filter(Boolean);
+  const form = new FormData(event.target);
+  const split = name => String(form.get(name) || '').split(',').map(word => word.trim()).filter(Boolean);
+  const keywords = split('keywords');
   if (!keywords.length) return toast('검색할 키워드를 입력해주세요.');
   const button = event.target.querySelector('[type=submit]'); button.disabled = true;
   try {
-    const data = await api('/v1/search', {method:'POST',body:JSON.stringify({keywords,scope:currentView === 'documents' ? 'documents' : recordKind === 'entity' ? 'entities' : 'memories',limit:50})});
-    const records = await Promise.all(data.hits.map(hit => api('/v1/records/' + encodeURIComponent(hit.id))));
+    const project = String(form.get('project') || '').trim();
+    const payload = {keywords,scope:currentView === 'documents' ? 'documents' : recordKind === 'entity' ? 'entities' : 'memories',limit:50,match_mode:form.get('match_mode') || 'hybrid',must_keywords:split('must_keywords'),exclude_keywords:split('exclude_keywords'),tags:split('tags'),min_score:Number(form.get('min_score') || 0),metadata_filters:project ? {project} : {}};
+    const data = await api('/v1/search', {method:'POST',body:JSON.stringify(payload)});
+    const records = await Promise.all(data.hits.map(async hit => ({...(await api('/v1/records/' + encodeURIComponent(hit.id))),search:hit})));
     $('#record-results').innerHTML = records.length ? recordRows(records) : empty('검색 결과가 없어요.','다른 키워드로 검색해보세요.');
+    const url = new URL(location.href); url.searchParams.set('q',keywords.join(', ')); url.searchParams.set('mode',payload.match_mode); if (project) url.searchParams.set('project',project); else url.searchParams.delete('project'); history.replaceState({view:currentView},'',url.pathname + url.search + url.hash);
   } catch (error) { toast(error.message); } finally { button.disabled = false; }
+}
+
+async function contextHandoff() {
+  const form = $('#search-records');
+  let ids = [];
+  if (form && String(new FormData(form).get('keywords') || '').trim()) {
+    const words = String(new FormData(form).get('keywords')).split(',').map(value => value.trim()).filter(Boolean);
+    const search = await api('/v1/search',{method:'POST',body:JSON.stringify({keywords:words,scope:currentView === 'documents' ? 'documents' : 'all',match_mode:'hybrid',limit:25})});
+    ids = search.hits.map(item => item.id);
+  } else {
+    const records = await api('/v1/records?limit=25&offset=0'); ids = records.items.map(item => item.id);
+  }
+  if (!ids.length) return toast('인계할 기억이 없습니다.');
+  const bundle = await api('/v1/context-bundle',{method:'POST',body:JSON.stringify({record_ids:ids,limit:25,byte_limit:131072,include_content:true})});
+  const reproducible = JSON.stringify({schema_version:bundle.schema_version || '1',request:{record_ids:ids,limit:25,byte_limit:131072,include_content:true},response:bundle},null,2);
+  detail('다른 에이전트에서 이어가기',`<p class="dialog-help">Vault 값은 포함되지 않습니다. ${bundle.items.length}개 기록 · ${formatBytes(new Blob([reproducible]).size)} · ${bundle.next_cursor ? '다음 cursor 있음' : '현재 묶음 완료'}</p><div class="handoff-summary">${bundle.items.map(item => `<article><strong>${h(item.title || item.id)}</strong><span>v${h(item.version)} · ${h((item.retrieval_reason || []).join(', ') || '명시 선택')} · ${h(item.correction_status || 'current')}</span></article>`).join('')}</div><button class="button primary" id="copy-context-bundle" type="button">재현 가능한 인계 묶음 복사 ${icon('copy')}</button><details><summary>JSON 미리보기</summary><pre class="detail-pre">${h(reproducible)}</pre></details>`,'CONTEXT BUNDLE');
+  $('#copy-context-bundle').addEventListener('click',async () => { await copyText(reproducible); toast('Context Bundle을 복사했습니다.'); });
 }
 function editor(title, fields, onSave, submitLabel = '저장') {
   $('#editor-title').textContent = title; $('#editor-fields').innerHTML = fields;
@@ -452,6 +503,19 @@ async function editAgentPermissions(id, name, permissions, vaultAccess) {
     toast('에이전트 권한을 저장했습니다.');
   },'권한 저장');
 }
+
+async function editNamespaceGrants(type, id, name, grantsJson) {
+  const namespaces = await api('/auth/namespaces');
+  let grants = [];
+  try { grants = JSON.parse(grantsJson || '[]'); } catch { grants = []; }
+  const grantMap = new Map(grants.map(item => [item.namespace_id,item]));
+  const choices = namespaces.items.map(namespace => { const grant = grantMap.get(namespace.id); return `<fieldset class="namespace-grant"><legend>${h(namespace.name)}</legend><code>${h(namespace.id)}</code><label class="check-field"><input type="checkbox" name="read:${h(namespace.id)}" ${grant?.can_read ? 'checked' : ''}>읽기</label><label class="check-field"><input type="checkbox" name="write:${h(namespace.id)}" ${grant?.can_write ? 'checked' : ''}>쓰기</label></fieldset>`; }).join('');
+  editor(`${name} · Namespace 권한`,`<p class="dialog-help">선택하지 않은 namespace는 존재 여부도 알 수 없습니다. 쓰기는 읽기와 함께 부여됩니다. 프로젝트 metadata 필터와 다른 실제 접근 경계입니다.</p><div class="namespace-grant-list">${choices}</div>`,async data => {
+    const next = namespaces.items.map(namespace => ({namespace_id:namespace.id,can_read:data.has(`read:${namespace.id}`) || data.has(`write:${namespace.id}`),can_write:data.has(`write:${namespace.id}`)})).filter(item => item.can_read);
+    const path = type === 'mcp' ? `/auth/mcp-connections/${encodeURIComponent(id)}/namespaces` : `/auth/api-keys/${encodeURIComponent(id)}/namespaces`;
+    await api(path,{method:'PUT',body:JSON.stringify({grants:next})}); toast('Namespace 권한을 저장했습니다.');
+  },'권한 저장');
+}
 function primaryAction() {
   if (currentView === 'overview') return copyInstallPrompt();
   if (currentView === 'agents') return createKey();
@@ -475,7 +539,7 @@ document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return navigate(nav.dataset.view);
   const button = event.target.closest('[data-action]'); if (!button) return;
-  const {action,id,name,description,sourceName,targetName,relation,reason,url,permissions,vaultAccess} = button.dataset;
+  const {action,id,name,description,sourceName,targetName,relation,reason,url,permissions,vaultAccess,type,grants} = button.dataset;
   try {
     if (action === 'toggle-account') {
       if (window.innerWidth <= 820) {
@@ -507,6 +571,9 @@ document.addEventListener('click', async event => {
       catch { detail('Vibe Memory MCP 주소', `<pre class="detail-pre">${h(url)}</pre>`); }
       return;
     }
+    if (action === 'toggle-search-advanced') { $('#search-advanced').hidden = !$('#search-advanced').hidden; return; }
+    if (action === 'context-bundle') return contextHandoff();
+    if (action === 'manage-namespaces') return editNamespaceGrants(type,id,name,grants);
     if (action === 'create-key') return createKey();
     if (action === 'manage-agent-permissions') return editAgentPermissions(id,name,permissions,vaultAccess === 'true');
     if (action === 'setup-totp') return beginTotpSetup();
@@ -516,7 +583,7 @@ document.addEventListener('click', async event => {
     if (action === 'reload') return navigate(currentView, false);
     if (action === 'next') { pageOffset += 50; return navigate(currentView, false); }
     if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); return navigate(currentView, false); }
-    if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); return detail(record.title || '기록 상세', `<p class="detail-content-text">${h(record.content)}</p><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre>`,'MEMORY DETAIL'); }
+    if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); const correction = record.correction_status ? `<section class="correction-detail"><strong>정정 상태: ${h(record.correction_status)}</strong><p>‘current’는 알려진 대체 기록이 없다는 뜻이며 사실 검증 완료를 의미하지 않습니다.</p>${record.correction_targets?.length ? `<p>대체 대상: ${h(record.correction_targets.join(', '))}</p>` : ''}${record.corrected_by?.length ? `<p>후속 기록: ${h(record.corrected_by.join(', '))}</p>` : ''}</section>` : ''; return detail(record.title || '기록 상세', `${correction}<dl class="request-detail-meta"><div><dt>작성 연결</dt><dd>${h(record.creator_agent_name || '알 수 없음')}</dd></div><div><dt>버전</dt><dd>v${h(record.version)}</dd></div><div><dt>원본 유형</dt><dd>${h(record.provenance?.source_type || 'agent-authored')}</dd></div><div><dt>기록 시각</dt><dd>${h(record.recorded_at || record.created_at)}</dd></div></dl><p class="detail-content-text">${h(record.content)}</p><details><summary>원본 JSON</summary><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre></details>`,'MEMORY DETAIL'); }
     if (action === 'request-detail') { const record = await api('/v1/feature-requests/' + encodeURIComponent(id)); return detail(record.title,featureRequestDetail(record),'FEATURE REQUEST'); }
     if (action === 'relation-detail') {
       return detail('관계 근거',`<div class="relation-detail-route"><span>${h(sourceName)}</span><strong>${h(relation)}</strong><span>${h(targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(reason)}</p></div>`,'RELATION EVIDENCE');

@@ -142,6 +142,18 @@ class FeatureRequestOperatorUpdate(BaseModel):
     feature_request_operator: bool
 
 
+class NamespaceInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=80)
+
+
+class NamespaceGrant(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    namespace_id: str = Field(min_length=1, max_length=100)
+    can_read: bool = True
+    can_write: bool = False
+
+
 class PasswordInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     password: str = Field(min_length=10, max_length=128)
@@ -248,6 +260,19 @@ class AuthStore:
                     after_vault_access INTEGER NOT NULL);
                 CREATE INDEX IF NOT EXISTS api_key_permission_events_owner_idx
                     ON api_key_permission_events(user_id, changed_at DESC, id DESC);
+                CREATE TABLE IF NOT EXISTS namespaces (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    UNIQUE(user_id, name));
+                CREATE TABLE IF NOT EXISTS api_key_namespace_grants (
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    api_key_id TEXT NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+                    namespace_id TEXT NOT NULL,
+                    can_read INTEGER NOT NULL DEFAULT 1,
+                    can_write INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(user_id, api_key_id, namespace_id));
                 CREATE TABLE IF NOT EXISTS device_logins (
                     device_hash TEXT PRIMARY KEY, user_hash TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL,
@@ -662,6 +687,7 @@ class AuthStore:
             "vault_access": bool(row["vault_access"]),
             "feature_request_operator": bool(row["feature_request_operator"]),
             "permissions": stored_agent_permissions(row["permissions"]),
+            "namespace_grants": self.key_namespace_grants(row["user_id"], row["id"]),
         }
 
     def list_keys(self, user_id):
@@ -678,6 +704,7 @@ class AuthStore:
                 "vault_access": bool(row["vault_access"]),
                 "feature_request_operator": bool(row["feature_request_operator"]),
                 "permissions": stored_agent_permissions(row["permissions"]),
+                "namespace_grants": self.key_namespace_grants(user_id, row["id"]),
             }
             for row in rows
         ]
@@ -722,6 +749,85 @@ class AuthStore:
                 ),
             )
         return {**record, "key": token}
+
+    def list_namespaces(self, user_id):
+        with self.connection() as db:
+            rows = db.execute(
+                "SELECT id,name,created_at FROM namespaces WHERE user_id=? ORDER BY created_at,id",
+                (user_id,),
+            ).fetchall()
+        return [
+            {"id": "default", "name": "Default", "created_at": None, "legacy": True},
+            *[{**dict(row), "legacy": False} for row in rows],
+        ]
+
+    def create_namespace(self, user_id, name):
+        record = {"id": str(uuid4()), "name": name.strip(), "created_at": utc_epoch_seconds()}
+        try:
+            with self.connection() as db:
+                db.execute(
+                    "INSERT INTO namespaces(id,user_id,name,created_at) VALUES(?,?,?,?)",
+                    (record["id"], user_id, record["name"], record["created_at"]),
+                )
+        except (sqlite3.IntegrityError, IntegrityError):
+            raise HTTPException(409, "같은 이름의 namespace가 이미 있습니다.") from None
+        return {**record, "legacy": False}
+
+    def namespace_exists(self, user_id, namespace_id):
+        if namespace_id == "default":
+            return True
+        with self.connection() as db:
+            return bool(
+                db.execute(
+                    "SELECT 1 FROM namespaces WHERE user_id=? AND id=?",
+                    (user_id, namespace_id),
+                ).fetchone()
+            )
+
+    def key_namespace_grants(self, user_id, key_id):
+        with self.connection() as db:
+            rows = db.execute(
+                """SELECT namespace_id,can_read,can_write FROM api_key_namespace_grants
+                WHERE user_id=? AND api_key_id=? ORDER BY namespace_id""",
+                (user_id, key_id),
+            ).fetchall()
+        if not rows:
+            return [{"namespace_id": "default", "can_read": True, "can_write": True}]
+        return [
+            {
+                "namespace_id": row["namespace_id"],
+                "can_read": bool(row["can_read"]),
+                "can_write": bool(row["can_write"]),
+            }
+            for row in rows
+        ]
+
+    def replace_key_namespace_grants(self, user_id, key_id, grants):
+        with self.connection() as db:
+            if not db.execute(
+                "SELECT 1 FROM api_keys WHERE id=? AND user_id=?", (key_id, user_id)
+            ).fetchone():
+                raise HTTPException(404, "키를 찾을 수 없습니다.")
+            for grant in grants:
+                if not self.namespace_exists(user_id, grant.namespace_id):
+                    raise HTTPException(422, "존재하지 않는 namespace입니다.")
+                if grant.can_write and not grant.can_read:
+                    raise HTTPException(422, "write 권한은 read 권한과 함께 부여해야 합니다.")
+            db.execute(
+                "DELETE FROM api_key_namespace_grants WHERE user_id=? AND api_key_id=?",
+                (user_id, key_id),
+            )
+            effective_grants = grants or [
+                NamespaceGrant(namespace_id="default", can_read=False, can_write=False)
+            ]
+            for grant in effective_grants:
+                db.execute(
+                    """INSERT INTO api_key_namespace_grants(
+                    user_id,api_key_id,namespace_id,can_read,can_write
+                    ) VALUES(?,?,?,?,?)""",
+                    (user_id, key_id, grant.namespace_id, grant.can_read, grant.can_write),
+                )
+        return self.key_namespace_grants(user_id, key_id)
 
     def set_key_access(self, user_id, id, vault_access=None, permissions=None):
         with self.connection() as db:

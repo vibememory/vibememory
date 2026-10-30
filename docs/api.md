@@ -2,6 +2,10 @@
 
 Your own server exposes an interactive schema at `/docs` and machine-readable OpenAPI at `/openapi.json`. Browser-admin routes are usable but omitted from both by default; a private deployment can set `MEMORY_PUBLIC_OPENAPI_INCLUDE_ADMIN=true`.
 
+Contract discovery is available at `/.well-known/vibe-memory`. All timestamps and temporal query fields use UTC. `X-Vibe-Memory-Namespace` selects a hard authorization partition; project values in metadata are classification only and never grant access.
+
+Portable archives use raw byte streams: `GET /v1/portable-archive` returns a versioned ZIP with a SHA-256 manifest and JSONL records/relations, while `POST /v1/portable-archive/import` accepts `application/vnd.vibememory.archive+zip`. Import is a dry run unless `?apply=true` is explicit. Tokens, OAuth state, sessions, OTP data and Vault values are always excluded.
+
 ## Authentication
 
 Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/logout`. The session cookie is HttpOnly; mutations must include an Origin exactly matching `MEMORY_PUBLIC_ORIGIN`. Users can optionally enable RFC 6238 authenticator-app TOTP in **Console → Account security**. A password-valid login then returns a five-minute challenge instead of a session; `/auth/login/otp` accepts a non-replayed six-digit code or one-time recovery code before issuing the cookie. TOTP secrets are AES-256-GCM encrypted and recovery codes are stored only as hashes.
@@ -22,8 +26,9 @@ that request: stable connection ID and display name, transport (`rest`, `cli`, o
 `web`), credential type, audience, current grants, validity, and UTC check time.
 It never returns a raw token, inspects another connection, or treats host/client
 policy and third-party permissions as Vibe Memory grants. Unverified external
-permissions are `not_evaluated`; project/namespace policy is explicitly reported
-as unsupported while account-owner isolation remains enforced.
+permissions are `not_evaluated`. Namespace scope is reported as an enforced
+owner partition selected by `X-Vibe-Memory-Namespace`; project metadata remains
+classification only and never grants access.
 
 `GET /v1/capabilities` separates server feature support from this connection's
 effective action-level authorization. `POST /v1/permission-check` accepts a
@@ -56,9 +61,12 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/me` | Authenticated user ID and keyword model |
 | GET/POST | `/auth/api-keys` | Browser-only list/create of agent keys and initial permissions |
 | PATCH | `/auth/api-keys/{id}` | Browser-only add/revoke of one owned key's permissions and Vault access |
+| GET/POST | `/auth/namespaces` | Browser-only list/create of hard owner partitions |
+| PUT | `/auth/api-keys/{id}/namespaces` | Browser-only replace of one key's namespace read/write grants |
 | GET | `/auth/api-keys/{id}/permission-events` | Browser-only permission change audit for one owned key |
 | GET | `/auth/mcp-connections` | Browser-only list of owned MCP OAuth connections and current scopes |
 | PATCH | `/auth/mcp-connections/{client_id}` | Browser-only add/revoke of one owned MCP connection's scopes |
+| PUT | `/auth/mcp-connections/{client_id}/namespaces` | Browser-only replace of one MCP connection's namespace grants |
 | GET | `/auth/mcp-connections/{client_id}/permission-events` | Browser-only MCP scope change audit for one owned connection |
 | GET | `/v1/agents` | This connection and same-account addressable agents |
 | POST | `/v1/agent-messages` | Queue an expiring message for one agent |
@@ -68,12 +76,12 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/agent-messages/{id}` | Read a message as its sender or recipient |
 | POST | `/v1/agent-messages/{id}/ack` | Advance incoming status to delivered/read/acked |
 | GET | `/v1/stats` | Owner-scoped console counts and logical storage usage (`memory_bytes`, `file_bytes`, `storage_bytes`; usage includes archived records) |
-| POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata/provenance |
+| POST | `/v1/memories` | content, kind, keywords; optional idempotency key, UTC valid-time interval, source/tags/metadata/provenance |
 | POST | `/v1/corrections/memories` | Atomically create a replacement memory plus version-checked `SUPERSEDES`/`CORRECTS` edge |
 | POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata/provenance |
 | POST | `/v1/entities/batch` | Create up to 100 entities with per-item idempotency and partial-success results |
 | POST | `/v1/documents` | title, keywords; optional content/file_id/source/tags/metadata/provenance |
-| GET | `/v1/records` | Owner-scoped records with summary/fields/content/history projection; untrusted and quarantined records are excluded by default |
+| GET | `/v1/records` | Namespace-scoped records with projection and optional `valid_at`/current-version-only `known_at`; untrusted and quarantined records are excluded by default |
 | GET/DELETE | `/v1/records/{id}` | Read / permanently delete a record and incident edges |
 | PATCH | `/v1/records/{id}` | Version-checked update of agent-selected record fields |
 | PATCH | `/v1/records/batch` | Version-check and update up to 100 records with per-item idempotency |
@@ -95,12 +103,15 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/graph/diff` | Dry-run an agent-authored desired-edge manifest and issue a snapshot-bound approval hash |
 | POST | `/v1/graph/apply` | Apply only explicitly approved create/retract IDs while the diff hash remains current |
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
+| GET | `/v1/portable-archive` | Download manifest-hashed JSONL ZIP; excludes credentials, Vault and raw files |
+| POST | `/v1/portable-archive/import` | Raw byte-stream archive dry-run; `?apply=true` is explicit and imported data is quarantined |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
 | GET | `/v1/admin/operator-agents` | Admin-browser list of the administrator's agent keys and operator state |
 | PATCH | `/v1/admin/operator-agents/{id}` | Admin-browser approval/revocation of narrow feature-request operator permission |
 | GET | `/v1/admin/feature-requests` | Admin-browser or approved operator processing queue across workspaces |
 | PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser or approved operator status and public-result update |
+| GET | `/v1/admin/metrics` | Admin-browser fixed-cardinality volume/error/latency and DB-pool metrics |
 | GET | `/v1/admin/users` | Admin-browser safe user list and usage/connection counts; no auth secrets |
 | GET | `/v1/auth-context` | Current credential/principal facts only; no raw token or cross-connection lookup |
 | GET | `/v1/capabilities` | Versioned feature support and action-level authorization matrix for the current connection |

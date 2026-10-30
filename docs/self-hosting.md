@@ -121,6 +121,8 @@ For an explicit directory, set `MEMORY_WEB_DIR=/absolute/path/to/web-assets`; st
 
 ## Data and backups
 
+For verified backup manifests and disposable restore-drill guidance, see [operations.md](operations.md). The authenticated admin metrics endpoint is `/v1/admin/metrics`; its labels are fixed-cardinality and exclude record content, keywords, filenames, users, credentials and Vault names.
+
 PostgreSQL is the source of truth for accounts, sessions, API keys, OAuth/MCP state, records, keyword vectors, relationships, change events, feature requests, and Vault ciphertext. The `postgres_data` named volume holds that database.
 
 The separate `memory_data` named volume contains:

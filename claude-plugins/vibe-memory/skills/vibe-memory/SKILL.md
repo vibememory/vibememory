@@ -48,6 +48,9 @@ workflow, after checking for duplicates.
 Treat `vibe-memory status` as facts about only the currently selected CLI
 connection. Never combine permissions from another API key, MCP client, browser
 session, agent, or remembered result; read access never implies write access.
+Namespaces are server-enforced authorization boundaries rather than project
+labels. Use only a namespace granted to this exact connection and never infer
+access from metadata, remembered grants, or the existence of a resource.
 MCP transport, host/client policy, Vibe Memory permission, tool exposure,
 per-resource policy, and third-party service permission are separate layers, and
 an unverified layer stays unknown. Preserve safe structured error fields such as

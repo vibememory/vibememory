@@ -6,7 +6,9 @@ import json
 import logging
 import re
 import time
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Literal
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -37,6 +39,8 @@ from .auth import (
     KeyAccessUpdate,
     KeyInput,
     LoginSecondFactor,
+    NamespaceGrant,
+    NamespaceInput,
     PasswordInput,
     ProtectedSecondFactor,
     SecondFactorInput,
@@ -58,6 +62,7 @@ from .capabilities import (
     permission_check,
     structured_error,
 )
+from .clock import utc_now_iso
 from .config import Settings
 from .corrections import annotate_corrections
 from .deterministic import (
@@ -99,11 +104,13 @@ from .models import (
     VaultInput,
 )
 from .oauth import SUPPORTED_MCP_SCOPES, OAuthError, OAuthStore
+from .portable import export_archive, import_archive
 from .postgres import PostgresDatabase
 from .postgres_store import PostgresStore
 from .retrieval import retrieve
 from .security import SecurityPolicyError, prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, FileInUse, NotFound, Store
+from .temporal import recorded_instant
 from .vault import (
     VaultCaptureConsumed,
     VaultCaptureExpired,
@@ -129,6 +136,19 @@ class DeviceApproval(BaseModel):
     user_code: str = Field(pattern=r"^[A-Fa-f0-9]{10}$")
     approved: bool
     vault_access: bool | None = None
+
+
+class NamespaceGrantsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    grants: list[NamespaceGrant] = Field(default_factory=list, max_length=100)
+
+    @field_validator("grants")
+    @classmethod
+    def unique_namespaces(cls, value):
+        namespace_ids = [grant.namespace_id for grant in value]
+        if len(namespace_ids) != len(set(namespace_ids)):
+            raise ValueError("namespace grants must be unique")
+        return value
 
 
 class OAuthRegistration(BaseModel):
@@ -200,10 +220,28 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.29.2",
+        version="0.30.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
+    request_metrics = defaultdict(lambda: deque(maxlen=2000))
+    request_metric_counts = defaultdict(int)
+
+    @app.middleware("http")
+    async def collect_request_metrics(request: Request, call_next):
+        started = time.perf_counter()
+        status_code = 500
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            return response
+        finally:
+            route = request.scope.get("route")
+            template = getattr(route, "path", "unmatched")
+            # Route templates and status classes are fixed-cardinality; no user/content labels.
+            key = (request.method, template, f"{status_code // 100}xx")
+            request_metric_counts[key] += 1
+            request_metrics[key].append((time.perf_counter() - started) * 1000)
 
     @app.middleware("http")
     async def request_contract(request: Request, call_next):
@@ -256,6 +294,7 @@ def create_app(settings=None, embedder=None):
     ]
 
     def bind_agent(request, user, agent_id, name, transport):
+        request.state.account_id = user
         request.state.agent_id = agent_id
         request.state.agent_name = name
         request.state.agent_transport = transport
@@ -264,6 +303,7 @@ def create_app(settings=None, embedder=None):
         return user
 
     def bind_browser_context(request, user):
+        request.state.account_id = user["id"]
         request.state.agent_id = "browser:" + user["id"]
         request.state.agent_name = user["name"]
         request.state.agent_transport = "browser"
@@ -291,6 +331,19 @@ def create_app(settings=None, embedder=None):
 
     def rest_auth_context(request, user_id):
         account = accounts.user(user_id)
+        namespace_id = request.headers.get("X-Vibe-Memory-Namespace", "default").strip()
+        if not re.fullmatch(r"default|[0-9a-fA-F-]{36}", namespace_id):
+            raise HTTPException(404, "Namespace or resource was not found")
+        if getattr(request.state, "auth_kind", "none") == "browser-session":
+            namespace_allowed = accounts.namespace_exists(user_id, namespace_id)
+        else:
+            namespace_allowed = any(
+                item["namespace_id"] == namespace_id and item["can_read"]
+                for item in (getattr(request.state, "namespace_grants", None) or [])
+            )
+        if not namespace_allowed:
+            raise HTTPException(404, "Namespace or resource was not found")
+        request.state.namespace_id = namespace_id
         raw_transport = getattr(request.state, "agent_transport", "api-key")
         if raw_transport == "browser":
             transport = "web"
@@ -307,7 +360,7 @@ def create_app(settings=None, embedder=None):
         grants = set(getattr(request.state, "permissions", set()))
         if getattr(request.state, "vault_access", False):
             grants.add("vault:read")
-        return build_auth_context(
+        context = build_auth_context(
             connection_id=getattr(request.state, "agent_id", "unknown"),
             connection_name=getattr(request.state, "agent_name", "Unknown connection"),
             transport=transport,
@@ -322,6 +375,14 @@ def create_app(settings=None, embedder=None):
             ),
             is_admin=bool(account and is_admin(account)),
         )
+        context["project_scope"] = {
+            "status": "enforced",
+            "namespace_id": namespace_id,
+            "selection": "X-Vibe-Memory-Namespace",
+            "enforcement": "isolated_owner_partition",
+            "grants": getattr(request.state, "namespace_grants", None),
+        }
+        return context
 
     def admin_user(user=Depends(browser_user)):
         if not is_admin(user):
@@ -367,6 +428,9 @@ def create_app(settings=None, embedder=None):
                 if hmac.compare_digest(expected, supplied):
                     request.state.auth_kind = "legacy-key"
                     request.state.permissions = set(DEFAULT_AGENT_PERMISSIONS)
+                    request.state.namespace_grants = [
+                        {"namespace_id": "default", "can_read": True, "can_write": True}
+                    ]
                     return bind_agent(
                         request,
                         user,
@@ -378,6 +442,7 @@ def create_app(settings=None, embedder=None):
             if principal:
                 request.state.vault_access = principal["vault_access"]
                 request.state.permissions = set(principal["permissions"])
+                request.state.namespace_grants = principal["namespace_grants"]
                 request.state.feature_request_operator = principal["feature_request_operator"]
                 request.state.auth_kind = "agent-key"
                 request.state.key_id = principal["key_id"]
@@ -415,14 +480,35 @@ def create_app(settings=None, embedder=None):
 
         return permitted
 
-    memory_reader = permission_user("memory:read")
-    memory_writer = permission_user("memory:write")
-    files_reader = permission_user("files:read")
-    files_writer = permission_user("files:write")
+    def scoped_permission(permission, write=False):
+        def permitted(request: Request, user=Depends(permission_user(permission))):
+            namespace_id = request.headers.get("X-Vibe-Memory-Namespace", "default").strip()
+            if not re.fullmatch(r"default|[0-9a-fA-F-]{36}", namespace_id):
+                raise HTTPException(404, "Namespace or resource was not found")
+            grants = getattr(request.state, "namespace_grants", None)
+            if getattr(request.state, "auth_kind", "none") == "browser-session":
+                allowed = accounts.namespace_exists(user, namespace_id)
+            else:
+                item = next(
+                    (value for value in (grants or []) if value["namespace_id"] == namespace_id),
+                    None,
+                )
+                allowed = bool(item and item["can_read"] and (not write or item["can_write"]))
+            if not allowed:
+                raise HTTPException(404, "Namespace or resource was not found")
+            request.state.namespace_id = namespace_id
+            return user if namespace_id == "default" else f"{user}::vmns::{namespace_id}"
+
+        return permitted
+
+    memory_reader = scoped_permission("memory:read", False)
+    memory_writer = scoped_permission("memory:write", True)
+    files_reader = scoped_permission("files:read", False)
+    files_writer = scoped_permission("files:write", True)
     messages_reader = permission_user("messages:read")
     messages_writer = permission_user("messages:write")
     feature_writer = permission_user("feature:write")
-    events_reader = permission_user("events:read")
+    events_reader = scoped_permission("events:read", False)
 
     def vault_user(request: Request, user=Depends(owner)):
         if not request.state.vault_access:
@@ -734,6 +820,23 @@ def create_app(settings=None, embedder=None):
     def create_api_key(data: KeyInput, user=Depends(browser_user)):
         return accounts.create_key(user["id"], data.name, data.vault_access, data.permissions)
 
+    @app.get("/auth/namespaces", tags=["account"])
+    def namespaces(user=Depends(browser_user)):
+        return {"items": accounts.list_namespaces(user["id"])}
+
+    @app.post("/auth/namespaces", status_code=201, tags=["account"])
+    def create_namespace(data: NamespaceInput, user=Depends(browser_user)):
+        return accounts.create_namespace(user["id"], data.name)
+
+    @app.put("/auth/api-keys/{id}/namespaces", tags=["account"])
+    def update_api_key_namespaces(
+        id: str, data: NamespaceGrantsUpdate, user=Depends(browser_user)
+    ):
+        return {
+            "key_id": id,
+            "grants": accounts.replace_key_namespace_grants(user["id"], id, data.grants),
+        }
+
     @app.patch("/auth/api-keys/{id}", tags=["account"])
     def update_api_key(id: str, data: KeyAccessUpdate, user=Depends(browser_user)):
         return accounts.set_key_access(user["id"], id, data.vault_access, data.permissions)
@@ -1026,6 +1129,22 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             ],
         }
 
+    @app.put("/auth/mcp-connections/{client_id}/namespaces", tags=["account"])
+    def update_mcp_namespaces(
+        client_id: str, data: NamespaceGrantsUpdate, user=Depends(browser_user)
+    ):
+        try:
+            grants = oauth.replace_namespace_grants(
+                user["id"],
+                client_id,
+                data.grants,
+                lambda namespace_id: accounts.namespace_exists(user["id"], namespace_id),
+            )
+        except OAuthError as error:
+            status = 422 if error.code == "invalid_scope" else 404
+            raise HTTPException(status, error.description) from None
+        return {"client_id": client_id, "grants": grants}
+
     @app.put("/auth/mcp-connections/{client_id}/vault", tags=["account"])
     def update_mcp_vault_grants(
         client_id: str,
@@ -1062,6 +1181,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         principal["agent_id"] = "oauth:" + principal["client_id"]
         principal["agent_name"] = principal["client_name"]
         principal["request_id"] = getattr(request.state, "request_id", "")
+        principal["account_id"] = principal["user_id"]
+        principal["namespace_grants"] = oauth.namespace_grants(
+            principal["user_id"], principal["client_id"]
+        )
         try:
             principal["vault_names"] = oauth.vault_grants(
                 principal["user_id"], principal["client_id"]
@@ -1088,6 +1211,55 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "Parse error"}},
                 status_code=400,
             )
+        namespace_id = request.headers.get("X-Vibe-Memory-Namespace", "default").strip()
+        grant = next(
+            (
+                item
+                for item in principal["namespace_grants"]
+                if item["namespace_id"] == namespace_id
+            ),
+            None,
+        )
+        calls = payload if isinstance(payload, list) else [payload]
+        write_call = any(
+            isinstance(item, dict)
+            and item.get("method") == "tools/call"
+            and (item.get("params") or {}).get("name")
+            in {
+                "memory_create",
+                "memory_correct",
+                "document_create",
+                "entity_create",
+                "entity_create_many",
+                "record_update",
+                "record_update_many",
+                "record_archive",
+                "record_restore",
+                "record_delete",
+                "relation_create",
+                "relation_create_many",
+                "relation_update",
+                "record_security_update",
+                "record_merge",
+                "graph_apply",
+            }
+            for item in calls
+        )
+        if not grant or not grant["can_read"] or (write_call and not grant["can_write"]):
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32003, "message": "Namespace is not authorized"},
+                },
+                status_code=403,
+            )
+        principal["namespace_id"] = namespace_id
+        principal["memory_owner"] = (
+            principal["user_id"]
+            if namespace_id == "default"
+            else f"{principal['user_id']}::vmns::{namespace_id}"
+        )
         db = request.app.state.store
         if isinstance(payload, list):
             if not payload:
@@ -1428,6 +1600,79 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def health():
         return {"status": "ok", "minimum_cli_version": MINIMUM_CLI_VERSION}
 
+    @app.get("/.well-known/vibe-memory", tags=["service"])
+    def public_memory_contract():
+        return {
+            "schema_version": "1.1",
+            "service": "vibe-memory",
+            "time_basis": "UTC",
+            "inference": "agent_supplied_only",
+            "endpoints": {
+                "capabilities": "/v1/capabilities",
+                "auth_context": "/v1/auth-context",
+                "portable_export": "/v1/portable-archive",
+                "portable_import": "/v1/portable-archive/import",
+                "mcp": "/mcp",
+            },
+            "profiles": ["core-rest", "mcp", "namespaces", "portable-archive", "valid-time"],
+            "extensions": {
+                "historical_recorded_time": "unsupported",
+                "raw_file_portable_export": "unsupported",
+            },
+        }
+
+    @app.get(
+        "/v1/admin/metrics",
+        tags=["admin"],
+        include_in_schema=settings.public_openapi_include_admin,
+    )
+    def admin_metrics(user=Depends(admin_user)):
+        def percentile(values, fraction):
+            ordered = sorted(values)
+            return round(ordered[min(len(ordered) - 1, int((len(ordered) - 1) * fraction))], 2)
+
+        routes = []
+        total_requests = 0
+        failed_requests = 0
+        for (method, template, status_class), values in sorted(request_metrics.items()):
+            if not values:
+                continue
+            sample = list(values)
+            count = request_metric_counts[(method, template, status_class)]
+            total_requests += count
+            if status_class in {"4xx", "5xx"}:
+                failed_requests += count
+            routes.append(
+                {
+                    "method": method,
+                    "route": template,
+                    "status_class": status_class,
+                    "count": count,
+                    "latency_sample_size": len(sample),
+                    "latency_ms": {
+                        "p50": percentile(sample, 0.50),
+                        "p95": percentile(sample, 0.95),
+                        "p99": percentile(sample, 0.99),
+                    },
+                }
+            )
+        pool = database.pool.get_stats() if database else {"backend": "embedded"}
+        return {
+            "checked_at": utc_now_iso(),
+            "time_basis": "UTC",
+            "privacy": "fixed-cardinality metadata only",
+            "summary": {
+                "request_count": total_requests,
+                "error_count": failed_requests,
+                "error_ratio": round(failed_requests / total_requests, 6)
+                if total_requests
+                else 0,
+            },
+            "requests": routes,
+            "database_pool": pool,
+            "backup": {"last_verified_at": None, "status": "not_reported"},
+        }
+
     @app.get("/v1/events", tags=["service"])
     async def events(
         request: Request,
@@ -1459,7 +1704,13 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     current = await anyio.to_thread.run_sync(owner, request, credentials)
                 except HTTPException:
                     return
-                if current != user or "events:read" not in request.state.permissions:
+                namespace_id = request.headers.get("X-Vibe-Memory-Namespace", "default").strip()
+                current_scoped = (
+                    current
+                    if namespace_id == "default"
+                    else f"{current}::vmns::{namespace_id}"
+                )
+                if current_scoped != user or "events:read" not in request.state.permissions:
                     return
                 batch = await anyio.to_thread.run_sync(db.events, user, cursor)
                 for event in batch:
@@ -1947,7 +2198,21 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def add_memory(
         data: MemoryInput, request: Request, user=Depends(memory_writer), db=Depends(store)
     ):
-        return ingest(db, user, "memory", data, request.state.agent_id, request.state.agent_name)
+        if not data.client_request_id:
+            return ingest(
+                db, user, "memory", data, request.state.agent_id, request.state.agent_name
+            )
+        stored, _created = db.run_idempotent(
+            user,
+            request.state.agent_id,
+            "memory_create",
+            data.client_request_id,
+            request_hash(data),
+            lambda: minimal_resource(
+                ingest(db, user, "memory", data, request.state.agent_id, request.state.agent_name)
+            ),
+        )
+        return db.get(user, stored["id"])
 
     @app.post("/v1/documents", status_code=201, tags=["documents"])
     def add_document(
@@ -2122,6 +2387,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         include_history: bool = True,
         include_untrusted: bool = False,
         include_quarantined: bool = False,
+        valid_at: datetime | None = None,
+        known_at: datetime | None = None,
         user=Depends(memory_reader),
         db=Depends(store),
     ):
@@ -2131,14 +2398,35 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             selected_fields = parse_fields(fields, RECORD_FIELDS)
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
-        items = db.list(
-            user,
-            kind,
-            limit,
-            offset,
-            include_untrusted,
-            include_quarantined,
-        )
+        for value in (valid_at, known_at):
+            if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+                raise HTTPException(422, "valid_at and known_at must include a UTC offset")
+        if not valid_at and not known_at:
+            items = db.list(
+                user, kind, limit, offset, include_untrusted, include_quarantined
+            )
+        else:
+            candidates, cursor = [], 0
+            while True:
+                page = db.list(
+                    user, kind, 500, cursor, include_untrusted, include_quarantined
+                )
+                candidates.extend(page)
+                if len(page) < 500:
+                    break
+                cursor += len(page)
+            def applies(record):
+                temporal = record.get("metadata", {}).get("vibe_memory_temporal", {})
+                start, end = temporal.get("valid_from"), temporal.get("valid_to")
+                point = valid_at.astimezone(UTC) if valid_at else None
+                if point and start and point < datetime.fromisoformat(start):
+                    return False
+                if point and end and point >= datetime.fromisoformat(end):
+                    return False
+                known = known_at.astimezone(UTC) if known_at else None
+                return not (known and recorded_instant(record) > known)
+            filtered = [record for record in candidates if applies(record)]
+            items = filtered[offset : offset + limit]
         annotate_corrections(db, user, items)
         return {
             "items": [
@@ -2153,13 +2441,18 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             ],
             "limit": limit,
             "offset": offset,
+            "temporal": {
+                "valid_at": valid_at.astimezone(UTC).isoformat() if valid_at else None,
+                "known_at": known_at.astimezone(UTC).isoformat() if known_at else None,
+                "completeness": "current_versions_only",
+            },
         }
 
     @app.get("/v1/records/{id}", tags=["memories"])
     def get_record(id: str, user=Depends(memory_reader), db=Depends(store)):
         record = db.get(user, id)
         annotate_corrections(db, user, [record])
-        return record
+        return project_record(record)
 
     @app.post("/v1/corrections/memories", status_code=201, tags=["memories"])
     def correct_memory(
@@ -2492,6 +2785,50 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         except Exception:
             log.exception("Retrieval failed")
             raise HTTPException(503, "Retrieval unavailable") from None
+
+    @app.get("/v1/portable-archive", tags=["portability"])
+    def portable_export(
+        request: Request, user=Depends(memory_reader), db=Depends(store)
+    ):
+        body, manifest = export_archive(
+            db, user, getattr(request.state, "namespace_id", "default")
+        )
+        return Response(
+            body,
+            media_type="application/vnd.vibememory.archive+zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="vibe-memory-export.zip"',
+                "X-Vibe-Memory-Archive-Version": manifest["version"],
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.post("/v1/portable-archive/import", tags=["portability"])
+    async def portable_import(
+        request: Request,
+        apply: bool = False,
+        user=Depends(memory_writer),
+        db=Depends(store),
+    ):
+        if request.headers.get("content-type", "").split(";", 1)[0].strip() not in {
+            "application/zip",
+            "application/vnd.vibememory.archive+zip",
+            "application/octet-stream",
+        }:
+            raise HTTPException(415, "Upload the archive as a raw byte stream")
+        body = await request.body()
+        try:
+            return import_archive(
+                db,
+                embedder,
+                user,
+                body,
+                request.state.agent_id,
+                request.state.agent_name,
+                apply=apply,
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
 
     mount_web(app, settings.web_dir)
     return app

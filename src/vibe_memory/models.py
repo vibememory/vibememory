@@ -78,12 +78,15 @@ class ProvenanceInput(Input):
 
 
 class RecordInput(KeywordsInput):
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
     source: str = Field(default="", max_length=2000)
     tags: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
         default_factory=list, max_length=30
     )
     metadata: dict = Field(default_factory=dict)
     provenance: ProvenanceInput = Field(default_factory=ProvenanceInput)
+    valid_from: datetime | None = None
+    valid_to: datetime | None = None
 
     @field_validator("metadata")
     @classmethod
@@ -93,6 +96,32 @@ class RecordInput(KeywordsInput):
         if len(json.dumps(value, ensure_ascii=False, allow_nan=False)) > 30000:
             raise ValueError("metadata must fit within 30000 characters of JSON")
         return value
+
+    @field_validator("valid_from", "valid_to")
+    @classmethod
+    def normalize_valid_time(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("valid time must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def temporal_interval(self):
+        if self.valid_from and self.valid_to and self.valid_from >= self.valid_to:
+            raise ValueError("valid_from must be earlier than valid_to")
+        if self.valid_from is None and self.valid_to is None:
+            return self
+        temporal = dict(self.metadata.get("vibe_memory_temporal") or {})
+        temporal.update(
+            {
+                "valid_from": self.valid_from.isoformat() if self.valid_from else None,
+                "valid_to": self.valid_to.isoformat() if self.valid_to else None,
+                "basis": "agent_supplied",
+            }
+        )
+        self.metadata = {**self.metadata, "vibe_memory_temporal": temporal}
+        return self
 
 
 class MemoryInput(RecordInput):
@@ -384,6 +413,8 @@ class SearchInput(KeywordsInput):
     include_untrusted: bool = False
     include_quarantined: bool = False
     exclude_resolved_superseded: bool = False
+    valid_at: datetime | None = None
+    known_at: datetime | None = None
 
     @field_validator("must_keywords", "exclude_keywords")
     @classmethod
@@ -396,7 +427,7 @@ class SearchInput(KeywordsInput):
                 seen.add(folded)
         return result
 
-    @field_validator("created_after", "created_before")
+    @field_validator("created_after", "created_before", "valid_at", "known_at")
     @classmethod
     def require_utc_timestamp(cls, value):
         if value is None:
@@ -437,6 +468,8 @@ class ContextBundleInput(Input):
     ] = Field(default_factory=list, max_length=30)
     created_after: datetime | None = None
     updated_after: datetime | None = None
+    valid_at: datetime | None = None
+    known_at: datetime | None = None
     depth: int = Field(default=1, ge=0, le=2)
     limit: int = Field(default=25, ge=1, le=100)
     byte_limit: int = Field(default=131072, ge=2048, le=1048576)
@@ -452,7 +485,7 @@ class ContextBundleInput(Input):
             raise ValueError("selector values must be unique")
         return values
 
-    @field_validator("created_after", "updated_after")
+    @field_validator("created_after", "updated_after", "valid_at", "known_at")
     @classmethod
     def normalize_context_time(cls, value):
         if value is None:
@@ -473,6 +506,8 @@ class ContextBundleInput(Input):
                 self.tags,
                 self.created_after,
                 self.updated_after,
+                self.valid_at,
+                self.known_at,
             )
         ):
             raise ValueError("at least one context selector is required")

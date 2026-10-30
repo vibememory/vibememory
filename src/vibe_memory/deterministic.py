@@ -9,6 +9,7 @@ from datetime import datetime
 from .clock import utc_now_iso
 from .corrections import annotate_corrections
 from .store import NotFound
+from .temporal import recorded_instant
 
 
 class SnapshotConflict(Exception):
@@ -103,6 +104,15 @@ def _record_matches_context(record, data):
     if data.created_after and datetime.fromisoformat(record["created_at"]) < data.created_after:
         return False
     if data.updated_after and datetime.fromisoformat(_updated_at(record)) < data.updated_after:
+        return False
+    temporal = record.get("metadata", {}).get("vibe_memory_temporal", {})
+    if data.valid_at:
+        valid_from, valid_to = temporal.get("valid_from"), temporal.get("valid_to")
+        if valid_from and data.valid_at < datetime.fromisoformat(valid_from):
+            return False
+        if valid_to and data.valid_at >= datetime.fromisoformat(valid_to):
+            return False
+    if data.known_at and recorded_instant(record) > data.known_at:
         return False
     return True
 
@@ -274,6 +284,11 @@ def context_bundle(store, owner, data):
             "selector_hash": selector_hash,
             "llm_calls": 0,
             "generated_summary": False,
+            "temporal": {
+                "valid_at": data.valid_at.isoformat() if data.valid_at else None,
+                "known_at": data.known_at.isoformat() if data.known_at else None,
+                "completeness": "current_versions_only",
+            },
             "items": page,
             "relations": [
                 _context_relation(edge)

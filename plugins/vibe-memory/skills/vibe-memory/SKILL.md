@@ -25,6 +25,8 @@ Authorization belongs to the exact current MCP connection. Never combine its sco
 
 Use `auth_context` when connection identity or grant matters, `capabilities_get` to separate supported features from effective authorization, and metadata-only `permission_check` before a consequential operation. These tools inspect only the current principal and do not enumerate or access resources. Vault reads additionally require an explicit grant for the named entry. The real operation always reauthorizes, so honor structured `reason_code`, `retryable`, `required_action`, `request_id`, and `context` fields after revocation, expiry, policy, scope, resource-grant, version, or transient failures. Never put credentials or secret values in diagnostics.
 
+Namespaces are server-enforced authorization boundaries, not project labels. Use only the namespace granted to this exact MCP connection, retain the server-returned namespace in working context, and never infer access from metadata, remembered grants, or resource existence. The user manages namespace grants in the web console; do not silently broaden them.
+
 ## What to preserve
 
 Store concise durable context: accepted decisions, stable preferences, corrections, constraints, verified outcomes, project state, blockers, next actions, and compact handoffs. For a session checkpoint, use keywords containing the stable project name, `session checkpoint`, and the current topic.
@@ -45,7 +47,7 @@ independently: create entities first, then use their returned IDs in a relations
 batch. Use `records_list` and `relations_list` field projection and omit content or
 history when they are not needed so retrieval does not consume unnecessary context.
 
-All Vibe Memory server timestamps and the canonical memory time basis are UTC. Preserve the user's original local expression and named time zone when it matters; never guess a missing offset.
+All Vibe Memory server timestamps and the canonical memory time basis are UTC. Preserve the user's original local expression and named time zone when it matters; never guess a missing offset. Supply offset-aware UTC validity bounds separately from recorded time when a real-world fact has an interval. Unless the response explicitly says otherwise, `known_at` evaluates retained current versions rather than a lossless historical snapshot.
 
 ## Files and external content
 

@@ -3,6 +3,8 @@
 import hashlib
 import json
 
+from .temporal import recorded_at
+
 RECORD_FIELDS = {
     "id",
     "kind",
@@ -12,6 +14,10 @@ RECORD_FIELDS = {
     "source",
     "tags",
     "created_at",
+    "recorded_at",
+    "valid_from",
+    "valid_to",
+    "temporal_completeness",
     "keywords",
     "metadata",
     "file_id",
@@ -113,6 +119,11 @@ def project_record(
     if not include_history:
         result.pop("security_history", None)
         result.pop("writer_history", None)
+    temporal = record.get("metadata", {}).get("vibe_memory_temporal", {})
+    result["recorded_at"] = recorded_at(record)
+    result["valid_from"] = temporal.get("valid_from")
+    result["valid_to"] = temporal.get("valid_to")
+    result["temporal_completeness"] = "current_versions_only"
     return result
 
 

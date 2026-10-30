@@ -3,6 +3,7 @@ from datetime import datetime
 from .corrections import annotate_corrections
 from .embeddings import cosine
 from .security import record_is_retrievable
+from .temporal import recorded_instant
 
 
 def record_matches_filters(record, stored_keywords, request):
@@ -24,7 +25,30 @@ def record_matches_filters(record, stored_keywords, request):
         return False
     if request.created_before and created > request.created_before:
         return False
+    temporal = record.get("metadata", {}).get("vibe_memory_temporal", {})
+    if request.valid_at:
+        valid_from = temporal.get("valid_from")
+        valid_to = temporal.get("valid_to")
+        if valid_from and request.valid_at < datetime.fromisoformat(valid_from):
+            return False
+        if valid_to and request.valid_at >= datetime.fromisoformat(valid_to):
+            return False
+    if request.known_at and recorded_instant(record) > request.known_at:
+        return False
     return True
+
+
+def _temporal_hit(hit, request):
+    temporal = hit.get("metadata", {}).get("vibe_memory_temporal", {})
+    if request.valid_at:
+        valid_from = temporal.get("valid_from")
+        valid_to = temporal.get("valid_to")
+        if valid_from and request.valid_at < datetime.fromisoformat(valid_from):
+            return False
+        if valid_to and request.valid_at >= datetime.fromisoformat(valid_to):
+            return False
+    recorded = recorded_instant(hit)
+    return not (request.known_at and recorded and recorded > request.known_at)
 
 
 def retrieve(store, embedder, owner, request):
@@ -34,11 +58,18 @@ def retrieve(store, embedder, owner, request):
     )
     if hasattr(store, "vector_search"):
         result = store.vector_search(owner, request, query_vectors, embedder.model_name)
+        result["hits"] = [hit for hit in result["hits"] if _temporal_hit(hit, request)]
         annotate_corrections(store, owner, result["hits"])
         if request.exclude_resolved_superseded:
             result["hits"] = [
                 hit for hit in result["hits"] if hit["correction_status"] != "superseded"
             ]
+        if request.valid_at or request.known_at:
+            result["temporal"] = {
+                "valid_at": request.valid_at.isoformat() if request.valid_at else None,
+                "known_at": request.known_at.isoformat() if request.known_at else None,
+                "completeness": "current_versions_only",
+            }
         return result
     candidates = store.candidates(owner, request.scope, request.tags)
     records = {}
@@ -94,10 +125,17 @@ def retrieve(store, embedder, owner, request):
     if request.exclude_resolved_superseded:
         hits = [hit for hit in hits if hit["correction_status"] != "superseded"]
     # Fetching source records, graph expansion, evidence selection and RAG belong to the agent.
-    return {
+    result = {
         "mode": "keyword_vector",
         "match_mode": request.match_mode,
         "embedding_model": embedder.model_name,
         "keywords": request.keywords,
         "hits": hits[: request.limit],
     }
+    if request.valid_at or request.known_at:
+        result["temporal"] = {
+            "valid_at": request.valid_at.isoformat() if request.valid_at else None,
+            "known_at": request.known_at.isoformat() if request.known_at else None,
+            "completeness": "current_versions_only",
+        }
+    return result

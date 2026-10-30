@@ -873,3 +873,54 @@ def test_mcp_vault_grants_reject_connection_without_scope(settings):
             json={"names": ["API_TOKEN"]},
         )
         assert response.status_code == 422
+
+
+def test_mcp_namespace_write_boundary_and_vault_grants_are_independent(settings):
+    settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
+    with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
+        client.headers["Origin"] = ORIGIN
+        signup(client, "namespace-mcp@example.invalid")
+        namespace = client.post("/auth/namespaces", json={"name": "Read only project"}).json()
+        client.put(
+            "/v1/vault/API_TOKEN",
+            json={"value": "secret", "description": "independence test"},
+        )
+        registration = register(client, "Namespace MCP")
+        code, verifier = authorize(
+            client, registration, "memory:read memory:write vault:read"
+        )
+        credentials = token(client, registration, code, verifier)
+        connection = f"/auth/mcp-connections/{registration['client_id']}"
+        grants = [{"namespace_id": namespace["id"], "can_read": True, "can_write": False}]
+        assert client.put(connection + "/namespaces", json={"grants": grants}).status_code == 200
+        assert (
+            client.put(connection + "/vault", json={"names": ["API_TOKEN"]}).status_code
+            == 200
+        )
+        listed = client.get("/auth/mcp-connections").json()["items"][0]
+        assert listed["namespace_grants"] == grants
+
+        response = client.post(
+            "/mcp",
+            headers={
+                "Authorization": "Bearer " + credentials["access_token"],
+                "X-Vibe-Memory-Namespace": namespace["id"],
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "record_update_many", "arguments": {"items": []}},
+            },
+        )
+        assert response.status_code == 403
+
+        denied = client.put(connection + "/namespaces", json={"grants": []}).json()
+        assert denied["grants"] == [
+            {"namespace_id": "default", "can_read": False, "can_write": False}
+        ]
+        assert client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer " + credentials["access_token"]},
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        ).status_code == 403

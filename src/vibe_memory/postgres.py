@@ -131,6 +131,21 @@ class PostgresDatabase:
         );
         CREATE INDEX IF NOT EXISTS api_key_permission_events_owner_idx
             ON api_key_permission_events(user_id, changed_at DESC, id DESC);
+        CREATE TABLE IF NOT EXISTS namespaces (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            created_at BIGINT NOT NULL,
+            UNIQUE(user_id, name)
+        );
+        CREATE TABLE IF NOT EXISTS api_key_namespace_grants (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            api_key_id TEXT NOT NULL REFERENCES api_keys(id) ON DELETE CASCADE,
+            namespace_id TEXT NOT NULL,
+            can_read BOOLEAN NOT NULL DEFAULT TRUE,
+            can_write BOOLEAN NOT NULL DEFAULT FALSE,
+            PRIMARY KEY(user_id, api_key_id, namespace_id)
+        );
         CREATE TABLE IF NOT EXISTS device_logins (
             device_hash TEXT PRIMARY KEY,
             user_hash TEXT UNIQUE NOT NULL,
@@ -232,6 +247,14 @@ class PostgresDatabase:
             name TEXT NOT NULL,
             created_at BIGINT NOT NULL,
             PRIMARY KEY(client_id, user_id, name)
+        );
+        CREATE TABLE IF NOT EXISTS oauth_namespace_grants (
+            client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            namespace_id TEXT NOT NULL,
+            can_read BOOLEAN NOT NULL DEFAULT TRUE,
+            can_write BOOLEAN NOT NULL DEFAULT FALSE,
+            PRIMARY KEY(client_id, user_id, namespace_id)
         );
         CREATE TABLE IF NOT EXISTS oauth_permission_events (
             id TEXT PRIMARY KEY,

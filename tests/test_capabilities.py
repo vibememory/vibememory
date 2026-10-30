@@ -36,7 +36,8 @@ def test_rest_auth_context_and_capabilities_are_current_connection_only(settings
         assert context["authorization"]["other_connections_checked"] is False
         assert context["authorization"]["permission_inheritance"] is False
         assert context["external_service_permissions"]["status"] == "not_evaluated"
-        assert context["project_scope"]["status"] == "unsupported"
+        assert context["project_scope"]["status"] == "enforced"
+        assert context["project_scope"]["namespace_id"] == "default"
         assert created["key"] not in str(context)
 
         read = client.post(
@@ -59,7 +60,7 @@ def test_rest_auth_context_and_capabilities_are_current_connection_only(settings
         assert write["request_will_reauthorize"] is True
 
         contract = client.get("/v1/capabilities", headers=headers).json()
-        assert contract["schema_version"] == "1.0"
+        assert contract["schema_version"] == "1.1"
         memory_actions = {
             item["operation"]: item["authorization"]["status"]
             for item in contract["capabilities"]

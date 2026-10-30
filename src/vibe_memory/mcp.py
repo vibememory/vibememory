@@ -57,7 +57,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.29.2"
+SERVER_VERSION = "0.30.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -673,12 +673,14 @@ def _auth_context(principal):
         transport="mcp",
         credential_type="oauth",
         audience=principal.get("resource", "vibe_memory_mcp"),
-        principal_id=principal["user_id"],
+        principal_id=principal.get("account_id", principal["user_id"]),
         principal_name=principal["name"],
         grants=principal.get("scopes", []),
         vault_access="vault:read" in principal.get("scopes", set()),
         vault_names=principal.get("vault_names", []),
         expires_at=expires_at,
+        namespace_id=principal.get("namespace_id", "default"),
+        namespace_grants=principal.get("namespace_grants"),
     )
 
 
@@ -866,7 +868,8 @@ class MCPHandler:
             )
             return _tool_error("Invalid tool arguments. " + details, "INVALID_ARGUMENT")
 
-        owner = principal["user_id"]
+        account_owner = principal.get("account_id", principal["user_id"])
+        owner = principal.get("memory_owner", principal["user_id"])
         try:
             if name == "auth_context":
                 context = _auth_context(principal)
@@ -888,7 +891,7 @@ class MCPHandler:
                 )
             if name == "profile_get":
                 profile = {
-                    "id": owner,
+                    "id": account_owner,
                     "name": principal["name"],
                     "email": principal["email"],
                 }
@@ -897,8 +900,8 @@ class MCPHandler:
                 if not self.vault:
                     return _tool_error("Vault is unavailable.", "UNSUPPORTED_CAPABILITY")
                 allowed = set(principal.get("vault_names", []))
-                items = [item for item in self.vault.list(owner) if item["name"] in allowed]
-                self.vault.audit_access(owner, principal["client_id"], "*", "list_success")
+                items = [item for item in self.vault.list(account_owner) if item["name"] in allowed]
+                self.vault.audit_access(account_owner, principal["client_id"], "*", "list_success")
                 return _text_result(
                     f"Listed metadata for {len(items)} explicitly authorized Vault entries.",
                     {"items": items},
@@ -908,7 +911,7 @@ class MCPHandler:
                     return _tool_error("Vault is unavailable.", "UNSUPPORTED_CAPABILITY")
                 if data.name not in set(principal.get("vault_names", [])):
                     self.vault.audit_access(
-                        owner, principal["client_id"], data.name, "denied_grant"
+                        account_owner, principal["client_id"], data.name, "denied_grant"
                     )
                     return _tool_error(
                         "Vault entry is not authorized for this MCP connection.",
@@ -916,14 +919,16 @@ class MCPHandler:
                         required_action="grant_vault_entry",
                     )
                 try:
-                    secret = self.vault.get(owner, data.name)
+                    secret = self.vault.get(account_owner, data.name)
                 except Exception:
-                    self.vault.audit_access(owner, principal["client_id"], data.name, "not_found")
+                    self.vault.audit_access(
+                        account_owner, principal["client_id"], data.name, "not_found"
+                    )
                     return _tool_error(
                         "Vault entry is unavailable or no longer authorized.",
                         "RESOURCE_NOT_FOUND_OR_NOT_VISIBLE",
                     )
-                self.vault.audit_access(owner, principal["client_id"], data.name, "success")
+                self.vault.audit_access(account_owner, principal["client_id"], data.name, "success")
                 return _text_result(
                     "Retrieved the authorized Vault entry. Its value is present in MCP client "
                     "and model context; do not repeat or store it.",
@@ -938,6 +943,7 @@ class MCPHandler:
             if name == "record_get":
                 record = db.get(owner, data.id)
                 annotate_corrections(db, owner, [record])
+                record = project_record(record)
                 return _text_result(f"Fetched record {record['id']}.", {"record": record})
             if name == "records_list":
                 records = db.list(
@@ -1047,13 +1053,13 @@ class MCPHandler:
                     {"items": records, "limit": data.limit, "offset": data.offset},
                 )
             if name == "feature_requests_list":
-                requests = db.list_feature_requests(owner, data.limit, data.offset)
+                requests = db.list_feature_requests(account_owner, data.limit, data.offset)
                 return _text_result(
                     f"Listed {len(requests)} feature requests.",
                     {"items": requests, "limit": data.limit, "offset": data.offset},
                 )
             if name == "agents_list":
-                agents = db.list_agents(owner)
+                agents = db.list_agents(account_owner)
                 return _text_result(
                     f"Listed {len(agents)} addressable agents.",
                     {
@@ -1066,7 +1072,7 @@ class MCPHandler:
                 )
             if name == "message_inbox":
                 messages = db.inbox_messages(
-                    owner, principal["agent_id"], data.after, data.limit, data.status
+                    account_owner, principal["agent_id"], data.after, data.limit, data.status
                 )
                 cursor = messages[-1]["sequence"] if messages else data.after
                 return _text_result(
@@ -1074,13 +1080,15 @@ class MCPHandler:
                     {"items": messages, "cursor": cursor, "limit": data.limit},
                 )
             if name == "message_sent":
-                messages = db.sent_messages(owner, principal["agent_id"], data.limit, data.offset)
+                messages = db.sent_messages(
+                    account_owner, principal["agent_id"], data.limit, data.offset
+                )
                 return _text_result(
                     f"Listed {len(messages)} sent messages.",
                     {"items": messages, "limit": data.limit, "offset": data.offset},
                 )
             if name == "message_get":
-                message = db.get_message(owner, principal["agent_id"], data.id)
+                message = db.get_message(account_owner, principal["agent_id"], data.id)
                 return _text_result(f"Fetched message {message['id']}.", {"message": message})
             if name == "memory_create":
                 record = self._ingest(db, owner, "memory", data, principal)
@@ -1357,17 +1365,19 @@ class MCPHandler:
                 )
             if name == "message_send":
                 message, created = db.send_message(
-                    owner, principal["agent_id"], principal["agent_name"], data
+                    account_owner, principal["agent_id"], principal["agent_name"], data
                 )
                 verb = "Queued" if created else "Found existing"
                 return _text_result(f"{verb} message {message['id']}.", {"message": message})
             if name == "message_ack":
-                message = db.ack_message(owner, principal["agent_id"], data.id, data.status)
+                message = db.ack_message(
+                    account_owner, principal["agent_id"], data.id, data.status
+                )
                 return _text_result(
                     f"Message {message['id']} is {message['status']}.", {"message": message}
                 )
             if name == "feature_request_submit":
-                record, created = db.add_feature_request(owner, data)
+                record, created = db.add_feature_request(account_owner, data)
                 verb = "Submitted" if created else "Found existing"
                 return _text_result(f"{verb} feature request {record['id']}.", {"request": record})
         except NotFound:

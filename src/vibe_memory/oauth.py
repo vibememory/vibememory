@@ -107,6 +107,14 @@ class OAuthStore:
                     created_at INTEGER NOT NULL,
                     PRIMARY KEY(client_id, user_id, name)
                 );
+                CREATE TABLE IF NOT EXISTS oauth_namespace_grants (
+                    client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    namespace_id TEXT NOT NULL,
+                    can_read INTEGER NOT NULL DEFAULT 1,
+                    can_write INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(client_id, user_id, namespace_id)
+                );
                 CREATE TABLE IF NOT EXISTS oauth_permission_events (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -175,6 +183,14 @@ class OAuthStore:
                 SELECT 1 FROM oauth_connections x
                 WHERE x.client_id=oauth_vault_grants.client_id
                 AND x.user_id=oauth_vault_grants.user_id
+            )"""
+        )
+        db.execute(
+            """DELETE FROM oauth_namespace_grants
+            WHERE NOT EXISTS (
+                SELECT 1 FROM oauth_connections x
+                WHERE x.client_id=oauth_namespace_grants.client_id
+                AND x.user_id=oauth_namespace_grants.user_id
             )"""
         )
 
@@ -499,9 +515,60 @@ class OAuthStore:
             {
                 **dict(row),
                 "scopes": row["scope"].split(),
+                "namespace_grants": self.namespace_grants(user_id, row["client_id"]),
             }
             for row in rows
         ]
+
+    def namespace_grants(self, user_id, client_id):
+        with self.connection() as db:
+            rows = db.execute(
+                """SELECT namespace_id,can_read,can_write FROM oauth_namespace_grants
+                WHERE user_id=? AND client_id=? ORDER BY namespace_id""",
+                (user_id, client_id),
+            ).fetchall()
+        if not rows:
+            return [{"namespace_id": "default", "can_read": True, "can_write": True}]
+        return [
+            {
+                "namespace_id": row["namespace_id"],
+                "can_read": bool(row["can_read"]),
+                "can_write": bool(row["can_write"]),
+            }
+            for row in rows
+        ]
+
+    def replace_namespace_grants(self, user_id, client_id, grants, namespace_exists):
+        with self.connection() as db:
+            if not db.execute(
+                "SELECT 1 FROM oauth_connections WHERE user_id=? AND client_id=?",
+                (user_id, client_id),
+            ).fetchone():
+                raise OAuthError("not_found", "MCP connection not found")
+            for grant in grants:
+                if not namespace_exists(grant.namespace_id):
+                    raise OAuthError("invalid_scope", "Namespace does not exist")
+                if grant.can_write and not grant.can_read:
+                    raise OAuthError("invalid_scope", "Namespace write requires read")
+            db.execute(
+                "DELETE FROM oauth_namespace_grants WHERE user_id=? AND client_id=?",
+                (user_id, client_id),
+            )
+            if not grants:
+                db.execute(
+                    """INSERT INTO oauth_namespace_grants(
+                    client_id,user_id,namespace_id,can_read,can_write
+                    ) VALUES(?,?,?,?,?)""",
+                    (client_id, user_id, "default", False, False),
+                )
+            for grant in grants:
+                db.execute(
+                    """INSERT INTO oauth_namespace_grants(
+                    client_id,user_id,namespace_id,can_read,can_write
+                    ) VALUES(?,?,?,?,?)""",
+                    (client_id, user_id, grant.namespace_id, grant.can_read, grant.can_write),
+                )
+        return self.namespace_grants(user_id, client_id)
 
     def set_connection_scopes(self, user_id, client_id, scopes):
         normalized = sorted(set(scopes))
@@ -641,6 +708,10 @@ class OAuthStore:
             self._remember_revocations(db, rows, now)
             db.execute(
                 "DELETE FROM oauth_vault_grants WHERE user_id=? AND client_id=?",
+                (user_id, client_id),
+            )
+            db.execute(
+                "DELETE FROM oauth_namespace_grants WHERE user_id=? AND client_id=?",
                 (user_id, client_id),
             )
             result = db.execute(

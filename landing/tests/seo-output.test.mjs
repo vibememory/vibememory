@@ -10,7 +10,7 @@ test('public landing emits complete search and social metadata', () => {
   assert.match(html, /<meta name="description" content="[^"]+"/);
   assert.match(html, /<link rel="canonical" href="https:\/\/vibememory\.io"/);
   assert.match(html, /<meta property="og:type" content="website"/);
-  assert.match(html, /<meta property="og:image" content="https:\/\/vibememory\.io\/assets\/og-vibe-memory\.png"/);
+  assert.match(html, /<meta property="og:image" content="https:\/\/vibememory\.io\/assets\/og-vibe-memory-v2\.png"/);
   assert.match(html, /<meta name="twitter:card" content="summary_large_image"/);
   assert.match(html, /<link rel="manifest" href="\/site\.webmanifest"/);
   assert.match(html, /type="application\/ld\+json"/);
@@ -56,7 +56,7 @@ test('crawl discovery files expose only canonical public pages', () => {
 });
 
 test('social image is a valid 1200 by 630 PNG', () => {
-  const image = read('dist/assets/og-vibe-memory.png', null);
+  const image = read('dist/assets/og-vibe-memory-v2.png', null);
   assert.equal(image.subarray(1, 4).toString('ascii'), 'PNG');
   assert.equal(image.readUInt32BE(16), 1200);
   assert.equal(image.readUInt32BE(20), 630);

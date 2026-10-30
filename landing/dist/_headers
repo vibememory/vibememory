@@ -9,7 +9,7 @@
 /assets/*
   Cache-Control: public, max-age=86400
 
-/assets/og-vibe-memory.png
+/assets/og-vibe-memory-v2.png
   Cache-Control: public, max-age=604800
 
 /site.webmanifest

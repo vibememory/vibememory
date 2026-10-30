@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-const assetVersion = "20261030-v026-2";
+const assetVersion = "20261030-v026-3";
 
 const siteDescription =
   "Claude Code, Codex, Cursor 등 여러 AI 에이전트가 기억과 관계를 공유하도록 연결하는 오픈소스 메모리 레이어입니다. MCP, Skill, Rust CLI와 self-hosting을 지원합니다.";
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
     description: siteDescription,
     images: [
       {
-        url: "/assets/og-vibe-memory.png",
+        url: "/assets/og-vibe-memory-v2.png",
         width: 1200,
         height: 630,
         alt: "Vibe Memory — One memory, every agent",
@@ -69,7 +69,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Vibe Memory — One memory, every agent",
     description: siteDescription,
-    images: ["/assets/og-vibe-memory.png"],
+    images: ["/assets/og-vibe-memory-v2.png"],
   },
   other: {
     "mobile-web-app-capable": "yes",

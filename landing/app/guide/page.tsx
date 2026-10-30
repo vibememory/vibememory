@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     description,
     images: [
       {
-        url: "/assets/og-vibe-memory.png",
+        url: "/assets/og-vibe-memory-v2.png",
         width: 1200,
         height: 630,
         alt: "Vibe Memory connection guide",
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Vibe Memory AI 에이전트 연결 가이드",
     description,
-    images: ["/assets/og-vibe-memory.png"],
+    images: ["/assets/og-vibe-memory-v2.png"],
   },
 };
 
@@ -46,7 +46,7 @@ export default function Guide() {
     mainEntityOfPage: "https://vibememory.io/guide",
     dateModified: "2026-10-30",
     inLanguage: "ko-KR",
-    image: "https://vibememory.io/assets/og-vibe-memory.png",
+    image: "https://vibememory.io/assets/og-vibe-memory-v2.png",
     author: {
       "@type": "Organization",
       name: "Vibe Memory contributors",

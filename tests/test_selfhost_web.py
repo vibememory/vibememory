@@ -41,7 +41,7 @@ def test_console_and_api_share_one_origin(settings):
         landing_styles = client.get("/assets/style.css")
         product_styles = client.get("/assets/product-ui.css")
         icon_sprite = client.get("/assets/icons.svg")
-        social_image = client.get("/assets/og-vibe-memory.png")
+        social_image = client.get("/assets/og-vibe-memory-v2.png")
         web_manifest = client.get("/site.webmanifest")
         robots = client.get("/robots.txt")
         sitemap = client.get("/sitemap.xml")
@@ -49,7 +49,7 @@ def test_console_and_api_share_one_origin(settings):
         assert "Vibe Memory — AI 에이전트를 위한 공유 기억 레이어" in landing
         assert 'rel="canonical" href="https://vibememory.io"' in landing
         assert 'name="twitter:card" content="summary_large_image"' in landing
-        assert 'property="og:image" content="https://vibememory.io/assets/og-vibe-memory.png"' in landing
+        assert 'property="og:image" content="https://vibememory.io/assets/og-vibe-memory-v2.png"' in landing
         assert 'type="application/ld+json"' in landing
         assert '"@type":"SoftwareApplication"' in landing
         assert '"@type":"WebSite"' in landing
@@ -143,18 +143,18 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261030-v026-2"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-2"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-2"' in landing
-        assert '<script src="/assets/theme.js?v=20261030-v026-2" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261030-v026-2" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v026-2" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v026-2" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-2" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-2" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v026-2" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-2" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v026-2" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261030-v026-3"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-3"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-3"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v026-3" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v026-3" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v026-3" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v026-3" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-3" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-3" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v026-3" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-3" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v026-3" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -193,9 +193,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v026-2' in connect
-        assert '/assets/theme.css?v=20261030-v026-2' in connect
-        assert '/assets/product-ui.css?v=20261030-v026-2' in connect
+        assert '/assets/ui-kit.css?v=20261030-v026-3' in connect
+        assert '/assets/theme.css?v=20261030-v026-3' in connect
+        assert '/assets/product-ui.css?v=20261030-v026-3' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

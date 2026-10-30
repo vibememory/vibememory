@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     description,
     images: [
       {
-        url: "/assets/og-vibe-memory.png",
+        url: "/assets/og-vibe-memory-v2.png",
         width: 1200,
         height: 630,
         alt: "Vibe Memory — One memory, every agent",
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Vibe Memory — One memory, every agent",
     description,
-    images: ["/assets/og-vibe-memory.png"],
+    images: ["/assets/og-vibe-memory-v2.png"],
   },
 };
 
@@ -69,14 +69,14 @@ export default function Home() {
         description,
         applicationCategory: "DeveloperApplication",
         operatingSystem: "Web, Linux, macOS, Windows",
-        softwareVersion: "0.26.2",
+        softwareVersion: "0.26.3",
         isAccessibleForFree: true,
         offers: {
           "@type": "Offer",
           price: "0",
           priceCurrency: "USD",
         },
-        image: "https://vibememory.io/assets/og-vibe-memory.png",
+        image: "https://vibememory.io/assets/og-vibe-memory-v2.png",
         downloadUrl: "https://vibememory.io/downloads/vibe-memory-skill.zip",
         codeRepository: "https://github.com/vibememory/vibememory",
         featureList: [

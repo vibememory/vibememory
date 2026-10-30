@@ -1,9 +1,9 @@
-:HL["/assets/style.css?v=20261030-v020-4","style"]
-:HL["/assets/i18n.css?v=20261030-v020-4","style"]
-:HL["/assets/console-fixes.css?v=20261030-v020-4","style"]
+:HL["/assets/style.css?v=20261030-v020-5","style"]
+:HL["/assets/i18n.css?v=20261030-v020-5","style"]
+:HL["/assets/console-fixes.css?v=20261030-v020-5","style"]
 :HL["/assets/brands/claude-code.png","image"]
 :HL["/assets/brands/codex.png","image"]
 :HL["/assets/brands/hermes.png","image"]
 :HL["/assets/brands/openclaw.svg","image"]
 1:[["children",{"s":"__PAGE__","h":160}]]
-0:{"b":"Xtyqmigho-WouNxH5sSpn","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"V3cf6ihPjM1DzvPS9ESHW","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

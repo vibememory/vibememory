@@ -143,18 +143,18 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261030-v026-1"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-1"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-1"' in landing
-        assert '<script src="/assets/theme.js?v=20261030-v026-1" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261030-v026-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v026-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v026-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v026-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-1" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v026-1" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261030-v026-2"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-2"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-2"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v026-2" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v026-2" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v026-2" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v026-2" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-2" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-2" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v026-2" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-2" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v026-2" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -193,9 +193,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v026-1' in connect
-        assert '/assets/theme.css?v=20261030-v026-1' in connect
-        assert '/assets/product-ui.css?v=20261030-v026-1' in connect
+        assert '/assets/ui-kit.css?v=20261030-v026-2' in connect
+        assert '/assets/theme.css?v=20261030-v026-2' in connect
+        assert '/assets/product-ui.css?v=20261030-v026-2' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -212,6 +212,8 @@ def test_console_and_api_share_one_origin(settings):
         assert "'font-size':12" in console_script.text
         assert "vm-theme-change" in console_script.text
         assert "--sidebar-width: 260px" in product_styles.text
+        assert '.sidebar nav button[aria-current="page"] { box-shadow: none; }' in product_styles.text
+        assert "inset 3px 0 0 var(--tool-blue)" not in product_styles.text
         assert ".landing-page .header-actions .vm-language-switcher" in product_styles.text
         assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in product_styles.text
         assert "min-height: 108px" in product_styles.text

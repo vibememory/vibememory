@@ -69,7 +69,7 @@ input:not([type="checkbox"]):not([type="radio"]), select { min-height: 40px; }
 .sidebar-label { margin-bottom: 7px; }
 .sidebar-label-spaced { margin-top: 19px; }
 .sidebar nav button { height: 42px; border-radius: 8px; }
-.sidebar nav button[aria-current="page"] { box-shadow: inset 3px 0 0 var(--tool-blue); }
+.sidebar nav button[aria-current="page"] { box-shadow: none; }
 .sidebar-help-card { border-color: var(--tool-border); border-radius: 10px; background: var(--tool-surface-soft); }
 .account-popover { border-color: var(--tool-border); background: var(--tool-surface); box-shadow: 0 18px 48px rgba(24, 37, 61, .14); }
 

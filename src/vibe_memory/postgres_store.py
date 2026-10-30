@@ -1450,10 +1450,27 @@ class PostgresStore:
                 resolved_at = None
             result = changes.get("result", current["result"])
             result_url = changes.get("result_url", current["result_url"])
+            title = changes.get("title", current["title"])
+            description = changes.get("description", current["description"])
+            use_case = changes.get("use_case", current["use_case"])
+            priority = changes.get("priority", current["priority"])
             connection.execute(
-                """UPDATE feature_requests SET status=%s,result=%s,result_url=%s,
-                updated_at=%s,resolved_at=%s WHERE owner=%s AND id=%s""",
-                (status, result, result_url, updated_at, resolved_at, owner, id),
+                """UPDATE feature_requests SET title=%s,description=%s,use_case=%s,
+                priority=%s,status=%s,result=%s,result_url=%s,updated_at=%s,
+                resolved_at=%s WHERE owner=%s AND id=%s""",
+                (
+                    title,
+                    description,
+                    use_case,
+                    priority,
+                    status,
+                    result,
+                    result_url,
+                    updated_at,
+                    resolved_at,
+                    owner,
+                    id,
+                ),
             )
             self._event(
                 owner,

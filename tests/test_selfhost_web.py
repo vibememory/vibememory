@@ -99,14 +99,14 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v020-6" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v020-6" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v020-6" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v020-6" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v020-6" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v020-6" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v020-6" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v020-6" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-v020-7" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v020-7" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v020-7" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v020-7" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v020-7" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v020-7" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v020-7" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v020-7" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -145,7 +145,7 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v020-6' in connect
+        assert '/assets/ui-kit.css?v=20261030-v020-7' in connect
         assert '.ui-choice-input:checked+.ui-choice-control' in ui_styles.text
         assert '.ui-choice-card--sensitive:has(.ui-choice-input:checked)' in ui_styles.text
         assert "Vault 권한:" in client.get("/assets/connect.js").text
@@ -192,6 +192,10 @@ def test_console_and_api_share_one_origin(settings):
         assert 'id="admin-link" href="/admin" hidden' in console
         assert "if (data.is_admin) $('#admin-link').hidden = false" in console_script.text
         assert "/v1/admin/feature-requests" in admin_script.text
+        assert 'request-edit-title' in admin
+        assert 'request-edit-description' in admin
+        assert 'request-edit-priority' in admin
+        assert "title:$('#request-edit-title').value" in admin_script.text
         assert "user.totp_enabled" in admin_script.text
         assert "PRODUCT OPERATIONS" in admin
         assert ".admin-stats" in admin_styles.text

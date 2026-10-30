@@ -48,16 +48,18 @@
 
   <dialog class="ui-modal" id="request-editor">
     <form id="request-editor-form">
-      <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-title">요청 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div>
-      <div class="admin-request-context"><div><span>요청자</span><strong id="requester-name"></strong><small id="requester-email"></small></div><div><span>우선순위</span><strong id="request-priority"></strong></div></div>
-      <section><span>요청 내용</span><p id="request-description"></p></section>
-      <section id="request-use-case-section"><span>사용 사례</span><p id="request-use-case"></p></section>
+      <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-heading">요청 편집 및 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div>
+      <div class="admin-request-context"><div><span>요청자</span><strong id="requester-name"></strong><small id="requester-email"></small></div><div><span>등록 에이전트</span><strong id="request-agent-name"></strong><small id="request-source"></small></div></div>
       <input id="request-owner-id" type="hidden"><input id="request-id" type="hidden">
+      <label>요청 제목<input id="request-edit-title" type="text" maxlength="200" required></label>
+      <label>요청 내용<textarea id="request-edit-description" maxlength="10000" rows="5" required></textarea></label>
+      <label>사용 사례<textarea id="request-edit-use-case" maxlength="4000" rows="3" placeholder="이 기능이 필요한 실제 상황을 적어주세요."></textarea></label>
+      <label>우선순위<select id="request-edit-priority" required><option value="low">낮음</option><option value="medium">보통</option><option value="high">높음</option></select></label>
       <label>처리 상태<select id="request-status" required><option value="received">접수됨</option><option value="reviewing">검토 중</option><option value="planned">계획됨</option><option value="in_progress">처리 중</option><option value="completed">완료</option><option value="declined">보류</option></select></label>
       <label>처리 결과<textarea id="request-result" maxlength="10000" rows="6" placeholder="사용자에게 공개할 처리 내용과 남은 작업을 적어주세요."></textarea></label>
       <label>관련 결과 링크<input id="request-result-url" type="url" maxlength="2048" placeholder="https://github.com/..."></label>
       <p id="request-editor-error" class="admin-form-error" role="alert" hidden></p>
-      <div class="admin-dialog-actions"><button class="admin-dialog-close" type="button">취소</button><button class="button primary" id="request-save" type="submit">처리 결과 저장</button></div>
+      <div class="admin-dialog-actions"><button class="admin-dialog-close" type="button">취소</button><button class="button primary" id="request-save" type="submit">요청 변경사항 저장</button></div>
     </form>
   </dialog>
   <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>

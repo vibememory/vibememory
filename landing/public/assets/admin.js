@@ -84,14 +84,16 @@ async function loadUsers() {
 function editRequest(owner,id) {
   const item = payload.items.find(record => record.owner_id === owner && record.id === id);
   if (!item) return;
-  $('#request-title').textContent = item.title;
+  $('#request-heading').textContent = item.title;
   $('#requester-name').textContent = item.requester?.name || 'Legacy workspace';
   $('#requester-email').textContent = item.requester?.email || item.owner_id;
-  $('#request-priority').textContent = priorityLabel(item.priority);
-  $('#request-description').textContent = item.description;
-  $('#request-use-case').textContent = item.use_case;
-  $('#request-use-case-section').hidden = !item.use_case;
+  $('#request-agent-name').textContent = item.agent_name;
+  $('#request-source').textContent = item.source || '출처 미지정';
   $('#request-owner-id').value = item.owner_id; $('#request-id').value = item.id;
+  $('#request-edit-title').value = item.title;
+  $('#request-edit-description').value = item.description;
+  $('#request-edit-use-case').value = item.use_case || '';
+  $('#request-edit-priority').value = item.priority;
   $('#request-status').value = item.status; $('#request-result').value = item.result || '';
   $('#request-result-url').value = item.result_url || '';
   $('#request-editor-error').hidden = true; window.VMUI.openModal($('#request-editor'));
@@ -124,8 +126,8 @@ $('#request-editor-form').addEventListener('submit',async event => {
   const save = $('#request-save'); save.disabled = true; $('#request-editor-error').hidden = true;
   try {
     const owner = encodeURIComponent($('#request-owner-id').value), id = encodeURIComponent($('#request-id').value);
-    await api(`/v1/admin/feature-requests/${owner}/${id}`, {method:'PATCH',body:JSON.stringify({status:$('#request-status').value,result:$('#request-result').value,result_url:$('#request-result-url').value})});
-    window.VMUI.closeModal($('#request-editor')); toast('처리 결과를 저장했습니다.'); await load();
+    await api(`/v1/admin/feature-requests/${owner}/${id}`, {method:'PATCH',body:JSON.stringify({title:$('#request-edit-title').value,description:$('#request-edit-description').value,use_case:$('#request-edit-use-case').value,priority:$('#request-edit-priority').value,status:$('#request-status').value,result:$('#request-result').value,result_url:$('#request-result-url').value})});
+    window.VMUI.closeModal($('#request-editor')); toast('요청과 처리 결과를 저장했습니다.'); await load();
   } catch (error) { $('#request-editor-error').textContent = error.message; $('#request-editor-error').hidden = false; }
   finally { save.disabled = false; }
 });

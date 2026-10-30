@@ -430,6 +430,10 @@ class FeatureRequestInput(Input):
 
 
 class FeatureRequestUpdate(Input):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, min_length=1, max_length=10000)
+    use_case: str | None = Field(default=None, max_length=4000)
+    priority: Literal["low", "medium", "high"] | None = None
     status: (
         Literal["received", "reviewing", "planned", "in_progress", "completed", "declined"] | None
     ) = None

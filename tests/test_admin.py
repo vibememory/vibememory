@@ -63,6 +63,10 @@ def test_admin_feature_request_queue_permissions_and_results(admin_web):
     reviewing = admin_web.patch(
         path,
         json={
+            "title": "관리자가 정리한 요청 제목",
+            "description": "다른 사용자가 등록한 요구사항을 관리자가 명확하게 정리했습니다.",
+            "use_case": "운영자가 요청을 재현하고 구현 범위를 기록합니다.",
+            "priority": "medium",
             "status": "reviewing",
             "result": "기술 검토를 시작했습니다.",
             "result_url": "https://github.com/vibememory/vibememory/issues/1",
@@ -71,6 +75,10 @@ def test_admin_feature_request_queue_permissions_and_results(admin_web):
     assert reviewing.status_code == 200, reviewing.text
     reviewing = reviewing.json()
     assert reviewing["status"] == "reviewing"
+    assert reviewing["title"] == "관리자가 정리한 요청 제목"
+    assert reviewing["description"].startswith("다른 사용자가 등록한")
+    assert reviewing["use_case"].startswith("운영자가 요청을")
+    assert reviewing["priority"] == "medium"
     assert reviewing["result"] == "기술 검토를 시작했습니다."
     assert reviewing["result_url"].endswith("/issues/1")
     assert reviewing["resolved_at"] is None
@@ -93,6 +101,11 @@ def test_admin_feature_request_queue_permissions_and_results(admin_web):
         {"result_url": "javascript:alert(1)"},
         {"result_url": "https://user:secret@example.com/result"},
         {"result": "x" * 10001},
+        {"title": " "},
+        {"description": " "},
+        {"priority": "urgent"},
+        {"agent_name": "forged-agent"},
+        {"owner_id": "another-user"},
     ):
         assert admin_web.patch(path, json=payload).status_code == 422
 
@@ -109,6 +122,8 @@ def test_admin_feature_request_queue_permissions_and_results(admin_web):
     assert login.status_code == 200 and login.json()["is_admin"] is False
     visible = admin_web.get("/v1/feature-requests/" + request["id"]).json()
     assert visible["status"] == "completed"
+    assert visible["title"] == "관리자가 정리한 요청 제목"
+    assert visible["description"].startswith("다른 사용자가 등록한")
     assert visible["result"] == "요청한 기능을 구현했습니다."
 
 

@@ -1533,13 +1533,23 @@ class Store:
                 resolved_at = ""
             result = changes.get("result", current["result"])
             result_url = changes.get("result_url", current["result_url"])
+            title = changes.get("title", current["title"])
+            description = changes.get("description", current["description"])
+            use_case = changes.get("use_case", current["use_case"])
+            priority = changes.get("priority", current["priority"])
             self.query(
                 """MATCH (r:FeatureRequest {owner: $owner, id: $id})
-                SET r.status = $status, r.result = $result, r.result_url = $result_url,
+                SET r.title = $title, r.description = $description,
+                    r.use_case = $use_case, r.priority = $priority,
+                    r.status = $status, r.result = $result, r.result_url = $result_url,
                     r.updated_at = $updated_at, r.resolved_at = $resolved_at""",
                 {
                     "owner": owner,
                     "id": id,
+                    "title": title,
+                    "description": description,
+                    "use_case": use_case,
+                    "priority": priority,
                     "status": status,
                     "result": result,
                     "result_url": result_url,

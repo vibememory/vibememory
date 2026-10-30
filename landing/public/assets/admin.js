@@ -94,7 +94,7 @@ function editRequest(owner,id) {
   $('#request-owner-id').value = item.owner_id; $('#request-id').value = item.id;
   $('#request-status').value = item.status; $('#request-result').value = item.result || '';
   $('#request-result-url').value = item.result_url || '';
-  $('#request-editor-error').hidden = true; $('#request-editor').showModal();
+  $('#request-editor-error').hidden = true; window.VMUI.openModal($('#request-editor'));
 }
 
 document.addEventListener('click', event => {
@@ -105,8 +105,8 @@ document.addEventListener('click', event => {
   }
   if (button.dataset.action === 'edit') editRequest(button.dataset.owner, button.dataset.id);
 });
-document.querySelectorAll('.admin-dialog-close').forEach(button => button.addEventListener('click',() => $('#request-editor').close()));
-$('#request-editor').addEventListener('click',event => { if (event.target === $('#request-editor')) $('#request-editor').close(); });
+document.querySelectorAll('.admin-dialog-close').forEach(button => button.addEventListener('click',() => window.VMUI.closeModal($('#request-editor'))));
+$('#request-editor').addEventListener('click',event => { if (event.target === $('#request-editor')) window.VMUI.closeModal($('#request-editor')); });
 $('#status-filter').addEventListener('change',() => { offset = 0; load().catch(showError); });
 $('#request-search').addEventListener('input',renderRows);
 $('#admin-refresh').addEventListener('click',() => load().catch(showError));
@@ -125,7 +125,7 @@ $('#request-editor-form').addEventListener('submit',async event => {
   try {
     const owner = encodeURIComponent($('#request-owner-id').value), id = encodeURIComponent($('#request-id').value);
     await api(`/v1/admin/feature-requests/${owner}/${id}`, {method:'PATCH',body:JSON.stringify({status:$('#request-status').value,result:$('#request-result').value,result_url:$('#request-result-url').value})});
-    $('#request-editor').close(); toast('처리 결과를 저장했습니다.'); await load();
+    window.VMUI.closeModal($('#request-editor')); toast('처리 결과를 저장했습니다.'); await load();
   } catch (error) { $('#request-editor-error').textContent = error.message; $('#request-editor-error').hidden = false; }
   finally { save.disabled = false; }
 });

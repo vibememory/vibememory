@@ -8,14 +8,16 @@
   <link rel="icon" href="/assets/favicon.svg">
   <link rel="stylesheet" href="/assets/style.css">
   <link rel="stylesheet" href="/assets/console.css">
+  <link rel="stylesheet" href="/assets/ui-kit.css">
   <script src="/assets/install-prompt.js" defer></script>
   <script src="/assets/vendor/cytoscape.min.js" defer></script>
+  <script src="/assets/ui-kit.js" defer></script>
   <script src="/assets/console.js" defer></script>
 </head>
 <body class="console-page">
   <a class="skip" href="#console-main">본문으로 바로가기</a>
 
-  <aside class="sidebar" aria-label="워크스페이스 메뉴">
+  <aside class="sidebar" aria-label="워크스페이스 메뉴" data-ui-shell>
     <div class="sidebar-brand-row">
       <a class="brand" href="/" aria-label="Vibe Memory 홈">
         <img src="/assets/favicon.svg" width="28" height="28" alt="">
@@ -48,7 +50,7 @@
   </aside>
   <button class="sidebar-backdrop" id="sidebar-backdrop" type="button" aria-label="메뉴 닫기" tabindex="-1"></button>
 
-  <div class="console-body">
+  <div class="console-body" data-ui-shell>
     <header class="console-header">
       <button id="menu-toggle" aria-expanded="false" aria-label="메뉴 열기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
       <div class="breadcrumb"><span>Vibe Memory</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg><strong id="breadcrumb">대시보드</strong></div>
@@ -67,8 +69,18 @@
     <footer class="console-footer"><span><i></i> All systems operational</span><span>Vibe Memory · Your context, carried forward.</span></footer>
   </div>
 
-  <dialog id="editor"><form id="editor-form"><div class="dialog-heading"><div><p class="dialog-kicker">VIBE MEMORY</p><h2 id="editor-title"></h2></div><button type="button" class="close-dialog" aria-label="닫기">×</button></div><div id="editor-fields"></div><p class="form-error" id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button close-dialog">취소</button><button type="submit" class="button primary" id="editor-submit">저장</button></div></form></dialog>
-  <dialog id="detail-dialog"><div class="dialog-heading"><div><p class="dialog-kicker">DETAIL</p><h2 id="detail-title">상세 정보</h2></div><button type="button" class="close-detail" aria-label="닫기">×</button></div><div id="detail-content"></div><button class="secondary-button close-detail" type="button">닫기</button></dialog>
+  <dialog class="ui-modal" id="editor"><form id="editor-form"><div class="dialog-heading"><div><p class="dialog-kicker">VIBE MEMORY</p><h2 id="editor-title"></h2></div><button type="button" class="ui-icon-button close-dialog" aria-label="닫기">×</button></div><div id="editor-fields"></div><p class="form-error" id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button close-dialog">취소</button><button type="submit" class="button primary" id="editor-submit">저장</button></div></form></dialog>
+
+  <button class="ui-scrim" id="detail-scrim" type="button" aria-label="상세 패널 닫기" hidden></button>
+  <aside class="ui-flyout" id="detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-title" aria-hidden="true" tabindex="-1" hidden>
+    <header class="ui-flyout-header"><div><p class="ui-flyout-kicker" id="detail-kicker">DETAIL</p><h2 id="detail-title">상세 정보</h2></div><button type="button" class="ui-icon-button close-detail" data-ui-dismiss="flyout" aria-label="닫기">×</button></header>
+    <div class="ui-flyout-body" id="detail-content"></div>
+    <footer class="ui-flyout-footer"><button class="secondary-button close-detail" data-ui-dismiss="flyout" type="button">닫기</button></footer>
+  </aside>
+
+  <dialog class="ui-modal ui-modal--compact" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form><div class="ui-confirm-icon" aria-hidden="true">!</div><div class="dialog-heading"><div><p class="dialog-kicker">PLEASE CONFIRM</p><h2 id="confirm-title">계속할까요?</h2></div><button type="button" class="ui-icon-button" id="confirm-cancel-top" data-ui-confirm-cancel aria-label="닫기">×</button></div><p class="ui-confirm-message" id="confirm-message"></p><div class="dialog-actions"><button class="secondary-button" id="confirm-cancel" data-ui-confirm-cancel type="button">취소</button><button class="button primary" id="confirm-submit" type="submit">확인</button></div></form>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 </body>
 </html>

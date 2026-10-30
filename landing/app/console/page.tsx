@@ -6,5 +6,5 @@ export const metadata: Metadata = { title: "Workspace", robots: { index: false, 
 
 export default function Console() {
   const page = legacyDocument("console");
-  return <LegacyPage {...page} pageStylesheet="/assets/console.css" scripts={["/assets/vendor/cytoscape.min.js", "/assets/console.js"]} />;
+  return <LegacyPage {...page} pageStylesheets={["/assets/console.css", "/assets/ui-kit.css"]} scripts={["/assets/vendor/cytoscape.min.js", "/assets/ui-kit.js", "/assets/console.js"]} />;
 }

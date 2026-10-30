@@ -8,6 +8,8 @@
   <link rel="icon" href="/assets/favicon.svg">
   <link rel="stylesheet" href="/assets/style.css">
   <link rel="stylesheet" href="/assets/admin.css">
+  <link rel="stylesheet" href="/assets/ui-kit.css">
+  <script src="/assets/ui-kit.js" defer></script>
   <script src="/assets/admin.js" defer></script>
 </head>
 <body class="admin-page">
@@ -44,7 +46,7 @@
     </section>
   </main>
 
-  <dialog id="request-editor">
+  <dialog class="ui-modal" id="request-editor">
     <form id="request-editor-form">
       <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-title">요청 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기">×</button></div>
       <div class="admin-request-context"><div><span>요청자</span><strong id="requester-name"></strong><small id="requester-email"></small></div><div><span>우선순위</span><strong id="request-priority"></strong></div></div>

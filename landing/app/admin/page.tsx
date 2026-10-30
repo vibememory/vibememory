@@ -9,5 +9,5 @@ export const metadata: Metadata = {
 
 export default function Admin() {
   const page = legacyDocument("admin");
-  return <LegacyPage {...page} pageStylesheet="/assets/admin.css" scripts={["/assets/admin.js"]} />;
+  return <LegacyPage {...page} pageStylesheets={["/assets/admin.css", "/assets/ui-kit.css"]} scripts={["/assets/ui-kit.js", "/assets/admin.js"]} />;
 }

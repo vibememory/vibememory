@@ -111,6 +111,12 @@ uv run vibe-memory serve
 
 The website and console use the Next.js App Router under `landing/app/`. `npm --prefix landing run build` creates the static export in `landing/dist/`; the server never needs a Node.js process at runtime. Built wheels bundle that export under the Python package, so an installed wheel also includes login and the console. A normal self-hosted installation uses the prebuilt assets and does not need Node.js.
 
+Shared interaction primitives live in `landing/public/assets/ui-kit.css` and
+`ui-kit.js`. The kit provides accessible Modal, Confirm Modal, and responsive
+right-side Flyout behavior through `window.VMUI`; page scripts load it before
+using those primitives. Detail views use Flyouts, while forms and destructive
+confirmations remain blocking Modals.
+
 For an explicit directory, set `MEMORY_WEB_DIR=/absolute/path/to/web-assets`; startup rejects an invalid directory instead of silently serving a broken console.
 
 ## Data and backups

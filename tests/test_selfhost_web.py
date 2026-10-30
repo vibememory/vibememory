@@ -29,6 +29,8 @@ def test_console_and_api_share_one_origin(settings):
         locale_script = client.get("/assets/i18n.js")
         console_script = client.get("/assets/console.js")
         console_styles = client.get("/assets/console.css")
+        ui_script = client.get("/assets/ui-kit.js")
+        ui_styles = client.get("/assets/ui-kit.css")
         admin_script = client.get("/assets/admin.js")
         admin_styles = client.get("/assets/admin.css")
         landing_script = client.get("/assets/app.js")
@@ -39,6 +41,8 @@ def test_console_and_api_share_one_origin(settings):
         assert locale_script.status_code == 200
         assert console_script.status_code == 200
         assert console_styles.status_code == 200
+        assert ui_script.status_code == 200
+        assert ui_styles.status_code == 200
         assert admin_script.status_code == 200
         assert admin_styles.status_code == 200
         assert landing_script.status_code == 200
@@ -86,15 +90,26 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v018-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v018-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v018-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v018-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v018-1" defer="">' in console
-        assert '<script src="/assets/admin.js?v=20261030-v018-1" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-v019-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v019-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v019-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v019-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v019-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v019-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v019-1" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v019-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
+        assert console.index("/assets/ui-kit.js") < console.index("/assets/console.js")
+        assert admin.index("/assets/ui-kit.js") < admin.index("/assets/admin.js")
+        assert 'class="ui-flyout" id="detail-dialog"' in console
+        assert 'class="ui-modal ui-modal--compact" id="confirm-dialog"' in console
+        assert "window.VMUI.openFlyout" in console_script.text
+        assert "window.VMUI.confirm" in console_script.text
+        assert "function openFlyout" in ui_script.text
+        assert ".ui-flyout.is-open" in ui_styles.text
+        assert "window.confirm(" not in console_script.text
         assert "설치·최신화 프롬프트 복사" in console_script.text
         assert "vibeMemoryInstallPrompt" in console_script.text
         assert "vibeMemoryInstallPrompt" in landing_script.text

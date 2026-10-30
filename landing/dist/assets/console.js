@@ -324,13 +324,16 @@ function editor(title, fields, onSave, submitLabel = '저장') {
   $('#editor-error').hidden = true; $('#editor-submit').textContent = submitLabel; $('#editor-submit').disabled = false;
   $('#editor-form').onsubmit = async event => {
     event.preventDefault(); $('#editor-submit').disabled = true; $('#editor-error').hidden = true;
-    try { const next = await onSave(new FormData(event.target)); $('#editor').close(); await navigate(currentView, false); if (typeof next === 'function') next(); }
+    try { const next = await onSave(new FormData(event.target)); window.VMUI.closeModal($('#editor')); await navigate(currentView, false); if (typeof next === 'function') next(); }
     catch (error) { $('#editor-error').textContent = error.message; $('#editor-error').hidden = false; }
     finally { $('#editor-submit').disabled = false; }
   };
-  $('#editor').showModal();
+  window.VMUI.openModal($('#editor'));
 }
-function detail(title, html) { $('#detail-title').textContent = title; $('#detail-content').innerHTML = html; $('#detail-dialog').showModal(); }
+function detail(title, html, eyebrow = 'DETAIL') { window.VMUI.openFlyout({title,content:html,eyebrow}); }
+function confirmAction(title, message, confirmLabel = '확인', tone = 'danger') {
+  return window.VMUI.confirm({title,message,confirmLabel,tone});
+}
 function showRecoveryCodes(codes) {
   detail('복구 코드를 안전하게 보관하세요.',`<div class="recovery-once"><p>각 코드는 한 번만 사용할 수 있습니다. 인증 앱을 사용할 수 없을 때 로그인 코드 대신 입력하세요. 이 화면을 닫으면 다시 볼 수 없습니다.</p><div class="recovery-code-grid">${codes.map(code => `<code>${h(code)}</code>`).join('')}</div><button class="secondary-button" id="copy-recovery-codes" type="button">복구 코드 모두 복사 ⧉</button></div>`);
   $('#copy-recovery-codes').addEventListener('click',async () => { try { await copyText(codes.join('\n')); toast('복구 코드를 복사했습니다.'); } catch { toast('코드를 선택해 복사해주세요.'); } });
@@ -451,7 +454,7 @@ document.addEventListener('click', async event => {
     if (action === 'rotate-vault') return editVault(name, description);
     if (action === 'toggle-vault-access') {
       const enabled = button.dataset.enabled === 'true';
-      if (!enabled && !confirm('이 에이전트에 Vault의 모든 비밀값을 사용할 권한을 허용할까요?')) return;
+      if (!enabled && !(await confirmAction('Vault 권한을 허용할까요?','이 에이전트는 저장된 모든 비밀값을 실행 프로세스에 전달할 수 있습니다. 신뢰하는 에이전트인지 확인하세요.','권한 허용','default'))) return;
       await api('/auth/api-keys/' + encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({vault_access:!enabled})});
       toast(enabled ? 'Vault 권한을 차단했습니다.' : 'Vault 권한을 허용했습니다.');
       return navigate(currentView,false);
@@ -459,33 +462,31 @@ document.addEventListener('click', async event => {
     if (action === 'reload') return navigate(currentView, false);
     if (action === 'next') { pageOffset += 50; return navigate(currentView, false); }
     if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); return navigate(currentView, false); }
-    if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); return detail(record.title || '기록 상세', `<p class="detail-content-text">${h(record.content)}</p><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre>`); }
-    if (action === 'request-detail') { const record = await api('/v1/feature-requests/' + encodeURIComponent(id)); return detail(record.title,featureRequestDetail(record)); }
+    if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); return detail(record.title || '기록 상세', `<p class="detail-content-text">${h(record.content)}</p><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre>`,'MEMORY DETAIL'); }
+    if (action === 'request-detail') { const record = await api('/v1/feature-requests/' + encodeURIComponent(id)); return detail(record.title,featureRequestDetail(record),'FEATURE REQUEST'); }
     if (action === 'relation-detail') {
-      return detail('관계 근거',`<div class="relation-detail-route"><span>${h(sourceName)}</span><strong>${h(relation)}</strong><span>${h(targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(reason)}</p></div>`);
+      return detail('관계 근거',`<div class="relation-detail-route"><span>${h(sourceName)}</span><strong>${h(relation)}</strong><span>${h(targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(reason)}</p></div>`,'RELATION EVIDENCE');
     }
     if (action === 'graph') {
       const graph = await api('/v1/graph/' + encodeURIComponent(id) + '?depth=2');
-      return detail('연결된 기억',`<div class="graph-nodes">${graph.nodes.map(node => `<div class="graph-node"><strong>${h(node.kind)}</strong>${h(node.title)}</div>`).join('')}</div><pre class="detail-pre">${h(JSON.stringify(graph.relations.map(edge => ({relation:edge.relation,reason:edge.reason,source:edge.source_id,target:edge.target_id})),null,2))}</pre>`);
+      return detail('연결된 기억',`<div class="graph-nodes">${graph.nodes.map(node => `<div class="graph-node"><strong>${h(node.kind)}</strong>${h(node.title)}</div>`).join('')}</div><pre class="detail-pre">${h(JSON.stringify(graph.relations.map(edge => ({relation:edge.relation,reason:edge.reason,source:edge.source_id,target:edge.target_id})),null,2))}</pre>`,'RELATION GRAPH');
     }
-    if (action === 'revoke' && confirm('이 API 키를 삭제할까요? 연결된 에이전트에서 더 이상 사용할 수 없습니다.')) {
+    if (action === 'revoke' && await confirmAction('에이전트 키를 삭제할까요?','연결된 에이전트는 즉시 Vibe Memory를 사용할 수 없게 됩니다.','키 삭제')) {
       await api('/auth/api-keys/' + encodeURIComponent(id),{method:'DELETE'}); toast('API 키를 삭제했습니다.'); await navigate(currentView,false);
     }
     if (action === 'grant-mcp-vault') return editMcpVaultGrants(id, name);
-    if (action === 'revoke-mcp' && confirm('이 GPT·Claude MCP 연결을 해제할까요?')) {
+    if (action === 'revoke-mcp' && await confirmAction('MCP 연결을 해제할까요?','이 GPT·Claude 연결은 즉시 기억과 Vault에 접근할 수 없게 됩니다.','연결 해제')) {
       await api('/auth/mcp-connections/' + encodeURIComponent(id),{method:'DELETE'}); toast('MCP 연결을 해제했습니다.'); await navigate(currentView,false);
     }
-    if (action === 'delete-vault' && confirm(`${name} 비밀값을 영구 삭제할까요?`)) {
+    if (action === 'delete-vault' && await confirmAction('비밀값을 영구 삭제할까요?',`${name} 항목은 복구할 수 없으며 연결된 에이전트에서 즉시 사용할 수 없게 됩니다.`,'비밀값 삭제')) {
       await api('/v1/vault/' + encodeURIComponent(name),{method:'DELETE'}); toast('Vault 비밀값을 삭제했습니다.'); await navigate(currentView,false);
     }
-    if (action === 'delete' && confirm('이 기록을 삭제할까요? 연결된 키워드와 관계도 삭제됩니다.')) {
+    if (action === 'delete' && await confirmAction('이 기록을 삭제할까요?','연결된 키워드와 관계도 함께 삭제됩니다. 이 작업은 되돌릴 수 없습니다.','기록 삭제')) {
       await api('/v1/records/' + encodeURIComponent(id),{method:'DELETE'}); toast('기록을 삭제했습니다.'); await navigate(currentView,false);
     }
   } catch (error) { toast(error.message); }
 });
-for (const button of document.querySelectorAll('.close-dialog')) button.addEventListener('click',() => $('#editor').close());
-for (const button of document.querySelectorAll('.close-detail')) button.addEventListener('click',() => { $('#detail-dialog').close(); $('#detail-content').replaceChildren(); });
-$('#detail-dialog').addEventListener('close',() => $('#detail-content').replaceChildren());
+for (const button of document.querySelectorAll('.close-dialog')) button.addEventListener('click',() => window.VMUI.closeModal($('#editor')));
 $('#menu-toggle').addEventListener('click',() => { const open = $('.sidebar').classList.toggle('open'); $('#menu-toggle').setAttribute('aria-expanded',String(open)); });
 $('#sidebar-backdrop').addEventListener('click',() => { $('.sidebar').classList.remove('open'); $('#account-popover').hidden = true; $('#menu-toggle').setAttribute('aria-expanded','false'); $('#account-menu').setAttribute('aria-expanded','false'); });
 $('#account-menu').addEventListener('click',event => {
@@ -506,7 +507,7 @@ window.addEventListener('popstate',() => {
   if (view !== currentView) navigate(view, true, 'none');
 });
 $('#logout').addEventListener('click',async () => {
-  try { await api('/auth/logout',{method:'POST'}); $('#detail-content').replaceChildren(); $('#view-content').replaceChildren(); location.replace('/login'); }
+  try { await api('/auth/logout',{method:'POST'}); window.VMUI.closeFlyout(); $('#view-content').replaceChildren(); location.replace('/login'); }
   catch (error) { toast(error.message); }
 });
 (async () => {

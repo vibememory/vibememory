@@ -79,7 +79,7 @@ class PostgresStore:
         callback,
     ):
         with self.transaction(), self._connection() as connection:
-            lock_key = "\0".join((owner, agent_id, operation, client_request_id))
+            lock_key = "\x1f".join((owner, agent_id, operation, client_request_id))
             connection.execute(
                 "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
                 (lock_key,),

@@ -23,6 +23,7 @@ def test_console_and_api_share_one_origin(settings):
             assert response.status_code == 200
             assert phrase in response.text
         landing = client.get("/").text
+        guide = client.get("/guide").text
         console = client.get("/console").text
         admin = client.get("/admin").text
         connect = client.get("/connect").text
@@ -40,6 +41,30 @@ def test_console_and_api_share_one_origin(settings):
         landing_styles = client.get("/assets/style.css")
         product_styles = client.get("/assets/product-ui.css")
         icon_sprite = client.get("/assets/icons.svg")
+        social_image = client.get("/assets/og-vibe-memory.png")
+        web_manifest = client.get("/site.webmanifest")
+        robots = client.get("/robots.txt")
+        sitemap = client.get("/sitemap.xml")
+        llms = client.get("/llms.txt")
+        assert "Vibe Memory — AI 에이전트를 위한 공유 기억 레이어" in landing
+        assert 'rel="canonical" href="https://vibememory.io"' in landing
+        assert 'name="twitter:card" content="summary_large_image"' in landing
+        assert 'property="og:image" content="https://vibememory.io/assets/og-vibe-memory.png"' in landing
+        assert 'type="application/ld+json"' in landing
+        assert '"@type":"SoftwareApplication"' in landing
+        assert '"@type":"WebSite"' in landing
+        assert '"@type":"TechArticle"' in guide
+        assert 'rel="canonical" href="https://vibememory.io/guide.html"' in guide
+        assert social_image.status_code == 200
+        assert social_image.content.startswith(b"\x89PNG\r\n\x1a\n")
+        assert web_manifest.status_code == 200
+        assert web_manifest.json()["name"] == "Vibe Memory"
+        assert robots.status_code == 200
+        assert "Disallow: /v1/" in robots.text
+        assert sitemap.status_code == 200
+        assert "https://vibememory.io/guide.html" in sitemap.text
+        assert llms.status_code == 200
+        assert "Vibe Memory does not call an LLM" in llms.text
         assert install_script.status_code == 200
         assert "Skip this step for other agents" not in install_script.text
         assert "Identify the current agent host first" in install_script.text
@@ -118,18 +143,18 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261030-v025-0"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v025-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v025-0"' in landing
-        assert '<script src="/assets/theme.js?v=20261030-v025-0" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261030-v025-0" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v025-0" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v025-0" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v025-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v025-0" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v025-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v025-0" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v025-0" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261030-v026-0"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-0"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v026-0" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v026-0" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v026-0" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v026-0" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-0" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v026-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-0" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v026-0" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -168,9 +193,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v025-0' in connect
-        assert '/assets/theme.css?v=20261030-v025-0' in connect
-        assert '/assets/product-ui.css?v=20261030-v025-0' in connect
+        assert '/assets/ui-kit.css?v=20261030-v026-0' in connect
+        assert '/assets/theme.css?v=20261030-v026-0' in connect
+        assert '/assets/product-ui.css?v=20261030-v026-0' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

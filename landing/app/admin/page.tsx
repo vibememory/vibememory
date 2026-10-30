@@ -4,7 +4,10 @@ import { legacyDocument } from "@/lib/legacy";
 
 export const metadata: Metadata = {
   title: "Admin",
-  robots: { index: false, follow: false },
+  alternates: { canonical: null },
+  openGraph: null,
+  twitter: null,
+  robots: { index: false, follow: false, noarchive: true },
 };
 
 export default function Admin() {

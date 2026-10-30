@@ -1,3 +1,10 @@
 User-agent: *
 Allow: /
+Disallow: /_next/
+Disallow: /auth/
+Disallow: /mcp
+Disallow: /oauth/
+Disallow: /openapi.json
+Disallow: /v1/
+
 Sitemap: https://vibememory.io/sitemap.xml

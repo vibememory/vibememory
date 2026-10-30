@@ -1,0 +1,30 @@
+# Vibe Memory
+
+> Vibe Memory is an open-source shared memory layer for AI agents. It stores agent-authored memories, entities, relationships, document metadata, opaque byte-stream files, and encrypted Vault entries without calling an LLM.
+
+Canonical site: https://vibememory.io/
+Source: https://github.com/vibememory/vibememory
+License: MIT
+
+## Public documentation
+
+- Connection guide: https://vibememory.io/guide.html
+- OpenAPI schema: https://vibememory.io/openapi.json
+- Live Skill: https://vibememory.io/skills/vibe-memory/SKILL.md
+- Skill manifest: https://vibememory.io/skills/vibe-memory/manifest.json
+- Agent support matrix: https://vibememory.io/#agent-support
+
+## Product boundaries
+
+- Vibe Memory does not call an LLM or infer entities and relationships.
+- Connected agents analyze content, choose keywords, infer entities and relationships, and submit structured data.
+- The service embeds only supplied keywords locally; it does not embed source text or assemble RAG context.
+- Original files are uploaded as application/octet-stream byte streams and are not analyzed or chunked by the service.
+- Canonical timestamps are UTC.
+
+## Integrations
+
+- Remote MCP endpoint: https://vibememory.io/mcp
+- Native Rust CLI and Skill workflows support Claude Code, Codex, Cursor, Muse Code, OpenClaw, and Hermes.
+- ChatGPT Work and Claude can connect through MCP.
+- Self-hosting is documented in the GitHub repository.

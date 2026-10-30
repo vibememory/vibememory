@@ -2,6 +2,35 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.hostname === 'www.vibememory.io') {
+      url.hostname = 'vibememory.io';
+      return new Response(null, {
+        status: 308,
+        headers: {
+          'Location': url.toString(),
+          'Cache-Control': 'public, max-age=86400',
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+        }
+      });
+    }
+    const canonicalRedirects = new Map([
+      ['/index', '/'],
+      ['/index.html', '/'],
+      ['/guide', '/guide.html'],
+      ['/guide/', '/guide.html']
+    ]);
+    const canonicalPath = canonicalRedirects.get(url.pathname);
+    if (canonicalPath && ['GET', 'HEAD'].includes(request.method)) {
+      url.pathname = canonicalPath;
+      return new Response(null, {
+        status: 308,
+        headers: {
+          'Location': url.pathname + url.search,
+          'Cache-Control': 'public, max-age=86400',
+          'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
+        }
+      });
+    }
     const sessionCookie = request.headers.get('Cookie') || '';
     const hasSession = /(?:^|;\s*)vm_session=/.test(sessionCookie);
     if (url.pathname === '/' && ['GET', 'HEAD'].includes(request.method) && hasSession) {
@@ -46,6 +75,7 @@ export default {
         const response = new Response(upstream.body, upstream);
         response.headers.set('Cache-Control', 'no-store');
         response.headers.set('X-Content-Type-Options', 'nosniff');
+        response.headers.set('X-Robots-Tag', 'noindex, nofollow');
         response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         return response;
       } catch {

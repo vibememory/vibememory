@@ -1,0 +1,33 @@
+{
+  "name": "Vibe Memory",
+  "short_name": "Vibe Memory",
+  "description": "One shared memory layer for your AI agents.",
+  "lang": "ko",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f8f9fc",
+  "theme_color": "#315efb",
+  "categories": ["developer", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "콘솔",
+      "short_name": "콘솔",
+      "url": "/console"
+    },
+    {
+      "name": "연결 가이드",
+      "short_name": "가이드",
+      "url": "/guide.html"
+    }
+  ]
+}

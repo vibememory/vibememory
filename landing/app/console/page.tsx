@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import { LegacyPage } from "@/components/LegacyPage";
 import { legacyDocument } from "@/lib/legacy";
 
-export const metadata: Metadata = { title: "Workspace", robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: "Workspace",
+  alternates: { canonical: null },
+  openGraph: null,
+  twitter: null,
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default function Console() {
   const page = legacyDocument("console");

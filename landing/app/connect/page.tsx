@@ -2,7 +2,13 @@ import type { Metadata } from "next";
 import { LegacyPage } from "@/components/LegacyPage";
 import { legacyDocument } from "@/lib/legacy";
 
-export const metadata: Metadata = { title: "Connect agent", robots: { index: false, follow: false } };
+export const metadata: Metadata = {
+  title: "Connect agent",
+  alternates: { canonical: null },
+  openGraph: null,
+  twitter: null,
+  robots: { index: false, follow: false, noarchive: true },
+};
 
 export default function Connect() {
   const page = legacyDocument("connect");

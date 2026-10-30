@@ -9,7 +9,7 @@ type Props = {
   slot?: { marker: string; node: ReactNode };
 };
 
-const assetVersion = "20261030-v027-0";
+const assetVersion = "20261030-v028-0";
 const versioned = (path: string) => `${path}?v=${assetVersion}`;
 
 export function LegacyPage({ body, bodyClass = "", pageStylesheet, pageStylesheets = [], scripts = [], slot }: Props) {

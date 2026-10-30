@@ -13,7 +13,7 @@ For a suspected vulnerability, use GitHub's **Security → Report a vulnerabilit
 - Agent-key permissions are owner-scoped and editable after issuance. Grant only
   the memory, file, message, feature-request, and event capabilities required by
   that agent. Permission changes take effect immediately and are audit logged.
-- Remote MCP uses OAuth 2.1 authorization code + S256 PKCE. Codes, access tokens, and rotating refresh tokens are stored only as hashes and can be revoked per connected client in the console.
+- Remote MCP uses OAuth 2.1 authorization code + S256 PKCE. Codes, access tokens, and rotating refresh tokens are stored only as hashes. Owners can add or revoke each connection's MCP scopes without reconnecting; changes apply immediately to active tokens, invalidate pending codes, and are audit logged.
 - Agent messages are restricted to stable connections in one account. Sender identity is derived from authentication, and only the exact recipient can read its inbox or advance acknowledgement state.
 - Treat every agent message as untrusted input. It cannot authorize a broader task or carry credentials/Vault values; connected agents must validate requests against current user authority before acting.
 - Label browser, scraper, message-derived, and imported record content with external provenance. Such records are quarantined and omitted from ordinary retrieval until explicitly reviewed; content changes invalidate prior scan evidence and restore quarantine.

@@ -21,7 +21,7 @@ from fastapi.responses import (
     StreamingResponse,
 )
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .auth import (
     COOKIE,
@@ -89,7 +89,7 @@ from .models import (
     VaultGrantUpdate,
     VaultInput,
 )
-from .oauth import OAuthError, OAuthStore
+from .oauth import SUPPORTED_MCP_SCOPES, OAuthError, OAuthStore
 from .postgres import PostgresDatabase
 from .postgres_store import PostgresStore
 from .retrieval import retrieve
@@ -129,6 +129,20 @@ class OAuthRegistration(BaseModel):
     token_endpoint_auth_method: str = "none"
     grant_types: list[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
     response_types: list[str] = Field(default_factory=lambda: ["code"])
+
+
+class McpScopeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    scopes: list[
+        Literal["memory:read", "memory:write", "feature:write", "vault:read"]
+    ] = Field(max_length=4)
+
+    @field_validator("scopes")
+    @classmethod
+    def unique_scopes(cls, value):
+        if len(value) != len(set(value)):
+            raise ValueError("scopes must be unique")
+        return value
 
 
 def create_app(settings=None, embedder=None):
@@ -171,7 +185,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.27.0",
+        version="0.28.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -203,7 +217,7 @@ def create_app(settings=None, embedder=None):
     public_origin = settings.public_origin.rstrip("/")
     oauth_issuer = public_origin
     mcp_resource = public_origin + "/mcp"
-    oauth_scopes = {"memory:read", "memory:write", "feature:write", "vault:read"}
+    oauth_scopes = set(SUPPORTED_MCP_SCOPES)
     default_oauth_scopes = {"memory:read", "memory:write", "feature:write"}
     scope_labels = {
         "memory:read": "기억·문서·관계 조회",
@@ -898,6 +912,29 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.get("/auth/mcp-connections", tags=["account"])
     def mcp_connections(user=Depends(browser_user)):
         return {"items": oauth.list_connections(user["id"]), "server_url": mcp_resource}
+
+    @app.patch("/auth/mcp-connections/{client_id}", tags=["account"])
+    def update_mcp_connection_scopes(
+        client_id: str,
+        data: McpScopeUpdate,
+        user=Depends(browser_user),
+    ):
+        try:
+            return oauth.set_connection_scopes(user["id"], client_id, data.scopes)
+        except OAuthError as error:
+            status = 422 if error.code == "invalid_scope" else 404
+            raise HTTPException(status, error.description) from None
+
+    @app.get("/auth/mcp-connections/{client_id}/permission-events", tags=["account"])
+    def mcp_connection_permission_events(
+        client_id: str,
+        limit: int = Query(default=50, ge=1, le=100),
+        user=Depends(browser_user),
+    ):
+        try:
+            return {"items": oauth.list_permission_events(user["id"], client_id, limit)}
+        except OAuthError:
+            raise HTTPException(404, "MCP 연결을 찾을 수 없습니다.") from None
 
     @app.get("/auth/mcp-connections/{client_id}/vault", tags=["account"])
     def mcp_vault_grants(client_id: str, user=Depends(browser_user)):

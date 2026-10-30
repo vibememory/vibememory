@@ -225,6 +225,18 @@ class PostgresDatabase:
             created_at BIGINT NOT NULL,
             PRIMARY KEY(client_id, user_id, name)
         );
+        CREATE TABLE IF NOT EXISTS oauth_permission_events (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            client_id TEXT NOT NULL,
+            client_name TEXT NOT NULL,
+            changed_at BIGINT NOT NULL,
+            before_scope TEXT NOT NULL,
+            after_scope TEXT NOT NULL,
+            source TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS oauth_permission_events_owner_idx
+            ON oauth_permission_events(user_id, client_id, changed_at DESC, id DESC);
 
         CREATE TABLE IF NOT EXISTS records (
             owner TEXT NOT NULL,

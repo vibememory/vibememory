@@ -17,7 +17,7 @@ reachable so an old CLI can update, and they never receive a service bearer toke
 
 An account listed in `MEMORY_ADMIN_EMAILS` can approve one of its own API-key connections as a feature-request operator from the browser admin console. The permission defaults to false, is checked against the current administrator allowlist on every request, and can be revoked immediately. It grants only cross-workspace feature-request list/update access; it does not grant user-directory, memory, file, message, graph, or Vault access. Approval and revocation use the signed-in administrator session with same-origin protection.
 
-Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. `vault:read` is an optional sensitive MCP scope and still exposes no entry until the user grants individual Vault names to that connection.
+Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. A signed-in owner can add or revoke `memory:read`, `memory:write`, `feature:write`, and `vault:read` on an existing connection with `PATCH /auth/mcp-connections/{client_id}`. The current access and rotating refresh tokens observe the new maximum grant immediately, so reconnection is not required; pending authorization codes are invalidated and every change is audited in UTC. Removing `vault:read` also deletes that connection's individual Vault grants. Adding it still exposes no entry until the owner separately grants individual Vault names.
 
 ## Endpoints
 
@@ -31,6 +31,9 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET/POST | `/auth/api-keys` | Browser-only list/create of agent keys and initial permissions |
 | PATCH | `/auth/api-keys/{id}` | Browser-only add/revoke of one owned key's permissions and Vault access |
 | GET | `/auth/api-keys/{id}/permission-events` | Browser-only permission change audit for one owned key |
+| GET | `/auth/mcp-connections` | Browser-only list of owned MCP OAuth connections and current scopes |
+| PATCH | `/auth/mcp-connections/{client_id}` | Browser-only add/revoke of one owned MCP connection's scopes |
+| GET | `/auth/mcp-connections/{client_id}/permission-events` | Browser-only MCP scope change audit for one owned connection |
 | GET | `/v1/agents` | This connection and same-account addressable agents |
 | POST | `/v1/agent-messages` | Queue an expiring message for one agent |
 | GET | `/v1/agent-messages/inbox` | This connection's non-expired inbox with sequence cursor |

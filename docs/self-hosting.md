@@ -288,6 +288,12 @@ permissions without rotating the token. Changes take effect on the next request;
 active SSE streams also stop when their read permission is removed. Existing
 keys keep the legacy full non-Vault permission set until the user narrows it.
 
+Remote MCP OAuth connections are managed from the same screen. The owner can add
+or revoke memory read, memory write, feature-request, and Vault scopes without
+reconnecting the client. Changes update active access and refresh tokens
+immediately and remain in the connection's UTC permission audit. Revoking the
+Vault scope also removes every per-entry Vault grant for that connection.
+
 ### Encrypted Vault
 
 Users add, rotate, and delete values in the web console. Secret names and access

@@ -73,6 +73,16 @@ AUTH_TABLES = {
         "created_at",
         "last_used_at",
     ),
+    "oauth_permission_events": (
+        "id",
+        "user_id",
+        "client_id",
+        "client_name",
+        "changed_at",
+        "before_scope",
+        "after_scope",
+        "source",
+    ),
 }
 
 VAULT_COLUMNS = (

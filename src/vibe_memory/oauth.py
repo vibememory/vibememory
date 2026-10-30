@@ -11,6 +11,7 @@ import json
 import secrets
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 
 from .clock import utc_epoch_seconds
@@ -19,6 +20,12 @@ from .postgres import PostgresDatabase
 ACCESS_TOKEN_SECONDS = 3600
 REFRESH_TOKEN_SECONDS = 30 * 24 * 3600
 AUTHORIZATION_CODE_SECONDS = 300
+SUPPORTED_MCP_SCOPES = (
+    "memory:read",
+    "memory:write",
+    "feature:write",
+    "vault:read",
+)
 
 
 def token_digest(value: str) -> str:
@@ -94,6 +101,18 @@ class OAuthStore:
                     created_at INTEGER NOT NULL,
                     PRIMARY KEY(client_id, user_id, name)
                 );
+                CREATE TABLE IF NOT EXISTS oauth_permission_events (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    client_id TEXT NOT NULL,
+                    client_name TEXT NOT NULL,
+                    changed_at INTEGER NOT NULL,
+                    before_scope TEXT NOT NULL,
+                    after_scope TEXT NOT NULL,
+                    source TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS oauth_permission_events_owner_idx
+                    ON oauth_permission_events(user_id, client_id, changed_at DESC, id DESC);
                 """
             )
         path.chmod(0o600)
@@ -208,7 +227,31 @@ class OAuthStore:
         return base64.urlsafe_b64encode(hashed).rstrip(b"=").decode()
 
     @staticmethod
-    def _issue_tokens(db, *, client_id, user_id, scope, resource, now):
+    def _record_permission_event(
+        db, *, user_id, client_id, client_name, before_scope, after_scope, source, now
+    ):
+        if before_scope == after_scope:
+            return
+        db.execute(
+            """INSERT INTO oauth_permission_events(
+                id,user_id,client_id,client_name,changed_at,before_scope,after_scope,source
+            ) VALUES(?,?,?,?,?,?,?,?)""",
+            (
+                f"{now:010d}-{time.time_ns():020d}-{secrets.token_hex(8)}",
+                user_id,
+                client_id,
+                client_name,
+                now,
+                before_scope,
+                after_scope,
+                source,
+            ),
+        )
+
+    @classmethod
+    def _issue_tokens(
+        cls, db, *, client_id, user_id, scope, resource, now, update_connection=True
+    ):
         access_token = "vma_" + secrets.token_urlsafe(36)
         refresh_token = "vmr_" + secrets.token_urlsafe(40)
         db.execute(
@@ -235,12 +278,55 @@ class OAuthStore:
                 now + REFRESH_TOKEN_SECONDS,
             ),
         )
-        db.execute(
-            """INSERT INTO oauth_connections(client_id,user_id,scope,created_at,last_used_at)
-            VALUES(?,?,?,?,?) ON CONFLICT(client_id,user_id) DO UPDATE SET
-            scope=excluded.scope,last_used_at=excluded.last_used_at""",
-            (client_id, user_id, scope, now, now),
-        )
+        if update_connection:
+            existing = db.execute(
+                """SELECT x.scope,c.client_name FROM oauth_connections x
+                JOIN oauth_clients c ON c.client_id=x.client_id
+                WHERE x.client_id=? AND x.user_id=?""",
+                (client_id, user_id),
+            ).fetchone()
+            db.execute(
+                """INSERT INTO oauth_connections(client_id,user_id,scope,created_at,last_used_at)
+                VALUES(?,?,?,?,?) ON CONFLICT(client_id,user_id) DO UPDATE SET
+                scope=excluded.scope,last_used_at=excluded.last_used_at""",
+                (client_id, user_id, scope, now, now),
+            )
+            if existing:
+                db.execute(
+                    """UPDATE oauth_access_tokens SET scope=?
+                    WHERE user_id=? AND client_id=?""",
+                    (scope, user_id, client_id),
+                )
+                db.execute(
+                    """UPDATE oauth_refresh_tokens SET scope=?
+                    WHERE user_id=? AND client_id=?""",
+                    (scope, user_id, client_id),
+                )
+                db.execute(
+                    "DELETE FROM oauth_codes WHERE user_id=? AND client_id=?",
+                    (user_id, client_id),
+                )
+                if "vault:read" not in scope.split():
+                    db.execute(
+                        "DELETE FROM oauth_vault_grants WHERE user_id=? AND client_id=?",
+                        (user_id, client_id),
+                    )
+                cls._record_permission_event(
+                    db,
+                    user_id=user_id,
+                    client_id=client_id,
+                    client_name=existing["client_name"],
+                    before_scope=existing["scope"],
+                    after_scope=scope,
+                    source="oauth-consent",
+                    now=now,
+                )
+        else:
+            db.execute(
+                """UPDATE oauth_connections SET last_used_at=?
+                WHERE client_id=? AND user_id=?""",
+                (now, client_id, user_id),
+            )
         return {
             "access_token": access_token,
             "token_type": "Bearer",
@@ -291,14 +377,19 @@ class OAuthStore:
             self._cleanup(db, now)
             digest = token_digest(refresh_token)
             row = db.execute(
-                "SELECT * FROM oauth_refresh_tokens WHERE hash=?", (digest,)
+                """SELECT r.*,x.scope AS connection_scope
+                FROM oauth_refresh_tokens r
+                JOIN oauth_connections x
+                  ON x.client_id=r.client_id AND x.user_id=r.user_id
+                WHERE r.hash=?""",
+                (digest,),
             ).fetchone()
             if not row or row["client_id"] != client_id or row["resource"] != resource:
                 raise OAuthError("invalid_grant", "Refresh token is invalid or expired")
-            granted = set(row["scope"].split())
-            requested = set((requested_scope or row["scope"]).split())
-            if not requested or not requested.issubset(granted):
-                raise OAuthError("invalid_scope", "Requested scope exceeds the original grant")
+            granted = set(row["connection_scope"].split())
+            requested = set((requested_scope or row["connection_scope"]).split())
+            if not requested.issubset(granted):
+                raise OAuthError("invalid_scope", "Requested scope exceeds the current grant")
             db.execute("DELETE FROM oauth_refresh_tokens WHERE hash=?", (digest,))
             return self._issue_tokens(
                 db,
@@ -307,6 +398,7 @@ class OAuthStore:
                 scope=" ".join(sorted(requested)),
                 resource=row["resource"],
                 now=now,
+                update_connection=False,
             )
 
     def principal(self, token, resource):
@@ -354,6 +446,91 @@ class OAuthStore:
             {
                 **dict(row),
                 "scopes": row["scope"].split(),
+            }
+            for row in rows
+        ]
+
+    def set_connection_scopes(self, user_id, client_id, scopes):
+        normalized = sorted(set(scopes))
+        if not set(normalized).issubset(SUPPORTED_MCP_SCOPES):
+            raise OAuthError("invalid_scope", "MCP connection scope is not supported")
+        after_scope = " ".join(normalized)
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            self._cleanup(db, now)
+            row = db.execute(
+                """SELECT x.scope,c.client_name FROM oauth_connections x
+                JOIN oauth_clients c ON c.client_id=x.client_id
+                WHERE x.user_id=? AND x.client_id=?""",
+                (user_id, client_id),
+            ).fetchone()
+            if not row:
+                raise OAuthError("not_found", "MCP connection not found")
+            before_scope = row["scope"]
+            db.execute(
+                """UPDATE oauth_connections SET scope=?
+                WHERE user_id=? AND client_id=?""",
+                (after_scope, user_id, client_id),
+            )
+            db.execute(
+                """UPDATE oauth_access_tokens SET scope=?
+                WHERE user_id=? AND client_id=?""",
+                (after_scope, user_id, client_id),
+            )
+            db.execute(
+                """UPDATE oauth_refresh_tokens SET scope=?
+                WHERE user_id=? AND client_id=?""",
+                (after_scope, user_id, client_id),
+            )
+            # A pending code reflects an older approval decision. Discard it so a
+            # completed stale browser flow cannot restore permissions just revoked.
+            db.execute(
+                "DELETE FROM oauth_codes WHERE user_id=? AND client_id=?",
+                (user_id, client_id),
+            )
+            if "vault:read" not in normalized:
+                db.execute(
+                    "DELETE FROM oauth_vault_grants WHERE user_id=? AND client_id=?",
+                    (user_id, client_id),
+                )
+            self._record_permission_event(
+                db,
+                user_id=user_id,
+                client_id=client_id,
+                client_name=row["client_name"],
+                before_scope=before_scope,
+                after_scope=after_scope,
+                source="console",
+                now=now,
+            )
+        return {"client_id": client_id, "scopes": normalized}
+
+    def list_permission_events(self, user_id, client_id, limit=50):
+        with self.connection() as db:
+            connection = db.execute(
+                """SELECT 1 FROM oauth_connections
+                WHERE user_id=? AND client_id=?""",
+                (user_id, client_id),
+            ).fetchone()
+            if not connection:
+                raise OAuthError("not_found", "MCP connection not found")
+            rows = db.execute(
+                """SELECT id,client_id,client_name,changed_at,
+                before_scope,after_scope,source
+                FROM oauth_permission_events
+                WHERE user_id=? AND client_id=?
+                ORDER BY changed_at DESC,id DESC LIMIT ?""",
+                (user_id, client_id, limit),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "client_id": row["client_id"],
+                "client_name": row["client_name"],
+                "changed_at": row["changed_at"],
+                "source": row["source"],
+                "before_scopes": row["before_scope"].split(),
+                "after_scopes": row["after_scope"].split(),
             }
             for row in rows
         ]

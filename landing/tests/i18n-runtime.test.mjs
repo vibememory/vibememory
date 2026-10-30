@@ -60,6 +60,8 @@ test('all seven locales translate core and newly added UI labels', () => {
   }
   window.vmSetLocale('en');
   assert.equal(window.vmTranslateText('다크 모드로 전환'), 'Switch to dark mode');
+  assert.equal(window.vmTranslateText('모든 기능 차단'), 'All capabilities blocked');
+  assert.equal(window.vmTranslateText('3개 권한 · Vault 범위 허용'), '3 scopes · Vault allowed');
   window.vmSetLocale('th');
   assert.equal(window.vmTranslateText('라이트 모드로 전환'), 'เปลี่ยนเป็นโหมดสว่าง');
   assert.equal(window.vmSetLocale('unsupported'), false);

@@ -618,6 +618,97 @@ def test_mcp_read_only_scope_and_oauth_validation(settings):
         assert replay.status_code == 400
 
 
+def test_existing_mcp_connection_permissions_can_be_added_and_revoked(settings):
+    settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
+    with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
+        client.headers["Origin"] = ORIGIN
+        signup(client, "managed-mcp@example.invalid")
+        registration = register(client, "Managed MCP")
+        code, verifier = authorize(client, registration, "memory:read")
+        credentials = token(client, registration, code, verifier)
+        path = f"/auth/mcp-connections/{registration['client_id']}"
+
+        initial_tools = mcp(
+            client, credentials["access_token"], 1, "tools/list"
+        )["result"]["tools"]
+        assert "memory_create" not in {tool["name"] for tool in initial_tools}
+
+        expanded = client.patch(
+            path,
+            json={
+                "scopes": [
+                    "memory:read",
+                    "memory:write",
+                    "feature:write",
+                    "vault:read",
+                ]
+            },
+        )
+        assert expanded.status_code == 200, expanded.text
+        assert set(expanded.json()["scopes"]) == {
+            "memory:read",
+            "memory:write",
+            "feature:write",
+            "vault:read",
+        }
+        expanded_tools = mcp(
+            client, credentials["access_token"], 2, "tools/list"
+        )["result"]["tools"]
+        expanded_names = {tool["name"] for tool in expanded_tools}
+        assert {"memory_create", "feature_request_submit", "vault_get"}.issubset(
+            expanded_names
+        )
+
+        assert client.put(
+            "/v1/vault/SCOPED_TOKEN",
+            json={"value": "secret", "description": "permission test"},
+        ).status_code == 200
+        grants_path = path + "/vault"
+        assert client.put(grants_path, json={"names": ["SCOPED_TOKEN"]}).status_code == 200
+
+        reduced = client.patch(path, json={"scopes": ["memory:read"]})
+        assert reduced.status_code == 200, reduced.text
+        reduced_tools = mcp(
+            client, credentials["access_token"], 3, "tools/list"
+        )["result"]["tools"]
+        reduced_names = {tool["name"] for tool in reduced_tools}
+        assert "memory_search" in reduced_names
+        assert not {"memory_create", "feature_request_submit", "vault_get"} & reduced_names
+        assert all(
+            not item["granted"] for item in client.get(grants_path).json()["items"]
+        )
+
+        history = client.get(path + "/permission-events?limit=5")
+        assert history.status_code == 200, history.text
+        events = history.json()["items"]
+        assert len(events) == 2
+        assert set(events[0]["before_scopes"]) == {
+            "memory:read",
+            "memory:write",
+            "feature:write",
+            "vault:read",
+        }
+        assert events[0]["after_scopes"] == ["memory:read"]
+        assert all(event["source"] == "console" for event in events)
+
+        refreshed = client.post(
+            "/oauth/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": registration["client_id"],
+                "refresh_token": credentials["refresh_token"],
+                "resource": RESOURCE,
+            },
+        )
+        assert refreshed.status_code == 200, refreshed.text
+        assert refreshed.json()["scope"] == "memory:read"
+
+        client.post("/auth/logout")
+        signup(client, "managed-mcp-other@example.invalid")
+        assert client.patch(path, json={"scopes": ["memory:read"]}).status_code == 404
+        assert client.get(path + "/permission-events").status_code == 404
+
+
 def test_mcp_vault_requires_scope_and_per_entry_grant(settings):
     settings = settings.model_copy(update={"public_origin": ORIGIN, "api_keys": {}})
     with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:

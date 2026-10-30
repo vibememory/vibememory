@@ -7,7 +7,8 @@ const statusInfo = status => ({
   in_progress:['처리 중','in-progress'], completed:['완료','completed'], declined:['보류','declined']
 }[status] || [status,'received']);
 const priorityLabel = priority => ({high:'높음',medium:'보통',low:'낮음'}[priority] || priority);
-let offset = 0, payload = {items:[],counts:{},total:0}, toastTimer;
+let offset = 0, payload = {items:[],counts:{},total:0}, userOffset = 0;
+let usersPayload = {items:[],total:0}, toastTimer, userSearchTimer;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers:{'Content-Type':'application/json'}, credentials:'same-origin', ...options});
@@ -29,6 +30,13 @@ function toast(message) {
 function statusBadge(status) {
   const [label,style] = statusInfo(status);
   return `<span class="admin-status ${style}">${h(label)}</span>`;
+}
+function bytes(value) {
+  const size = Number(value || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 ** 2) return `${(size / 1024).toFixed(1)} KiB`;
+  if (size < 1024 ** 3) return `${(size / 1024 ** 2).toFixed(1)} MiB`;
+  return `${(size / 1024 ** 3).toFixed(1)} GiB`;
 }
 function renderStats() {
   const cards = [
@@ -59,6 +67,19 @@ async function load() {
   const status = $('#status-filter').value;
   payload = await api(`/v1/admin/feature-requests?limit=50&offset=${offset}${status ? `&status=${encodeURIComponent(status)}` : ''}`);
   renderStats(); renderRows();
+}
+function renderUsers() {
+  $('#user-description').textContent = `${usersPayload.total}명의 사용자 중 ${usersPayload.items.length}명을 표시합니다.`;
+  $('#user-rows').innerHTML = usersPayload.items.length ? usersPayload.items.map(user => `<tr><td><strong>${h(user.name)}</strong><small>${h(user.email)}</small><code>${h(user.id)}</code></td><td><span class="admin-role ${user.is_admin ? 'administrator' : ''}">${user.is_admin ? '관리자' : '사용자'}</span></td><td><time>${h(utcDate(new Date(user.created_at * 1000).toISOString()))}</time></td><td><strong>${h(user.api_key_count + user.mcp_connection_count)}</strong><small>API 키 ${h(user.api_key_count)} · MCP ${h(user.mcp_connection_count)} · 세션 ${h(user.active_session_count)}</small></td><td><strong>${h(user.record_count)}</strong><small>관계 ${h(user.relation_count)} · Vault ${h(user.vault_entry_count)}</small></td><td><strong>${h(bytes(user.storage_bytes))}</strong><small>기억 ${h(bytes(user.memory_bytes))} · 파일 ${h(bytes(user.file_bytes))}</small></td></tr>`).join('') : '<tr><td colspan="6" class="admin-empty">조건에 맞는 사용자가 없습니다.</td></tr>';
+  $('#users-previous').disabled = userOffset === 0;
+  $('#users-next').disabled = usersPayload.items.length < 50;
+  $('#users-page-number').textContent = `${Math.floor(userOffset / 50) + 1} 페이지`;
+}
+async function loadUsers() {
+  $('#user-rows').innerHTML = '<tr><td colspan="6" class="admin-loading">불러오는 중…</td></tr>';
+  const query = $('#user-search').value.trim();
+  usersPayload = await api(`/v1/admin/users?limit=50&offset=${userOffset}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
+  renderUsers();
 }
 function editRequest(owner,id) {
   const item = payload.items.find(record => record.owner_id === owner && record.id === id);
@@ -91,6 +112,13 @@ $('#request-search').addEventListener('input',renderRows);
 $('#admin-refresh').addEventListener('click',() => load().catch(showError));
 $('#admin-previous').addEventListener('click',() => { offset = Math.max(0,offset-50); load().catch(showError); });
 $('#admin-next').addEventListener('click',() => { offset += 50; load().catch(showError); });
+$('#users-refresh').addEventListener('click',() => loadUsers().catch(showError));
+$('#users-previous').addEventListener('click',() => { userOffset = Math.max(0,userOffset-50); loadUsers().catch(showError); });
+$('#users-next').addEventListener('click',() => { userOffset += 50; loadUsers().catch(showError); });
+$('#user-search').addEventListener('input',() => {
+  clearTimeout(userSearchTimer);
+  userSearchTimer = setTimeout(() => { userOffset = 0; loadUsers().catch(showError); }, 250);
+});
 $('#request-editor-form').addEventListener('submit',async event => {
   event.preventDefault();
   const save = $('#request-save'); save.disabled = true; $('#request-editor-error').hidden = true;
@@ -109,6 +137,6 @@ function showError(error) { $('#admin-error').textContent = error.message; $('#a
     const account = await api('/auth/me');
     if (!account.is_admin) { location.replace('/console'); return; }
     $('#admin-name').textContent = account.user.name; $('#admin-email').textContent = account.user.email;
-    await load();
+    await Promise.all([load(), loadUsers()]);
   } catch (error) { showError(error); }
 })();

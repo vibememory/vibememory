@@ -4,4 +4,4 @@
 :HL["/assets/console.css?v=20261029-chatgpt-work-plugin-1","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"login","h":96,"c":"$Q2"}]]
-0:{"b":"ClbZDQEBB5lnly6QbEio3","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"L7ijiYLGFKlFSto9_rchU","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

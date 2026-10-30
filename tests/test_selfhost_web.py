@@ -148,18 +148,18 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261030-v029-0"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v029-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v029-0"' in landing
-        assert '<script src="/assets/theme.js?v=20261030-v029-0" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261030-v029-0" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v029-0" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v029-0" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v029-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v029-0" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v029-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v029-0" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v029-0" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261030-v029-1"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v029-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v029-1"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v029-1" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v029-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v029-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v029-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v029-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v029-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v029-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v029-1" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v029-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -174,6 +174,17 @@ def test_console_and_api_share_one_origin(settings):
         assert "window.confirm(" not in console_script.text
         assert "manage-agent-permissions" in console_script.text
         assert "manage-mcp-permissions" in console_script.text
+        assert console.index(">CONNECT</p>") < console.index('data-view="mcp"')
+        assert console.index('data-view="mcp"') < console.index('data-view="agents"')
+        assert console.index('data-view="agents"') < console.index(">WORKSPACE</p>")
+        assert console.index(">WORKSPACE</p>") < console.index(">MANAGE</p>")
+        assert 'data-view="keys"' not in console
+        assert "view === 'mcp'" in console_script.text
+        assert "view === 'agents'" in console_script.text
+        assert "requestedView === 'keys' ? 'agents'" in console_script.text
+        assert "const mcp = await api('/auth/mcp-connections');" in console_script.text
+        assert "const result = await api('/auth/api-keys');" in console_script.text
+        assert "Promise.all([api('/auth/api-keys'), api('/auth/mcp-connections')])" not in console_script.text
         assert "/auth/mcp-connections/" in console_script.text
         assert "MCP 연결 권한을 저장했습니다." in console_script.text
         assert "/permission-events?limit=5" in console_script.text
@@ -204,9 +215,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v029-0' in connect
-        assert '/assets/theme.css?v=20261030-v029-0' in connect
-        assert '/assets/product-ui.css?v=20261030-v029-0' in connect
+        assert '/assets/ui-kit.css?v=20261030-v029-1' in connect
+        assert '/assets/theme.css?v=20261030-v029-1' in connect
+        assert '/assets/product-ui.css?v=20261030-v029-1' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

@@ -200,7 +200,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.29.0",
+        version="0.29.1",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )

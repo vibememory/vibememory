@@ -51,7 +51,7 @@ with sync_playwright() as p:
     records = context.request.get(base + '/v1/records').json()['items']
     created.extend(record['id'] for record in records)
     memory_id = records[0]['id']
-    page.locator('.sidebar [data-view="keys"]').click()
+    page.locator('.sidebar [data-view="agents"]').click()
     page.locator('#primary-action').click()
     page.locator('#editor [name="name"]').fill('QA Claude Code')
     page.locator('#editor [name="vault_access"]').check()
@@ -135,7 +135,7 @@ with sync_playwright() as p:
     for id in created:
         response = context.request.delete(base+'/v1/records/'+id,headers={'Origin':base})
         assert response.status == 204,response.text()
-    page.locator('.sidebar [data-view="keys"]').click()
+    page.locator('.sidebar [data-view="agents"]').click()
     page.locator('[data-action="revoke"]').click()
     expect(page.locator('#confirm-dialog')).to_be_visible()
     expect(page.locator('#confirm-title')).to_have_text('에이전트 키를 삭제할까요?')

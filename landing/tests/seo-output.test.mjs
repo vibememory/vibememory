@@ -18,12 +18,13 @@ test('public landing emits complete search and social metadata', () => {
   assert.match(html, /"@type":"WebSite"/);
   assert.match(html, /"codeRepository":"https:\/\/github\.com\/vibememory\/vibememory"/);
   assert.doesNotMatch(html, /hreflang=/);
+  assert.doesNotMatch(html, /href="\/guide\.html/);
 });
 
 test('guide has its own canonical, metadata, and article schema', () => {
   const html = read('dist/guide.html');
   assert.match(html, /<title>AI 에이전트 연결 가이드 \| Vibe Memory<\/title>/);
-  assert.match(html, /<link rel="canonical" href="https:\/\/vibememory\.io\/guide\.html"/);
+  assert.match(html, /<link rel="canonical" href="https:\/\/vibememory\.io\/guide"/);
   assert.match(html, /<meta property="og:type" content="article"/);
   assert.match(html, /"@type":"TechArticle"/);
   assert.match(html, /"dateModified":"2026-10-30"/);
@@ -47,7 +48,7 @@ test('crawl discovery files expose only canonical public pages', () => {
   assert.match(robots, /Disallow: \/v1\//);
   assert.match(robots, /Sitemap: https:\/\/vibememory\.io\/sitemap\.xml/);
   assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/<\/loc>/);
-  assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/guide\.html<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/guide<\/loc>/);
   assert.doesNotMatch(sitemap, /\/console/);
   assert.match(llms, /Vibe Memory does not call an LLM/);
   assert.equal(manifest.name, 'Vibe Memory');
@@ -59,4 +60,13 @@ test('social image is a valid 1200 by 630 PNG', () => {
   assert.equal(image.subarray(1, 4).toString('ascii'), 'PNG');
   assert.equal(image.readUInt32BE(16), 1200);
   assert.equal(image.readUInt32BE(20), 630);
+});
+
+test('Cloudflare runs canonical redirects before static asset routing', () => {
+  const config = JSON.parse(read('wrangler.jsonc'));
+  const worker = read('src/worker.js');
+  assert.equal(config.assets.run_worker_first, true);
+  assert.match(worker, /url\.hostname === 'www\.vibememory\.io'/);
+  assert.match(worker, /\['\/guide\.html', '\/guide'\]/);
+  assert.match(worker, /\['\/index\.html', '\/'\]/);
 });

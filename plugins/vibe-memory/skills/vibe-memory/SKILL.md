@@ -56,7 +56,7 @@ Use `agents_list` to choose a real recipient and `message_send` only when a know
 Use this proactive loop even when no lifecycle hook is installed. For local
 Codex, Claude Code, Hermes Agent, and OpenClaw, the official repository documents
 separate opt-in lifecycle adapters at
-`https://vibememory.io/guide.html#agent-hooks`. Never install one or modify host
+`https://vibememory.io/guide#agent-hooks`. Never install one or modify host
 configuration without the user's review and scope choice. Local command hooks do
 not run in a cloud host without local execution, and public ChatGPT Work plugin
 packages do not bundle local lifecycle hooks. Hook adapters supplement this Skill,

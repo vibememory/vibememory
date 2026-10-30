@@ -12,7 +12,7 @@
       "minimum_version": "2.1.275",
       "verified_version": "2.1.275+ marketplace hook contract",
       "environment": "Claude Code CLI on Linux, macOS, or Windows",
-      "installation_url": "/guide.html#claude-code-hooks",
+      "installation_url": "/guide#claude-code-hooks",
       "capabilities": {
         "skill": "supported",
         "mcp": "supported",
@@ -30,7 +30,7 @@
       "minimum_version": "0.166.0",
       "verified_version": "codex-cli 0.166.0",
       "environment": "Codex CLI or desktop with local command execution",
-      "installation_url": "/guide.html#codex-hooks",
+      "installation_url": "/guide#codex-hooks",
       "capabilities": {
         "skill": "supported",
         "mcp": "supported",
@@ -48,7 +48,7 @@
       "minimum_version": "1.7.0",
       "verified_version": "Cursor 1.7+ official hooks contract + adapter tests",
       "environment": "Cursor desktop or CLI with local command hooks and Python 3",
-      "installation_url": "/guide.html#cursor-hooks",
+      "installation_url": "/guide#cursor-hooks",
       "capabilities": {
         "skill": "supported",
         "mcp": "supported",
@@ -66,7 +66,7 @@
       "minimum_version": "1.3.0",
       "verified_version": "Muse Code 1.3.0 official hook contract + manifest tests",
       "environment": "Muse Code terminal or CI on Linux, macOS, or Windows",
-      "installation_url": "/guide.html#muse-hooks",
+      "installation_url": "/guide#muse-hooks",
       "capabilities": {
         "skill": "supported",
         "mcp": "supported",
@@ -84,7 +84,7 @@
       "minimum_version": "0.22.5 verified floor; earlier hook release not established",
       "verified_version": "Hermes Agent 0.22.5 official contract + adapter tests",
       "environment": "Hermes CLI, Gateway, Desktop, TUI, or dashboard chat",
-      "installation_url": "/guide.html#hermes-hooks",
+      "installation_url": "/guide#hermes-hooks",
       "capabilities": {
         "skill": "supported",
         "mcp": "supported",
@@ -102,7 +102,7 @@
       "minimum_version": "2026.10.9",
       "verified_version": "OpenClaw 2026.10.9 isolated runtime load + adapter tests",
       "environment": "OpenClaw Gateway with native plugins enabled",
-      "installation_url": "/guide.html#openclaw-hooks",
+      "installation_url": "/guide#openclaw-hooks",
       "capabilities": {
         "skill": "supported",
         "mcp": "supported",

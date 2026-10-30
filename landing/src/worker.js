@@ -16,8 +16,8 @@ export default {
     const canonicalRedirects = new Map([
       ['/index', '/'],
       ['/index.html', '/'],
-      ['/guide', '/guide.html'],
-      ['/guide/', '/guide.html']
+      ['/guide.html', '/guide'],
+      ['/guide/', '/guide']
     ]);
     const canonicalPath = canonicalRedirects.get(url.pathname);
     if (canonicalPath && ['GET', 'HEAD'].includes(request.method)) {

@@ -104,7 +104,7 @@ with sync_playwright() as p:
             page.screenshot(
                 path=str(artifacts / "mobile.png"), full_page=True, animations="disabled"
             )
-        page.goto(base + "/guide.html")
+        page.goto(base + "/guide")
         assert page.locator("h1").count() == 1
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), (
             f"guide overflow at {width}px"

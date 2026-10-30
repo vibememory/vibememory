@@ -9,10 +9,10 @@ const description =
 export const metadata: Metadata = {
   title: "AI 에이전트 연결 가이드",
   description,
-  alternates: { canonical: "/guide.html" },
+  alternates: { canonical: "/guide" },
   openGraph: {
     type: "article",
-    url: "/guide.html",
+    url: "/guide",
     siteName: "Vibe Memory",
     locale: "ko_KR",
     title: "Vibe Memory AI 에이전트 연결 가이드",
@@ -39,11 +39,11 @@ export default function Guide() {
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "TechArticle",
-    "@id": "https://vibememory.io/guide.html#article",
+    "@id": "https://vibememory.io/guide#article",
     headline: "Vibe Memory AI 에이전트 연결 가이드",
     description,
-    url: "https://vibememory.io/guide.html",
-    mainEntityOfPage: "https://vibememory.io/guide.html",
+    url: "https://vibememory.io/guide",
+    mainEntityOfPage: "https://vibememory.io/guide",
     dateModified: "2026-10-30",
     inLanguage: "ko-KR",
     image: "https://vibememory.io/assets/og-vibe-memory.png",

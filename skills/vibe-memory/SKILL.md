@@ -81,7 +81,7 @@ conversation-access and prompt-injection grants. Ask the user to review the
 adapter and choose its user, project, profile, or `projectRoots` scope before
 enabling it. Do not install or modify host configuration silently. The current
 support matrix, exact install, update, disable, and uninstall instructions live at
-`https://vibememory.io/guide.html#agent-hooks`.
+`https://vibememory.io/guide#agent-hooks`.
 
 Identify the current host before proposing lifecycle automation and apply exactly
 one host-specific branch. Hook manifests, event names, consent models, and config

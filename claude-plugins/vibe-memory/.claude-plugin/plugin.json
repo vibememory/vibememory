@@ -1,13 +1,13 @@
 {
   "name": "vibe-memory",
   "displayName": "Vibe Memory",
-  "version": "0.26.0",
+  "version": "0.26.1",
   "description": "Shared durable memory for Claude Code with lifecycle checkpoint hooks",
   "author": {
     "name": "Vibe Memory",
     "url": "https://vibememory.io"
   },
-  "homepage": "https://vibememory.io/guide.html",
+  "homepage": "https://vibememory.io/guide",
   "repository": "https://github.com/vibememory/vibememory",
   "license": "MIT",
   "keywords": ["memory", "continuity", "checkpoint", "hooks", "agents"]

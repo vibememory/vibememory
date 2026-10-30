@@ -54,7 +54,7 @@ def test_console_and_api_share_one_origin(settings):
         assert '"@type":"SoftwareApplication"' in landing
         assert '"@type":"WebSite"' in landing
         assert '"@type":"TechArticle"' in guide
-        assert 'rel="canonical" href="https://vibememory.io/guide.html"' in guide
+        assert 'rel="canonical" href="https://vibememory.io/guide"' in guide
         assert social_image.status_code == 200
         assert social_image.content.startswith(b"\x89PNG\r\n\x1a\n")
         assert web_manifest.status_code == 200
@@ -62,7 +62,7 @@ def test_console_and_api_share_one_origin(settings):
         assert robots.status_code == 200
         assert "Disallow: /v1/" in robots.text
         assert sitemap.status_code == 200
-        assert "https://vibememory.io/guide.html" in sitemap.text
+        assert "https://vibememory.io/guide" in sitemap.text
         assert llms.status_code == 200
         assert "Vibe Memory does not call an LLM" in llms.text
         assert install_script.status_code == 200
@@ -134,7 +134,7 @@ def test_console_and_api_share_one_origin(settings):
         assert "사이드 프로젝트" in landing
         assert "저녁 러닝" in landing
         assert 'class="hero-connect"' in landing
-        assert 'class="button button-outline" href="/guide.html"' in landing
+        assert 'class="button button-outline" href="/guide"' in landing
         assert 'class="hero-support"' in landing
         assert 'class="memory-showcase wrap"' in landing
         assert 'class="connect-ways wrap section"' not in landing
@@ -143,18 +143,18 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261030-v026-0"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-0"' in landing
-        assert '<script src="/assets/theme.js?v=20261030-v026-0" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261030-v026-0" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v026-0" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v026-0" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-0" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v026-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-0" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v026-0" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261030-v026-1"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-1"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v026-1" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v026-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v026-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v026-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v026-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-1" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v026-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -193,9 +193,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v026-0' in connect
-        assert '/assets/theme.css?v=20261030-v026-0' in connect
-        assert '/assets/product-ui.css?v=20261030-v026-0' in connect
+        assert '/assets/ui-kit.css?v=20261030-v026-1' in connect
+        assert '/assets/theme.css?v=20261030-v026-1' in connect
+        assert '/assets/product-ui.css?v=20261030-v026-1' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

@@ -24,6 +24,8 @@ def test_console_and_api_share_one_origin(settings):
             assert phrase in response.text
         landing = client.get("/").text
         guide = client.get("/guide").text
+        login = client.get("/login").text
+        capture = client.get("/capture").text
         console = client.get("/console").text
         admin = client.get("/admin").text
         connect = client.get("/connect").text
@@ -55,6 +57,9 @@ def test_console_and_api_share_one_origin(settings):
         assert '"@type":"WebSite"' in landing
         assert '"@type":"TechArticle"' in guide
         assert 'rel="canonical" href="https://vibememory.io/guide"' in guide
+        for auth_page in (login, capture, connect):
+            assert 'class="auth-header"' in auth_page
+            assert 'class="header-actions auth-header-actions"' in auth_page
         assert social_image.status_code == 200
         assert social_image.content.startswith(b"\x89PNG\r\n\x1a\n")
         assert web_manifest.status_code == 200
@@ -143,18 +148,18 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261030-v026-3"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-3"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-3"' in landing
-        assert '<script src="/assets/theme.js?v=20261030-v026-3" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261030-v026-3" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v026-3" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v026-3" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-3" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-3" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v026-3" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v026-3" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v026-3" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261030-v026-4"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v026-4"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261030-v026-4"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v026-4" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v026-4" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v026-4" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v026-4" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v026-4" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-4" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v026-4" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v026-4" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v026-4" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -193,9 +198,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v026-3' in connect
-        assert '/assets/theme.css?v=20261030-v026-3' in connect
-        assert '/assets/product-ui.css?v=20261030-v026-3' in connect
+        assert '/assets/ui-kit.css?v=20261030-v026-4' in connect
+        assert '/assets/theme.css?v=20261030-v026-4' in connect
+        assert '/assets/product-ui.css?v=20261030-v026-4' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -214,6 +219,8 @@ def test_console_and_api_share_one_origin(settings):
         assert "--sidebar-width: 260px" in product_styles.text
         assert '.sidebar nav button[aria-current="page"] { box-shadow: none; }' in product_styles.text
         assert "inset 3px 0 0 var(--tool-blue)" not in product_styles.text
+        assert ".auth-header-actions .vm-theme-toggle" in product_styles.text
+        assert "position: static !important" in product_styles.text
         assert ".landing-page .header-actions .vm-language-switcher" in product_styles.text
         assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in product_styles.text
         assert "min-height: 108px" in product_styles.text

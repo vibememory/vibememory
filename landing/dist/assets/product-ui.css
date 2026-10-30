@@ -34,6 +34,39 @@ button, input, select, textarea { accent-color: var(--tool-blue); }
 .button, .secondary-button, .danger-button { min-height: 40px; border-radius: var(--tool-radius-sm); }
 input:not([type="checkbox"]):not([type="radio"]), select { min-height: 40px; }
 
+/* Authentication: keep brand, theme, and locale on one shared header baseline. */
+.auth-header {
+  width: min(1120px, calc(100% - 48px));
+  min-height: 48px;
+  margin: 22px auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.auth-header .auth-brand { margin: 0; flex: 0 0 auto; }
+.auth-header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.auth-header-actions .vm-theme-toggle,
+.auth-header-actions .vm-language-switcher {
+  position: static !important;
+  inset: auto !important;
+  margin: 0 !important;
+}
+.auth-header-actions .vm-theme-toggle { order: 1; width: 40px; height: 40px; border-radius: 10px; box-shadow: none; }
+.auth-header-actions .vm-language-switcher {
+  order: 2;
+  min-height: 40px;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--tool-border);
+  border-radius: 10px;
+  background: var(--tool-surface);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+.auth-header-actions .vm-language-icon { width: 30px; height: 30px; padding: 7px; border: 0; background: transparent; }
+.auth-header-actions .vm-language-switcher select { width: 108px; min-width: 108px; height: 32px; min-height: 32px; padding: 0 25px 0 9px; border: 0; border-radius: 7px; background: transparent; box-shadow: none; }
+
 /* Landing: application-like controls without wrapping cards in extra decoration. */
 .landing-page .header { height: 96px; position: relative; }
 .landing-page .header-actions { gap: 10px; }
@@ -229,6 +262,16 @@ html[data-theme="dark"] .console-status-list strong { color: var(--tool-text); }
 }
 
 @media (max-width: 520px) {
+  .auth-header { width: calc(100% - 40px); min-height: 40px; margin-top: 18px; gap: 10px; }
+  .auth-header .auth-brand { gap: 8px; font-size: 20px; }
+  .auth-header .auth-brand img { width: 30px; height: 30px; }
+  .auth-header-actions { gap: 6px; }
+  .auth-header-actions .vm-theme-toggle { width: 36px; height: 36px; border-radius: 9px; }
+  .auth-header-actions .vm-language-switcher { min-height: 36px; padding: 3px; }
+  .auth-header-actions .vm-language-icon { display: none; }
+  .auth-header-actions .vm-language-switcher select { width: 92px; min-width: 92px; height: 30px; min-height: 30px; padding-left: 8px; }
+  .auth-page .auth-layout { margin-top: 28px; }
+
   .landing-page .header { gap: 8px; }
   .landing-page .brand { gap: 7px; font-size: 18px; }
   .landing-page .brand svg { width: 24px; }
@@ -265,6 +308,12 @@ html[data-theme="dark"] .console-status-list strong { color: var(--tool-text); }
 }
 
 @media (max-width: 380px) {
+  .auth-header { width: calc(100% - 32px); gap: 7px; }
+  .auth-header .auth-brand { font-size: 18px; }
+  .auth-header .auth-brand img { width: 28px; height: 28px; }
+  .auth-header-actions .vm-language-switcher select { width: 80px; min-width: 80px; }
+  .auth-header-actions .vm-theme-toggle { width: 34px; }
+
   .landing-page .brand { font-size: 17px; }
   .landing-page .brand svg { width: 22px; }
   .landing-page .header-actions .vm-language-switcher select { width: 56px; min-width: 56px; }

@@ -419,6 +419,122 @@ class SearchInput(KeywordsInput):
         return self
 
 
+class ContextBundleInput(Input):
+    """Deterministic, LLM-free handoff selection over stored records and edges."""
+
+    anchor_id: str | None = Field(default=None, min_length=1, max_length=100)
+    record_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=200
+    )
+    kinds: list[Literal["memory", "document", "entity", "file"]] = Field(
+        default_factory=list, max_length=4
+    )
+    tags: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=30
+    )
+    relations: list[
+        Annotated[str, Field(min_length=1, max_length=80, pattern=r"^[A-Z][A-Z0-9_]*$")]
+    ] = Field(default_factory=list, max_length=30)
+    created_after: datetime | None = None
+    updated_after: datetime | None = None
+    depth: int = Field(default=1, ge=0, le=2)
+    limit: int = Field(default=25, ge=1, le=100)
+    byte_limit: int = Field(default=131072, ge=2048, le=1048576)
+    cursor: str | None = Field(default=None, min_length=1, max_length=2048)
+    include_content: bool = False
+    include_untrusted: bool = False
+    include_quarantined: bool = False
+
+    @field_validator("record_ids", "kinds", "tags", "relations")
+    @classmethod
+    def unique_values(cls, values):
+        if len(values) != len(set(values)):
+            raise ValueError("selector values must be unique")
+        return values
+
+    @field_validator("created_after", "updated_after")
+    @classmethod
+    def normalize_context_time(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamps must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def safe_context_selection(self):
+        if self.include_quarantined and not self.include_untrusted:
+            raise ValueError("include_quarantined requires include_untrusted")
+        if not any(
+            (
+                self.anchor_id,
+                self.record_ids,
+                self.kinds,
+                self.tags,
+                self.created_after,
+                self.updated_after,
+            )
+        ):
+            raise ValueError("at least one context selector is required")
+        return self
+
+
+class GraphAuditInput(Input):
+    include_untrusted: bool = False
+    include_quarantined: bool = False
+    relation: str = Field(default="", max_length=80, pattern=r"^$|^[A-Z][A-Z0-9_]*$")
+    hub_threshold: int = Field(default=20, ge=2, le=10000)
+
+    @model_validator(mode="after")
+    def safe_graph_audit(self):
+        if self.include_quarantined and not self.include_untrusted:
+            raise ValueError("include_quarantined requires include_untrusted")
+        return self
+
+
+class GraphManifestItem(RelationInput):
+    client_request_id: str = Field(min_length=1, max_length=100)
+
+
+class GraphDiffInput(Input):
+    items: list[GraphManifestItem] = Field(min_length=1, max_length=100)
+    scope_record_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=500
+    )
+    include_retract_candidates: bool = False
+
+    @model_validator(mode="after")
+    def unique_graph_manifest(self):
+        request_ids = [item.client_request_id for item in self.items]
+        if len(request_ids) != len(set(request_ids)):
+            raise ValueError("client_request_id values must be unique")
+        if len(self.scope_record_ids) != len(set(self.scope_record_ids)):
+            raise ValueError("scope_record_ids must be unique")
+        if self.include_retract_candidates and not self.scope_record_ids:
+            raise ValueError("retract candidates require explicit scope_record_ids")
+        return self
+
+
+class GraphApplyInput(GraphDiffInput):
+    approved_diff_hash: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
+    approved_create_client_ids: list[
+        Annotated[str, Field(min_length=1, max_length=100)]
+    ] = Field(default_factory=list, max_length=100)
+    approved_retract_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=100
+    )
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def explicit_graph_approval(self):
+        for values in (self.approved_create_client_ids, self.approved_retract_ids):
+            if len(values) != len(set(values)):
+                raise ValueError("approved IDs must be unique")
+        if not self.approved_create_client_ids and not self.approved_retract_ids:
+            raise ValueError("at least one diff item must be explicitly approved")
+        return self
+
+
 class FeatureRequestInput(Input):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=10000)

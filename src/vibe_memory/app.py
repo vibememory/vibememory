@@ -50,17 +50,27 @@ from .batch import (
 )
 from .config import Settings
 from .corrections import annotate_corrections
+from .deterministic import (
+    SnapshotConflict,
+    context_bundle,
+    graph_audit,
+    graph_diff,
+)
 from .embeddings import Embedder
 from .files import FileStorage
 from .mcp import LATEST_PROTOCOL, MCPHandler
 from .models import (
     AgentMessageAck,
     AgentMessageInput,
+    ContextBundleInput,
     DocumentInput,
     EntityCreateMany,
     EntityInput,
     FeatureRequestInput,
     FeatureRequestUpdate,
+    GraphApplyInput,
+    GraphAuditInput,
+    GraphDiffInput,
     KeywordUpdate,
     MemoryCorrectionInput,
     MemoryInput,
@@ -95,6 +105,8 @@ from .vault import (
 from .web import mount_web
 
 log = logging.getLogger(__name__)
+MINIMUM_CLI_VERSION = "3.8.0"
+CLI_USER_AGENT = re.compile(r"^VibeMemoryCLI/(\d+)\.(\d+)\.(\d+)(?:\s|$)")
 
 
 class DevicePoll(BaseModel):
@@ -158,10 +170,33 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.21.0",
+        version="0.22.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
+
+    @app.middleware("http")
+    async def require_supported_cli(request: Request, call_next):
+        match = CLI_USER_AGENT.match(request.headers.get("user-agent", ""))
+        protected = request.url.path.startswith("/v1/") or request.url.path.startswith(
+            "/auth/device/"
+        )
+        minimum = tuple(int(part) for part in MINIMUM_CLI_VERSION.split("."))
+        if protected and match and tuple(int(part) for part in match.groups()) < minimum:
+            return JSONResponse(
+                status_code=426,
+                content={
+                    "detail": (
+                        "This Vibe Memory CLI version is no longer supported; run the separate "
+                        "check-update command, then explicitly install the verified update"
+                    ),
+                    "minimum_cli_version": MINIMUM_CLI_VERSION,
+                },
+                headers={"Vibe-Memory-Minimum-CLI": MINIMUM_CLI_VERSION},
+            )
+        response = await call_next(request)
+        response.headers["Vibe-Memory-Minimum-CLI"] = MINIMUM_CLI_VERSION
+        return response
     auth = HTTPBearer(auto_error=False)
     mcp_handler = MCPHandler(embedder, vault)
     public_origin = settings.public_origin.rstrip("/")
@@ -954,6 +989,13 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             status_code=409, content={"detail": "Version conflict; reload the current resource"}
         )
 
+    @app.exception_handler(SnapshotConflict)
+    async def snapshot_conflict(request, error):
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "Snapshot changed; rerun the dry-run or restart pagination"},
+        )
+
     @app.exception_handler(FileInUse)
     async def file_in_use(request, error):
         return JSONResponse(
@@ -1139,7 +1181,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.get("/health", tags=["service"])
     def health():
-        return {"status": "ok"}
+        return {"status": "ok", "minimum_cli_version": MINIMUM_CLI_VERSION}
 
     @app.get("/v1/events", tags=["service"])
     async def events(
@@ -1958,6 +2000,139 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.patch("/v1/relations/{id}", tags=["graph"])
     def update_relation(id: str, data: RelationUpdate, user=Depends(owner), db=Depends(store)):
         return db.update_link(user, id, data)
+
+    @app.post("/v1/context-bundle", tags=["retrieval"])
+    def get_context_bundle(
+        data: ContextBundleInput,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        try:
+            return context_bundle(db, user, data)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+
+    @app.post("/v1/graph/audit", tags=["graph"])
+    def audit_graph(
+        data: GraphAuditInput,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        return graph_audit(db, user, data)
+
+    @app.post("/v1/graph/diff", tags=["graph"])
+    def diff_graph(
+        data: GraphDiffInput,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        return graph_diff(db, user, data)
+
+    @app.post("/v1/graph/apply", tags=["graph"])
+    def apply_graph_diff(
+        data: GraphApplyInput,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        diff_input = GraphDiffInput.model_validate(
+            data.model_dump(
+                exclude={
+                    "approved_diff_hash",
+                    "approved_create_client_ids",
+                    "approved_retract_ids",
+                    "reason",
+                }
+            )
+        )
+        current = graph_diff(db, user, diff_input)
+        if current["diff_hash"] != data.approved_diff_hash.lower():
+            raise SnapshotConflict()
+        classifications = {
+            item["client_request_id"]: item["classification"]
+            for item in current["items"]
+        }
+        invalid_creates = sorted(
+            client_id
+            for client_id in data.approved_create_client_ids
+            if classifications.get(client_id) != "create"
+        )
+        retract_by_id = {item["id"]: item for item in current["retract_candidates"]}
+        invalid_retracts = sorted(
+            relation_id
+            for relation_id in data.approved_retract_ids
+            if relation_id not in retract_by_id
+        )
+        if invalid_creates or invalid_retracts:
+            raise HTTPException(
+                422,
+                {
+                    "message": "approved IDs must refer to create or retract_candidate items",
+                    "invalid_create_client_ids": invalid_creates,
+                    "invalid_retract_ids": invalid_retracts,
+                },
+            )
+        approved_creates = set(data.approved_create_client_ids)
+        create_results = []
+        for index, item in enumerate(data.items):
+            if item.client_request_id not in approved_creates:
+                continue
+            relation_data = RelationInput.model_validate(
+                item.model_dump(exclude={"client_request_id"})
+            )
+            create_results.append(
+                batch_item(
+                    db,
+                    user,
+                    request,
+                    "relation_create",
+                    index,
+                    item,
+                    lambda relation_data=relation_data: db.link(
+                        user,
+                        relation_data,
+                        request.state.agent_id,
+                        request.state.agent_name,
+                    ),
+                    "created",
+                    "minimal",
+                )
+            )
+        retract_results = []
+        for relation_id in data.approved_retract_ids:
+            candidate = retract_by_id[relation_id]
+            try:
+                updated = db.update_link(
+                    user,
+                    relation_id,
+                    RelationUpdate(
+                        status="retracted",
+                        reason=data.reason,
+                        expected_version=candidate["version"],
+                    ),
+                )
+                retract_results.append(
+                    {
+                        "id": relation_id,
+                        "status": "retracted",
+                        "version": updated["version"],
+                    }
+                )
+            except (NotFound, Conflict):
+                retract_results.append(
+                    {
+                        "id": relation_id,
+                        "status": "conflict",
+                        "error": "relation changed after approval",
+                    }
+                )
+        return {
+            "approved_diff_hash": current["diff_hash"],
+            "dry_run": False,
+            "atomic": False,
+            "created": create_results,
+            "retracted": retract_results,
+        }
 
     @app.get("/v1/graph/{id}", tags=["graph"])
     def graph(

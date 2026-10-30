@@ -229,6 +229,10 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "record_restore",
             "record_merge",
             "relation_update",
+            "context_bundle_get",
+            "graph_audit",
+            "graph_diff",
+            "graph_apply",
             "events_poll",
             "quarantine_list",
             "feature_requests_list",
@@ -258,6 +262,31 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             },
         )["result"]["structuredContent"]["record"]
         assert embedder.calls == [["녹차", "음료 선호"]]
+
+        bundle = mcp(
+            client,
+            credentials["access_token"],
+            31,
+            "tools/call",
+            {
+                "name": "context_bundle_get",
+                "arguments": {"record_ids": [created["id"]], "byte_limit": 10000},
+            },
+        )["result"]["structuredContent"]
+        assert bundle["llm_calls"] == 0
+        assert bundle["items"][0]["id"] == created["id"]
+        assert "content" not in bundle["items"][0]
+        assert embedder.calls == [["녹차", "음료 선호"]]
+
+        audit = mcp(
+            client,
+            credentials["access_token"],
+            32,
+            "tools/call",
+            {"name": "graph_audit", "arguments": {}},
+        )["result"]["structuredContent"]
+        assert audit["llm_calls"] == 0
+        assert audit["content_included"] is False
 
         found = mcp(
             client,
@@ -412,6 +441,42 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             },
         )["result"]["structuredContent"]
         assert relation_batch["items"][0]["status"] == "created"
+        manifest = {
+            "items": [
+                {
+                    "client_request_id": "mcp-reviewed-edge",
+                    "source_id": entity_ids[1],
+                    "target_id": entity_ids[0],
+                    "relation": "CONTEXT_FOR",
+                    "reason": "reviewed MCP graph manifest",
+                }
+            ]
+        }
+        dry_run = mcp(
+            client,
+            credentials["access_token"],
+            58,
+            "tools/call",
+            {"name": "graph_diff", "arguments": manifest},
+        )["result"]["structuredContent"]
+        assert dry_run["items"][0]["classification"] == "create"
+        applied = mcp(
+            client,
+            credentials["access_token"],
+            59,
+            "tools/call",
+            {
+                "name": "graph_apply",
+                "arguments": {
+                    **manifest,
+                    "approved_diff_hash": dry_run["diff_hash"],
+                    "approved_create_client_ids": ["mcp-reviewed-edge"],
+                    "approved_retract_ids": [],
+                    "reason": "approved after exact dry-run review",
+                },
+            },
+        )["result"]["structuredContent"]
+        assert applied["created"][0]["status"] == "created"
         compact_relations = mcp(
             client,
             credentials["access_token"],

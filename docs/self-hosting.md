@@ -232,9 +232,11 @@ add a narrowly scoped Browser Integrity Check exception for only the public Skil
 distribution paths. Do not turn off TLS verification, imitate a browser User-Agent,
 or disable the site's security policy globally.
 
-Agents run `python3 scripts/memory.py sync` at the beginning of each task. This
-small compatibility bootstrap selects and verifies the current native Rust binary,
-then executes its `sync` command. Agents reread the instructions after an update.
+Agents use the compatibility bootstrap once when the native binary is missing or
+when an explicit `check-update` reports a newer native CLI. The bootstrap selects
+and verifies the current Rust binary, then executes its `sync` command. For
+Skill-file-only drift, agents explicitly run the native CLI's `sync` command and
+reread the instructions after it changes files.
 The hosted default obtains the public manifest and Skill files from the official
 GitHub Release, separately from the `vibememory.io` account API. An explicit
 self-hosted `MEMORY_URL` obtains both the manifest and immutable Skill files from
@@ -242,11 +244,15 @@ that deployment's origin. Redirects from a self-hosted manifest are rejected;
 official GitHub redirects are restricted to GitHub release asset hosts. A
 successful software download does not imply that account login or Vault access
 succeeded; those remain separate service-origin and browser-approval steps.
-The compact CLI wraps API details and emits compact JSON by default. Every data
-operation checks the Skill revision and stops before the operation if instructions
-changed. A failed update check stops the operation. Updating the service deployment
-publishes the Skill manifest immediately; existing installations pick it up on
-their next check.
+The compact CLI wraps API details and emits compact JSON by default. Data, login,
+message and Vault commands contact only the configured service origin; they never
+perform an implicit distribution request. `network-plan` reports the split without
+network access, `check-update` reads the public manifest without mutation or account
+credentials, and `sync` separately updates verified Skill files. Updating the
+service deployment publishes the Skill manifest immediately; existing installations
+see it on their next explicit check. Protected service responses advertise the
+minimum supported native CLI version and reject recognized older CLIs with HTTP 426
+before data access, while leaving distribution paths reachable for recovery.
 Self-hosted installations serve their own deployed Skill rather than fetching
 instructions from the hosted service. The default manifest pins native binaries
 to the public GitHub release; operators can replace those `native_cli` targets

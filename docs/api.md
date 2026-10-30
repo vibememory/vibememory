@@ -8,6 +8,13 @@ Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/
 
 Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
 
+Official native CLI requests identify their version without exposing credentials.
+Protected service routes return `Vibe-Memory-Minimum-CLI`; a recognized older,
+unsupported CLI receives HTTP 426 before data access. The CLI then directs the
+agent to the separate `check-update` and explicit verified install flow. Generic
+REST/MCP clients are not version-gated. Distribution manifest paths remain
+reachable so an old CLI can update, and they never receive a service bearer token.
+
 An account listed in `MEMORY_ADMIN_EMAILS` can approve one of its own API-key connections as a feature-request operator from the browser admin console. The permission defaults to false, is checked against the current administrator allowlist on every request, and can be revoked immediately. It grants only cross-workspace feature-request list/update access; it does not grant user-directory, memory, file, message, graph, or Vault access. Approval and revocation use the signed-in administrator session with same-origin protection.
 
 Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. `vault:read` is an optional sensitive MCP scope and still exposes no entry until the user grants individual Vault names to that connection.
@@ -51,6 +58,10 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/relations/batch` | Create up to 100 relation claims with per-item ownership/evidence validation and idempotency |
 | PATCH | `/v1/relations/{id}` | Retract/restore using reason and expected_version |
 | GET | `/v1/graph/{id}` | Explicit 0–2 hop active-edge traversal |
+| POST | `/v1/context-bundle` | Stable, byte-bounded, LLM-free handoff selected by IDs, filters, or a 0–2 hop anchor |
+| POST | `/v1/graph/audit` | Content-free deterministic graph consistency audit |
+| POST | `/v1/graph/diff` | Dry-run an agent-authored desired-edge manifest and issue a snapshot-bound approval hash |
+| POST | `/v1/graph/apply` | Apply only explicitly approved create/retract IDs while the diff hash remains current |
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
 | POST/GET | `/v1/feature-requests` | Submit/list owner-scoped feature feedback |
 | GET | `/v1/feature-requests/{id}` | Read one submitted request |
@@ -116,7 +127,7 @@ its item grants. The server only retrieves the value and never calls an external
 
 ## Keyword-only retrieval
 
-Every indexed record requires 1–32 keywords, each 1–100 characters. The server embeds each keyword separately. Titles, content, summaries, metadata, and original file bytes are not embedded or analyzed.
+Every indexed record requires 1–32 keywords, each 1–100 characters. The server embeds each keyword separately. Titles, content, summaries, metadata, and original file bytes are not embedded or analyzed. Record bodies also have no lexical/full-text index. Agents should include useful error codes, paths, names, aliases, and project identifiers in the supplied keyword array; the service does not fall back to body search.
 
 The agent extracts search keywords before calling:
 
@@ -137,6 +148,50 @@ The agent extracts search keywords before calling:
 Scopes: `all`, `memories`, `documents`, `entities`. `match_mode` is `semantic`, `exact`, or `hybrid`; exact mode performs no embedding call, while semantic/hybrid embed only the supplied search keywords. `tags` and `must_keywords` require every value, `exclude_keywords` rejects exact stored-keyword matches, `metadata_filters` uses exact JSON scalar equality, and date bounds require offset-aware timestamps normalized to UTC. `min_score` prevents unrelated results from filling the response. The response contains record IDs, matched keywords, metadata, provenance/security fields, explicit correction summaries, the chosen mode, and similarity scores. It does not build an answer, rerank raw body content, or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422). `exclude_resolved_superseded=true` excludes an old record only when exactly one active, trusted, non-cyclic full-scope correction is present; conflicts, partial/unknown scope, and unresolved claims remain visible.
 
 Untrusted records are omitted unless `include_untrusted` is true. Quarantined records require both `include_untrusted` and `include_quarantined`; setting only the latter is rejected. The same opt-in pair applies to record lists and graph traversal.
+
+## Deterministic context bundles
+
+`POST /v1/context-bundle` assembles a bounded handoff without calling an LLM,
+summarizing, reranking bodies, inferring entities, or inferring relationships. A
+request must provide at least one selector: `anchor_id`, `record_ids`, `kinds`,
+`tags`, `created_after`, or `updated_after`. An anchor may traverse explicit active
+edges to `depth` 0–2 and may restrict relationship types. Security defaults match
+ordinary retrieval; quarantined records require both explicit opt-ins.
+
+The response contains stored IDs, versions, provenance, security and correction
+state, latest authenticated writer, retrieval reasons, and explicit edges.
+`include_content` defaults to false. `limit` and `byte_limit` bound each page. The
+opaque `next_cursor` binds the normalized selector to record/edge versions; if the
+selected snapshot changes, reuse returns 409 and the caller must restart. With an
+unchanged snapshot and selector, ordering and page content are stable. Missing
+explicit IDs are reported without crossing owner boundaries.
+
+REST exposes this as `/v1/context-bundle`; MCP exposes `context_bundle_get`; the
+Rust CLI accepts an agent-prepared JSON object with `context-bundle FILE`.
+
+## Graph audit and reviewed manifests
+
+`POST /v1/graph/audit` returns deterministic metadata-only diagnostics: orphan
+records, entity degree/relationship coverage, relation distribution, over-connected
+hubs, correction cycles/branches, repeated claim fingerprints, and missing
+endpoints. It never returns record content or decides which claim is true.
+
+`POST /v1/graph/diff` compares 1–100 agent-authored desired relationship claims to
+the active graph and performs no mutation. Each desired item has a stable
+`client_request_id` and is classified as `create`, `unchanged`,
+`conflicting_claim`, or `unknown`. Parallel claims remain separate. Retract
+candidates are produced only when `include_retract_candidates` is true and both
+edge endpoints are inside explicit `scope_record_ids`; omission outside that scope
+never implies deletion. The response includes the current snapshot and a
+`diff_hash`.
+
+`POST /v1/graph/apply` recomputes that dry-run and requires the exact current
+`approved_diff_hash`, one or more exact `approved_create_client_ids` and/or
+`approved_retract_ids`, plus a reason. A changed graph returns 409. Unknown,
+conflicting, unchanged, or out-of-scope IDs are rejected. Approved items commit
+independently and report partial results; nothing is automatically created,
+merged, retracted, or selected by the service. MCP exposes `graph_audit`,
+`graph_diff`, and `graph_apply`; the Rust CLI exposes matching commands.
 
 ## Provenance and quarantine
 

@@ -8,12 +8,12 @@ f:"MetadataBoundary"
 10:I[97367,["$2"],"$f"]
 11:"$Sreact.suspense"
 13:I[68027,["$2"],"default",1]
-:HL["/assets/style.css?v=20261030-admin-users-1","style"]
-:HL["/assets/i18n.css?v=20261030-admin-users-1","style"]
-:HL["/assets/console-fixes.css?v=20261030-admin-users-1","style"]
-:HL["/assets/console.css?v=20261030-admin-users-1","style"]
+:HL["/assets/style.css?v=20261030-totp-1","style"]
+:HL["/assets/i18n.css?v=20261030-totp-1","style"]
+:HL["/assets/console-fixes.css?v=20261030-totp-1","style"]
+:HL["/assets/console.css?v=20261030-totp-1","style"]
 6:X
-8:T18e2,
+8:T1a03,
   <a class="skip" href="#console-main">본문으로 바로가기</a>
 
   <aside class="sidebar" aria-label="워크스페이스 메뉴">
@@ -39,11 +39,12 @@ f:"MetadataBoundary"
       <button data-view="keys"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="12" r="4"/><path d="M13 12h8m-3 0v3m-3-3v2"/></svg><span>에이전트 연결</span></button>
       <button data-view="vault"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg><span>Vault</span></button>
       <button data-view="requests"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/><path d="M8 9h8m-8 3h5"/></svg><span>기능 요청</span></button>
+      <button data-view="security"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m9 12 2 2 4-5"/></svg><span>계정 보안</span></button>
     </nav>
     <div class="sidebar-bottom">
       <div class="sidebar-help-card"><span class="sidebar-help-icon">?</span><div><strong>도움이 필요하신가요?</strong><a href="/guide.html" target="_blank" rel="noopener">연결 가이드 보기</a></div></div>
       <div class="account-line"><span id="user-initial">V</span><div><strong id="user-name">로그인 확인 중…</strong><small id="user-email"></small></div><button id="account-menu" type="button" aria-label="계정 메뉴 열기" aria-expanded="false">•••</button></div>
-      <div class="account-popover" id="account-popover" hidden><a id="admin-link" href="/admin" hidden>관리자 페이지 <span>→</span></a><a href="/" target="_blank" rel="noopener">서비스 홈 <span>↗</span></a><a href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 <span>↓</span></a><button id="logout" type="button">로그아웃 <span>↗</span></button></div>
+      <div class="account-popover" id="account-popover" hidden><button type="button" data-view="security">계정 보안 <span>→</span></button><a id="admin-link" href="/admin" hidden>관리자 페이지 <span>→</span></a><a href="/" target="_blank" rel="noopener">서비스 홈 <span>↗</span></a><a href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 <span>↓</span></a><button id="logout" type="button">로그아웃 <span>↗</span></button></div>
     </div>
   </aside>
   <button class="sidebar-backdrop" id="sidebar-backdrop" type="button" aria-label="메뉴 닫기" tabindex="-1"></button>
@@ -70,13 +71,13 @@ f:"MetadataBoundary"
   <dialog id="editor"><form id="editor-form"><div class="dialog-heading"><div><p class="dialog-kicker">VIBE MEMORY</p><h2 id="editor-title"></h2></div><button type="button" class="close-dialog" aria-label="닫기">×</button></div><div id="editor-fields"></div><p class="form-error" id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button close-dialog">취소</button><button type="submit" class="button primary" id="editor-submit">저장</button></div></form></dialog>
   <dialog id="detail-dialog"><div class="dialog-heading"><div><p class="dialog-kicker">DETAIL</p><h2 id="detail-title">상세 정보</h2></div><button type="button" class="close-detail" aria-label="닫기">×</button></div><div id="detail-content"></div><button class="secondary-button close-detail" type="button">닫기</button></dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-7:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[[["$","link",null,{"rel":"stylesheet","href":"/assets/console.css?v=20261030-admin-users-1"}],["$","div",null,{"className":"console-page","dangerouslySetInnerHTML":{"__html":"$8"}}],["$L9","$La"]],null,"$Lb"]}],"p":false,"v":null}}]]
+7:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[[["$","link",null,{"rel":"stylesheet","href":"/assets/console.css?v=20261030-totp-1"}],["$","div",null,{"className":"console-page","dangerouslySetInnerHTML":{"__html":"$8"}}],["$L9","$La"]],null,"$Lb"]}],"p":false,"v":null}}]]
 5:[["children",{"s":"console","h":512,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],"p":false,"v":"$6"},"c":"$Q7"}]]
-0:{"P":null,"c":["","console"],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-admin-users-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-admin-users-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-admin-users-1"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-admin-users-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-admin-users-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[null,["$","div",null,{"className":"$undefined","dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]]}]]}],"p":false,"v":null},"c":"$Q5"},"h":{"r":["$","$1","h",{"children":[null,["$","$Ld",null,{"children":"$Le"}],["$","$L10",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$11",null,{"name":"Next.Metadata","children":"$L12"}]}],null]}],null]}],"p":false,"v":null}},"m":"$undefined","G":["$13",[]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"l8KxMy89VM2jlOrUlaCUa"}
+0:{"P":null,"c":["","console"],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","children":[["$","head",null,{"children":[["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261030-totp-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261030-totp-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261030-totp-1"}],["$","script",null,{"src":"/assets/i18n.js?v=20261030-totp-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261030-totp-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[null,["$","div",null,{"className":"$undefined","dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 ↗</a></main>"}}],[]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]]}]]}],"p":false,"v":null},"c":"$Q5"},"h":{"r":["$","$1","h",{"children":[null,["$","$Ld",null,{"children":"$Le"}],["$","$L10",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$11",null,{"name":"Next.Metadata","children":"$L12"}]}],null]}],null]}],"p":false,"v":null}},"m":"$undefined","G":["$13",[]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"0-ctelMHa3ztzKqtQUbkL"}
 14:I[97367,["$2"],"OutletBoundary"]
 6:C
-9:["$","script","/assets/vendor/cytoscape.min.js",{"src":"/assets/vendor/cytoscape.min.js?v=20261030-admin-users-1","defer":true}]
-a:["$","script","/assets/console.js",{"src":"/assets/console.js?v=20261030-admin-users-1","defer":true}]
+9:["$","script","/assets/vendor/cytoscape.min.js",{"src":"/assets/vendor/cytoscape.min.js?v=20261030-totp-1","defer":true}]
+a:["$","script","/assets/console.js",{"src":"/assets/console.js?v=20261030-totp-1","defer":true}]
 b:["$","$L14",null,{"children":["$","$11",null,{"name":"Next.MetadataOutlet","children":"$@15"}]}]
 e:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc"}]]
 16:I[27201,["$2"],"IconMark"]

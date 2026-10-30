@@ -33,6 +33,10 @@ AUTH_TABLES = {
         "vault_access",
     ),
     "auth_attempts": ("key", "count", "resets_at"),
+    "user_totp": ("user_id", "nonce", "ciphertext", "enabled_at", "last_counter"),
+    "totp_setups": ("user_id", "nonce", "ciphertext", "expires_at"),
+    "recovery_codes": ("user_id", "hash", "created_at"),
+    "login_challenges": ("hash", "user_id", "expires_at", "attempts"),
     "oauth_clients": ("client_id", "client_name", "redirect_uris", "created_at"),
     "oauth_codes": (
         "hash",

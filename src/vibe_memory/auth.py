@@ -1,14 +1,21 @@
-"""Persistent browser sessions and revocable agent keys; no credentials in browser storage."""
+"""Persistent browser sessions, TOTP protection, and revocable agent keys."""
 
+import base64
 import hashlib
 import hmac
+import os
 import re
 import secrets
 import sqlite3
+import struct
 import threading
 from contextlib import contextmanager
+from urllib.parse import quote
 from uuid import uuid4
 
+import segno
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -17,6 +24,10 @@ from .postgres import IntegrityError, PostgresDatabase
 
 COOKIE = "vm_session"
 SESSION_SECONDS = 7 * 24 * 3600
+TOTP_PERIOD = 30
+TOTP_SETUP_SECONDS = 10 * 60
+LOGIN_CHALLENGE_SECONDS = 5 * 60
+RECOVERY_CODE_COUNT = 10
 
 
 class Credentials(BaseModel):
@@ -55,6 +66,24 @@ class KeyAccessUpdate(BaseModel):
     vault_access: bool
 
 
+class PasswordInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    password: str = Field(min_length=10, max_length=128)
+
+
+class SecondFactorInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    code: str = Field(min_length=6, max_length=32)
+
+
+class LoginSecondFactor(SecondFactorInput):
+    challenge_token: str = Field(min_length=40, max_length=100)
+
+
+class ProtectedSecondFactor(PasswordInput, SecondFactorInput):
+    pass
+
+
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -63,8 +92,50 @@ def password_hash(password, salt):
     return hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=16384, r=8, p=1).hex()
 
 
+def _decode_totp_secret(secret):
+    padding = "=" * ((8 - len(secret) % 8) % 8)
+    return base64.b32decode(secret + padding, casefold=True)
+
+
+def totp_code(secret, timestamp=None):
+    """Return the RFC 6238 six-digit code for tests and internal verification."""
+    timestamp = utc_epoch_seconds() if timestamp is None else int(timestamp)
+    counter = timestamp // TOTP_PERIOD
+    digest_bytes = hmac.new(
+        _decode_totp_secret(secret), struct.pack(">Q", counter), hashlib.sha1
+    ).digest()
+    offset = digest_bytes[-1] & 0x0F
+    number = struct.unpack(">I", digest_bytes[offset : offset + 4])[0] & 0x7FFFFFFF
+    return f"{number % 1_000_000:06d}"
+
+
+def _matching_totp_counter(secret, code, timestamp=None):
+    timestamp = utc_epoch_seconds() if timestamp is None else int(timestamp)
+    current = timestamp // TOTP_PERIOD
+    for counter in (current, current - 1, current + 1):
+        if hmac.compare_digest(totp_code(secret, counter * TOTP_PERIOD), code):
+            return counter
+    return None
+
+
+def _recovery_digest(user_id, code):
+    normalized = re.sub(r"[^A-Z2-9]", "", code.upper())
+    return digest(user_id + "\0" + normalized)
+
+
+def _recovery_codes():
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return [
+        "-".join(
+            "".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3)
+        )
+        for _ in range(RECOVERY_CODE_COUNT)
+    ]
+
+
 class AuthStore:
-    def __init__(self, path):
+    def __init__(self, path, otp_cipher: AESGCM):
+        self.otp_cipher = otp_cipher
         self.postgres = path if isinstance(path, PostgresDatabase) else None
         if self.postgres:
             self.path, self.lock = None, threading.RLock()
@@ -93,6 +164,21 @@ class AuthStore:
                     vault_access INTEGER NOT NULL DEFAULT 0);
                 CREATE TABLE IF NOT EXISTS auth_attempts (
                     key TEXT PRIMARY KEY, count INTEGER NOT NULL, resets_at INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS user_totp (
+                    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    nonce BLOB NOT NULL, ciphertext BLOB NOT NULL,
+                    enabled_at INTEGER NOT NULL, last_counter INTEGER NOT NULL DEFAULT -1);
+                CREATE TABLE IF NOT EXISTS totp_setups (
+                    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    nonce BLOB NOT NULL, ciphertext BLOB NOT NULL, expires_at INTEGER NOT NULL);
+                CREATE TABLE IF NOT EXISTS recovery_codes (
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    hash TEXT NOT NULL, created_at INTEGER NOT NULL,
+                    PRIMARY KEY(user_id, hash));
+                CREATE TABLE IF NOT EXISTS login_challenges (
+                    hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    expires_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0);
             """)
             api_columns = {row[1] for row in db.execute("PRAGMA table_info(api_keys)")}
             if "vault_access" not in api_columns:
@@ -138,6 +224,10 @@ class AuthStore:
                 (key, now + 900),
             )
 
+    def clear_throttle(self, identifier):
+        with self.connection() as db:
+            db.execute("DELETE FROM auth_attempts WHERE key=?", (digest(identifier),))
+
     def signup(self, data):
         salt = secrets.token_hex(16)
         user = dict(
@@ -167,6 +257,229 @@ class AuthStore:
         with self.connection() as db:
             db.execute("DELETE FROM auth_attempts WHERE key=?", (digest("login:" + data.email),))
         return {k: row[k] for k in ("id", "email", "name", "created_at")}
+
+    def verify_password(self, user_id, password):
+        throttle_key = "security-password:" + user_id
+        self.throttle(throttle_key, 8)
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT salt,password_hash FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+        actual = password_hash(password, row["salt"] if row else self.dummy_salt)
+        if not row or not hmac.compare_digest(actual, row["password_hash"]):
+            raise HTTPException(401, "현재 비밀번호가 올바르지 않습니다.")
+        self.clear_throttle(throttle_key)
+
+    @staticmethod
+    def _totp_associated_data(user_id):
+        return b"vibe-memory-totp-v1\0" + user_id.encode()
+
+    def _encrypt_totp_secret(self, user_id, secret):
+        nonce = os.urandom(12)
+        ciphertext = self.otp_cipher.encrypt(
+            nonce, secret.encode(), self._totp_associated_data(user_id)
+        )
+        return nonce, ciphertext
+
+    def _decrypt_totp_secret(self, user_id, nonce, ciphertext):
+        try:
+            return self.otp_cipher.decrypt(
+                nonce, ciphertext, self._totp_associated_data(user_id)
+            ).decode()
+        except (InvalidTag, UnicodeDecodeError):
+            raise HTTPException(500, "OTP 보안 정보를 확인할 수 없습니다.") from None
+
+    def totp_enabled(self, user_id):
+        with self.connection() as db:
+            return bool(
+                db.execute("SELECT 1 FROM user_totp WHERE user_id=?", (user_id,)).fetchone()
+            )
+
+    def security(self, user_id):
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT enabled_at FROM user_totp WHERE user_id=?", (user_id,)
+            ).fetchone()
+            remaining = db.execute(
+                "SELECT count(*) FROM recovery_codes WHERE user_id=?", (user_id,)
+            ).fetchone()[0]
+        return {
+            "totp_enabled": bool(row),
+            "totp_enabled_at": row["enabled_at"] if row else None,
+            "recovery_codes_remaining": remaining,
+        }
+
+    def start_totp_setup(self, user_id, email, password):
+        self.verify_password(user_id, password)
+        if self.totp_enabled(user_id):
+            raise HTTPException(409, "OTP가 이미 활성화되어 있습니다.")
+        secret = base64.b32encode(os.urandom(20)).decode().rstrip("=")
+        nonce, ciphertext = self._encrypt_totp_secret(user_id, secret)
+        expires_at = utc_epoch_seconds() + TOTP_SETUP_SECONDS
+        with self.connection() as db:
+            db.execute(
+                """INSERT INTO totp_setups(user_id,nonce,ciphertext,expires_at)
+                VALUES(?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET
+                nonce=excluded.nonce,ciphertext=excluded.ciphertext,
+                expires_at=excluded.expires_at""",
+                (user_id, nonce, ciphertext, expires_at),
+            )
+        issuer = "Vibe Memory"
+        label = quote(f"{issuer}:{email}", safe="")
+        uri = (
+            f"otpauth://totp/{label}?secret={secret}&issuer={quote(issuer, safe='')}"
+            "&algorithm=SHA1&digits=6&period=30"
+        )
+        qr_svg_data_uri = segno.make(uri, error="m", micro=False).svg_data_uri(
+            scale=5, border=2, dark="#1d293d", light="#ffffff"
+        )
+        return {
+            "secret": secret,
+            "otpauth_uri": uri,
+            "qr_svg_data_uri": qr_svg_data_uri,
+            "expires_at": expires_at,
+        }
+
+    def _replace_recovery_codes(self, db, user_id):
+        codes = _recovery_codes()
+        now = utc_epoch_seconds()
+        db.execute("DELETE FROM recovery_codes WHERE user_id=?", (user_id,))
+        for code in codes:
+            db.execute(
+                "INSERT INTO recovery_codes(user_id,hash,created_at) VALUES(?,?,?)",
+                (user_id, _recovery_digest(user_id, code), now),
+            )
+        return codes
+
+    def enable_totp(self, user_id, code, current_session):
+        now = utc_epoch_seconds()
+        throttle_key = "totp-enable:" + user_id
+        self.throttle(throttle_key, 8)
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT nonce,ciphertext,expires_at FROM totp_setups WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            if not row or row["expires_at"] <= now:
+                db.execute("DELETE FROM totp_setups WHERE user_id=?", (user_id,))
+                raise HTTPException(410, "OTP 설정이 만료되었습니다. 다시 시작해주세요.")
+            secret = self._decrypt_totp_secret(
+                user_id, row["nonce"], row["ciphertext"]
+            )
+            if not re.fullmatch(r"\d{6}", code) or _matching_totp_counter(secret, code) is None:
+                raise HTTPException(401, "인증 앱의 6자리 코드가 올바르지 않습니다.")
+            db.execute(
+                """INSERT INTO user_totp(
+                    user_id,nonce,ciphertext,enabled_at,last_counter
+                ) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET
+                    nonce=excluded.nonce,ciphertext=excluded.ciphertext,
+                    enabled_at=excluded.enabled_at,last_counter=-1""",
+                (user_id, row["nonce"], row["ciphertext"], now, -1),
+            )
+            db.execute("DELETE FROM totp_setups WHERE user_id=?", (user_id,))
+            codes = self._replace_recovery_codes(db, user_id)
+            db.execute(
+                "DELETE FROM sessions WHERE user_id=? AND hash<>?",
+                (user_id, digest(current_session or "")),
+            )
+            db.execute("DELETE FROM login_challenges WHERE user_id=?", (user_id,))
+        self.clear_throttle(throttle_key)
+        return {"recovery_codes": codes}
+
+    def _verify_second_factor(self, user_id, code):
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT nonce,ciphertext,last_counter FROM user_totp WHERE user_id=?",
+                (user_id,),
+            ).fetchone()
+            if not row:
+                raise HTTPException(409, "OTP가 활성화되어 있지 않습니다.")
+            normalized = code.strip().upper()
+            if re.fullmatch(r"\d{6}", normalized):
+                secret = self._decrypt_totp_secret(
+                    user_id, row["nonce"], row["ciphertext"]
+                )
+                counter = _matching_totp_counter(secret, normalized)
+                if counter is None or counter <= row["last_counter"]:
+                    raise HTTPException(401, "OTP 코드가 올바르지 않거나 이미 사용되었습니다.")
+                updated = db.execute(
+                    """UPDATE user_totp SET last_counter=?
+                    WHERE user_id=? AND last_counter<?""",
+                    (counter, user_id, counter),
+                )
+                if not updated.rowcount:
+                    raise HTTPException(401, "OTP 코드가 이미 사용되었습니다.")
+                return "totp"
+            code_hash = _recovery_digest(user_id, normalized)
+            consumed = db.execute(
+                "DELETE FROM recovery_codes WHERE user_id=? AND hash=?",
+                (user_id, code_hash),
+            )
+            if not consumed.rowcount:
+                raise HTTPException(401, "OTP 또는 복구 코드가 올바르지 않습니다.")
+            return "recovery"
+
+    def begin_login_challenge(self, user_id):
+        token = secrets.token_urlsafe(36)
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            db.execute("DELETE FROM login_challenges WHERE expires_at<=?", (now,))
+            db.execute(
+                "INSERT INTO login_challenges(hash,user_id,expires_at,attempts) VALUES(?,?,?,0)",
+                (digest(token), user_id, now + LOGIN_CHALLENGE_SECONDS),
+            )
+        return token
+
+    def complete_login_challenge(self, token, code):
+        token_hash = digest(token)
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT user_id,expires_at,attempts FROM login_challenges WHERE hash=?",
+                (token_hash,),
+            ).fetchone()
+        if not row or row["expires_at"] <= now or row["attempts"] >= 5:
+            with self.connection() as db:
+                db.execute("DELETE FROM login_challenges WHERE hash=?", (token_hash,))
+            raise HTTPException(401, "로그인 인증이 만료되었습니다. 다시 로그인해주세요.")
+        try:
+            self._verify_second_factor(row["user_id"], code)
+        except HTTPException:
+            with self.connection() as db:
+                db.execute(
+                    "UPDATE login_challenges SET attempts=attempts+1 WHERE hash=?",
+                    (token_hash,),
+                )
+            raise
+        with self.connection() as db:
+            db.execute("DELETE FROM login_challenges WHERE hash=?", (token_hash,))
+        return self.user(row["user_id"])
+
+    def regenerate_recovery_codes(self, user_id, password, code):
+        self.verify_password(user_id, password)
+        throttle_key = "security-otp:" + user_id
+        self.throttle(throttle_key, 8)
+        self._verify_second_factor(user_id, code)
+        with self.connection() as db:
+            codes = self._replace_recovery_codes(db, user_id)
+        self.clear_throttle(throttle_key)
+        return {"recovery_codes": codes}
+
+    def disable_totp(self, user_id, password, code, current_session):
+        self.verify_password(user_id, password)
+        throttle_key = "security-otp:" + user_id
+        self.throttle(throttle_key, 8)
+        self._verify_second_factor(user_id, code)
+        with self.connection() as db:
+            db.execute("DELETE FROM user_totp WHERE user_id=?", (user_id,))
+            db.execute("DELETE FROM totp_setups WHERE user_id=?", (user_id,))
+            db.execute("DELETE FROM recovery_codes WHERE user_id=?", (user_id,))
+            db.execute("DELETE FROM login_challenges WHERE user_id=?", (user_id,))
+            db.execute(
+                "DELETE FROM sessions WHERE user_id=? AND hash<>?",
+                (user_id, digest(current_session or "")),
+            )
+        self.clear_throttle(throttle_key)
 
     def session(self, user_id):
         token = secrets.token_urlsafe(36)
@@ -209,13 +522,15 @@ class AuthStore:
                 """SELECT u.id,u.email,u.name,u.created_at,
                 (SELECT count(*) FROM api_keys k WHERE k.user_id=u.id) AS api_key_count,
                 (SELECT count(*) FROM sessions s
-                 WHERE s.user_id=u.id AND s.expires_at>?) AS active_session_count
+                 WHERE s.user_id=u.id AND s.expires_at>?) AS active_session_count,
+                EXISTS(SELECT 1 FROM user_totp t WHERE t.user_id=u.id) AS totp_enabled
                 FROM users u
                 WHERE ?='' OR lower(u.email) LIKE ? OR lower(u.name) LIKE ?
                 ORDER BY u.created_at DESC,u.id LIMIT ? OFFSET ?""",
                 (now, query.strip(), needle, needle, limit, offset),
             ).fetchall()
-        return {"items": [dict(row) for row in rows], "total": total}
+        items = [{**dict(row), "totp_enabled": bool(row["totp_enabled"])} for row in rows]
+        return {"items": items, "total": total}
 
     def logout(self, token):
         with self.connection() as db:

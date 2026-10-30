@@ -32,6 +32,7 @@ def test_console_and_api_share_one_origin(settings):
         admin_script = client.get("/assets/admin.js")
         admin_styles = client.get("/assets/admin.css")
         landing_script = client.get("/assets/app.js")
+        login_script = client.get("/assets/login.js")
         capture_script = client.get("/assets/capture.js")
         landing_styles = client.get("/assets/style.css")
         assert install_script.status_code == 200
@@ -41,6 +42,7 @@ def test_console_and_api_share_one_origin(settings):
         assert admin_script.status_code == 200
         assert admin_styles.status_code == 200
         assert landing_script.status_code == 200
+        assert login_script.status_code == 200
         assert capture_script.status_code == 200
         assert landing_styles.status_code == 200
         assert 'class="landing-page"' in landing
@@ -84,12 +86,12 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-admin-users-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-admin-users-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-admin-users-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-admin-users-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-admin-users-1" defer="">' in console
-        assert '<script src="/assets/admin.js?v=20261030-admin-users-1" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-totp-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-totp-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-totp-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-totp-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-totp-1" defer="">' in console
+        assert '<script src="/assets/admin.js?v=20261030-totp-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -98,6 +100,11 @@ def test_console_and_api_share_one_origin(settings):
         assert "vibeMemoryInstallPrompt" in landing_script.text
         assert "fetch('/auth/me', {cache:'no-store', credentials:'same-origin'})" in landing_script.text
         assert "window.location.replace('/console')" in landing_script.text
+        assert "/auth/login/otp" in login_script.text
+        assert 'data-view="security"' in console
+        assert "/auth/totp/setup" in console_script.text
+        assert "/auth/totp/recovery-codes" in console_script.text
+        assert ".security-card" in console_styles.text
         assert "location.hash.slice(1)" in capture_script.text
         assert "sessionStorage.setItem('vibe-memory-vault-capture'" in capture_script.text
         assert "history.replaceState(null, '', '/capture')" in capture_script.text
@@ -144,6 +151,7 @@ def test_console_and_api_share_one_origin(settings):
         assert 'id="admin-link" href="/admin" hidden' in console
         assert "if (data.is_admin) $('#admin-link').hidden = false" in console_script.text
         assert "/v1/admin/feature-requests" in admin_script.text
+        assert "user.totp_enabled" in admin_script.text
         assert "PRODUCT OPERATIONS" in admin
         assert ".admin-stats" in admin_styles.text
         assert "Console UI refresh" in console_styles.text

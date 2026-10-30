@@ -11,6 +11,8 @@ import urllib.request
 from pathlib import Path
 from uuid import uuid4
 
+from vibe_memory.auth import totp_code
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -66,13 +68,14 @@ def main():
 
     if args.phase == "create":
         assert call("/v1/records", expected=401)
+        password = secrets.token_urlsafe(24)
         user = call(
             "/auth/signup",
             "POST",
             {
                 "name": "Self-host smoke",
                 "email": "smoke-" + uuid4().hex + "@example.invalid",
-                "password": secrets.token_urlsafe(24),
+                "password": password,
             },
         )["user"]
         key = call(
@@ -138,8 +141,16 @@ def main():
             key,
             expected=201,
         )
+        setup = call("/auth/totp/setup", "POST", {"password": password})
+        recovery_codes = call(
+            "/auth/totp/enable", "POST", {"code": totp_code(setup["secret"])}
+        )["recovery_codes"]
+        assert len(recovery_codes) == 10
         state = dict(
             user_id=user["id"],
+            email=user["email"],
+            password=password,
+            totp_secret=setup["secret"],
             key=key,
             memory_id=memory["id"],
             document_id=document["id"],
@@ -154,11 +165,26 @@ def main():
         args.state_file.write_text(json.dumps(state))
         call("/auth/logout", "POST", expected=204)
         print(
-            "PASS: self-hosted console, account, scoped agent key, encrypted Vault, keyword search, raw bytes, graph, feedback. State saved for restart verification (no key printed)."
+            "PASS: self-hosted console, account, TOTP, scoped agent key, encrypted Vault, keyword search, raw bytes, graph, feedback. State saved for restart verification (no secret printed)."
         )
     else:
         state = json.loads(args.state_file.read_text())
         key = state["key"]
+        login = call(
+            "/auth/login",
+            "POST",
+            {"email": state["email"], "password": state["password"]},
+        )
+        assert login["mfa_required"] is True
+        assert call(
+            "/auth/login/otp",
+            "POST",
+            {
+                "challenge_token": login["challenge_token"],
+                "code": totp_code(state["totp_secret"]),
+            },
+        )["user"]["id"] == state["user_id"]
+        assert call("/auth/security")["totp_enabled"] is True
         assert call("/v1/me", key=key)["user_id"] == state["user_id"]
         assert call("/v1/records/" + state["memory_id"], key=key)["content"] == "I prefer tea"
         assert call("/v1/records/" + state["document_id"], key=key)["file_id"] == state["file_id"]
@@ -176,7 +202,7 @@ def main():
             call("/v1/records/" + id, "DELETE", key=key, expected=204)
         args.state_file.unlink()
         print(
-            "PASS: user/key, encrypted Vault, graph, file bytes, metadata, feedback and keyword index survive process/container replacement."
+            "PASS: user/TOTP/key, encrypted Vault, graph, file bytes, metadata, feedback and keyword index survive process/container replacement."
         )
 
 

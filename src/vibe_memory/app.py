@@ -30,6 +30,10 @@ from .auth import (
     Credentials,
     KeyAccessUpdate,
     KeyInput,
+    LoginSecondFactor,
+    PasswordInput,
+    ProtectedSecondFactor,
+    SecondFactorInput,
     Signup,
 )
 from .config import Settings
@@ -114,13 +118,13 @@ def create_app(settings=None, embedder=None):
         else None
     )
     account_storage = database or settings.data_dir / "auth.sqlite"
-    accounts = AuthStore(account_storage)
-    oauth = OAuthStore(account_storage)
     files = FileStorage(settings.data_dir / "files", settings.upload_max_bytes)
     vault = VaultStore(
         database or settings.data_dir / "vault.sqlite",
         settings.vault_key_file or settings.data_dir / "vault.key",
     )
+    accounts = AuthStore(account_storage, vault.cipher)
+    oauth = OAuthStore(account_storage)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -138,7 +142,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.13.0",
+        version="0.14.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -403,11 +407,57 @@ def create_app(settings=None, embedder=None):
     @app.post("/auth/login", tags=["account"])
     def login(data: Credentials, request: Request):
         check_origin(request)
-        return signed_in(accounts.login(data))
+        user = accounts.login(data)
+        if accounts.totp_enabled(user["id"]):
+            return JSONResponse(
+                {
+                    "mfa_required": True,
+                    "challenge_token": accounts.begin_login_challenge(user["id"]),
+                    "expires_in": 300,
+                }
+            )
+        return signed_in(user)
+
+    @app.post("/auth/login/otp", tags=["account"])
+    def login_otp(data: LoginSecondFactor, request: Request):
+        check_origin(request)
+        return signed_in(
+            accounts.complete_login_challenge(data.challenge_token, data.code)
+        )
 
     @app.get("/auth/me", tags=["account"])
     def account(user=Depends(browser_user)):
         return {"user": user, "is_admin": is_admin(user)}
+
+    @app.get("/auth/security", tags=["account"])
+    def account_security(user=Depends(browser_user)):
+        return accounts.security(user["id"])
+
+    @app.post("/auth/totp/setup", tags=["account"])
+    def setup_totp(data: PasswordInput, user=Depends(browser_user)):
+        return accounts.start_totp_setup(user["id"], user["email"], data.password)
+
+    @app.post("/auth/totp/enable", tags=["account"])
+    def enable_totp(data: SecondFactorInput, request: Request, user=Depends(browser_user)):
+        return accounts.enable_totp(
+            user["id"], data.code, request.cookies.get(COOKIE)
+        )
+
+    @app.post("/auth/totp/recovery-codes", tags=["account"])
+    def regenerate_recovery_codes(
+        data: ProtectedSecondFactor, user=Depends(browser_user)
+    ):
+        return accounts.regenerate_recovery_codes(
+            user["id"], data.password, data.code
+        )
+
+    @app.delete("/auth/totp", status_code=204, tags=["account"])
+    def disable_totp(
+        data: ProtectedSecondFactor, request: Request, user=Depends(browser_user)
+    ):
+        accounts.disable_totp(
+            user["id"], data.password, data.code, request.cookies.get(COOKIE)
+        )
 
     @app.post("/auth/logout", status_code=204, tags=["account"])
     def logout(request: Request):

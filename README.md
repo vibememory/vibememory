@@ -22,6 +22,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
 - **Provenance quarantine:** external/imported text is untrusted and excluded from normal search and graph traversal until an agent explicitly reviews it.
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
+- **Account security:** optional authenticator-app TOTP with one-time recovery codes; OTP secrets are encrypted and recovery codes are stored only as hashes.
 - **Remote MCP:** one OAuth 2.1 + PKCE Streamable HTTP server for ChatGPT, Codex, Claude, and other MCP clients.
 - **Agent keys:** independently revocable keys share the same account's memory; keys are shown once and stored as hashes.
 - **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; agents can create owner-bound, one-time browser capture links so values never need to pass through chat.
@@ -135,7 +136,7 @@ Browser console / REST agent / remote MCP client
             ├── PostgreSQL: accounts, OAuth, records, relationships, agent mailboxes, feedback, Vault ciphertext
             ├── pgvector: agent-supplied keyword embeddings and exact cosine search
             ├── local multilingual keyword model (FastEmbed / ONNX)
-            └── persistent volume: opaque byte-stream files and Vault key
+            └── persistent volume: opaque byte-stream files and Vault/OTP encryption key
 ```
 
 This is a **personal/small-team deployment**. PostgreSQL is the source of truth for structured data; raw uploaded bytes remain on the app volume. Search uses exact, owner-scoped pgvector cosine distance, so it favors perfect recall over an approximate ANN index. Horizontal file-storage replication, email verification, password recovery, and social login are not currently included.

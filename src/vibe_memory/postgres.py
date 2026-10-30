@@ -126,6 +126,31 @@ class PostgresDatabase:
             count INTEGER NOT NULL,
             resets_at BIGINT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS user_totp (
+            user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            nonce BYTEA NOT NULL,
+            ciphertext BYTEA NOT NULL,
+            enabled_at BIGINT NOT NULL,
+            last_counter BIGINT NOT NULL DEFAULT -1
+        );
+        CREATE TABLE IF NOT EXISTS totp_setups (
+            user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+            nonce BYTEA NOT NULL,
+            ciphertext BYTEA NOT NULL,
+            expires_at BIGINT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS recovery_codes (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            hash TEXT NOT NULL,
+            created_at BIGINT NOT NULL,
+            PRIMARY KEY(user_id, hash)
+        );
+        CREATE TABLE IF NOT EXISTS login_challenges (
+            hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            expires_at BIGINT NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0
+        );
 
         CREATE TABLE IF NOT EXISTS oauth_clients (
             client_id TEXT PRIMARY KEY,

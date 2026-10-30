@@ -190,7 +190,8 @@ const viewInfo = {
   relations: ['관계 그래프','CONNECTIONS WITH A REASON','관계 그래프','에이전트가 구성한 기억의 연결과 근거를 살펴보세요.'],
   keys: ['에이전트 연결','ONE MEMORY, EVERY AGENT','에이전트 연결','연결된 에이전트를 확인하고 접근 권한을 관리하세요.','+ API 키 만들기'],
   vault: ['Vault','ENCRYPTED SECRETS','Vault','에이전트가 로컬 설정 파일 없이 사용할 비밀값을 암호화해 관리하세요.','+ 비밀 추가'],
-  requests: ['기능 요청','HELP SHAPE VIBE MEMORY','기능 요청','필요한 기능과 실제 사용 사례를 남겨주세요.','+ 기능 요청']
+  requests: ['기능 요청','HELP SHAPE VIBE MEMORY','기능 요청','필요한 기능과 실제 사용 사례를 남겨주세요.','+ 기능 요청'],
+  security: ['계정 보안','ACCOUNT SECURITY','계정 보안','로그인 보호와 복구 수단을 관리하세요.']
 };
 function viewFromLocation() {
   const view = decodeURIComponent(location.hash.slice(1));
@@ -252,6 +253,18 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const scopeName = {'memory:read':'기억 조회','memory:write':'기억 저장','feature:write':'기능 요청','vault:read':'Vault 항목 조회'};
       const mcpRows = mcp.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>MCP 클라이언트</th><th>허용 범위</th><th>마지막 사용</th><th></th></tr></thead><tbody>${mcp.items.map(connection => `<tr><td><strong>${h(connection.client_name)}</strong><span class="record-subtitle">OAuth · 웹 승인 연결</span></td><td>${connection.scopes.map(scope => `<span class="tag">${h(scopeName[scope] || scope)}</span>`).join('')}</td><td>${date(connection.last_used_at)}</td><td><div class="row-actions">${connection.scopes.includes('vault:read') ? `<button data-action="grant-mcp-vault" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}">Vault 항목</button>` : '<span class="permission-toggle">Vault 재연결 필요</span>'}<button class="danger" data-action="revoke-mcp" data-id="${h(connection.client_id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="mcp-empty">아직 연결된 원격 MCP 클라이언트가 없습니다.</p>';
       html = `<section class="mcp-connect-card"><div class="mcp-connect-copy"><span>CHATGPT WORK PLUGIN · OAUTH 2.1</span><h2>ChatGPT Work에 바로 설치하세요.</h2><p>Plugin을 설치하면 Vibe Memory 로그인과 권한 승인이 이어집니다. Claude나 다른 MCP 클라이언트는 아래 주소로 연결할 수 있습니다.</p><code>${h(mcp.server_url)}</code></div><div class="mcp-connect-actions"><a class="button primary" href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec" target="_blank" rel="noopener"><img src="/assets/brands/codex.png" alt="">ChatGPT Work에 설치 ↗</a><button class="button" type="button" data-action="copy-mcp-url" data-url="${h(mcp.server_url)}"><img src="/assets/brands/claude-code.png" alt="">다른 MCP용 주소 복사 ⧉</button><a href="/guide.html#mcp" target="_blank" rel="noopener">연결 방법 보기 ↗</a></div></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>원격 MCP 연결</h2><p>${mcp.items.length}개의 GPT·Claude 연결이 활성 상태입니다.</p></div></div>${mcpRows}</section><div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>CLI·Skill 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드</a></div><p class="key-note">Vault 권한은 기억 접근과 별도로 관리됩니다. 신뢰하는 에이전트에만 허용하고 언제든 철회하세요.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>Vault</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><button class="permission-toggle ${key.vault_access ? 'enabled' : ''}" data-action="toggle-vault-access" data-id="${h(key.id)}" data-enabled="${key.vault_access}">${key.vault_access ? '허용됨' : '차단됨'}</button></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.','<a class="secondary-button" href="/guide.html" target="_blank">연결 방법 보기</a>')}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
+    } else if (view === 'security') {
+      const security = await api('/auth/security');
+      const status = security.totp_enabled
+        ? `<span class="security-state enabled"><i></i>OTP 사용 중</span>`
+        : `<span class="security-state"><i></i>OTP 사용 안 함</span>`;
+      const actions = security.totp_enabled
+        ? `<button class="secondary-button" type="button" data-action="regenerate-recovery">복구 코드 재발급</button><button class="danger-button" type="button" data-action="disable-totp">OTP 해제</button>`
+        : `<button class="button primary" type="button" data-action="setup-totp">인증 앱 연결</button>`;
+      const details = security.totp_enabled
+        ? `<dl class="security-details"><div><dt>인증 방식</dt><dd>표준 TOTP 인증 앱</dd></div><div><dt>활성화</dt><dd>${date(security.totp_enabled_at)} UTC</dd></div><div><dt>남은 복구 코드</dt><dd>${h(security.recovery_codes_remaining)}개</dd></div></dl>`
+        : `<p class="security-description">Google Authenticator, Microsoft Authenticator, 1Password 등 표준 TOTP 앱을 연결할 수 있습니다. 활성화하면 이메일과 비밀번호 입력 후 일회용 코드가 있어야 로그인됩니다.</p>`;
+      html = `<section class="security-card"><div class="security-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m9 12 2 2 4-5"/></svg></div><div class="security-card-copy"><div class="security-title-row"><div><span>TWO-FACTOR AUTHENTICATION</span><h2>인증 앱 OTP</h2></div>${status}</div>${details}<div class="security-actions">${actions}</div></div></section><section class="security-note"><strong>에이전트 연결은 그대로 유지됩니다.</strong><p>OTP는 브라우저 로그인만 보호합니다. 기존 CLI·MCP 연결은 중단되지 않으며 에이전트 키와 연결 권한은 에이전트 연결 화면에서 별도로 철회할 수 있습니다.</p></section>`;
     } else if (view === 'requests') {
       const result = await api(`/v1/feature-requests?limit=50&offset=${pageOffset}`);
       html = `<section class="console-panel request-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>접수된 기능 요청</h2><p>에이전트와 콘솔에서 남긴 요청의 진행 상태와 처리 결과입니다.</p></div><span class="request-count">${result.items.length}개 표시</span></div>${result.items.length ? `<div class="table-scroll"><table class="records-table request-table"><thead><tr><th>요청 내용</th><th>상태</th><th>처리 결과</th><th>에이전트</th><th>최종 갱신</th></tr></thead><tbody>${result.items.map(item => { const [statusLabel,statusClass] = featureStatus(item.status); return `<tr><td><button class="record-title" data-action="request-detail" data-id="${h(item.id)}">${h(item.title)}</button><span class="record-subtitle">${h(item.description.slice(0,100))}</span></td><td><span class="request-status ${statusClass}">${h(statusLabel)}</span></td><td><button class="request-result-preview ${item.result ? '' : 'is-empty'}" data-action="request-detail" data-id="${h(item.id)}">${h(item.result ? item.result.slice(0,120) : '결과 대기 중')}</button></td><td>${h(item.agent_name)}</td><td>${date(item.updated_at)}</td></tr>`; }).join('')}</tbody></table></div>` : empty('더 나은 기억을 위한 아이디어가 있나요?','에이전트에서 요청을 보내거나 콘솔에서 필요한 기능과 사용 사례를 남겨주세요.')}<div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>← 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 →</button></div></section>`;
@@ -303,13 +316,44 @@ function editor(title, fields, onSave, submitLabel = '저장') {
   $('#editor-error').hidden = true; $('#editor-submit').textContent = submitLabel; $('#editor-submit').disabled = false;
   $('#editor-form').onsubmit = async event => {
     event.preventDefault(); $('#editor-submit').disabled = true; $('#editor-error').hidden = true;
-    try { await onSave(new FormData(event.target)); $('#editor').close(); await navigate(currentView, false); }
+    try { const next = await onSave(new FormData(event.target)); $('#editor').close(); await navigate(currentView, false); if (typeof next === 'function') next(); }
     catch (error) { $('#editor-error').textContent = error.message; $('#editor-error').hidden = false; }
     finally { $('#editor-submit').disabled = false; }
   };
   $('#editor').showModal();
 }
 function detail(title, html) { $('#detail-title').textContent = title; $('#detail-content').innerHTML = html; $('#detail-dialog').showModal(); }
+function showRecoveryCodes(codes) {
+  detail('복구 코드를 안전하게 보관하세요.',`<div class="recovery-once"><p>각 코드는 한 번만 사용할 수 있습니다. 인증 앱을 사용할 수 없을 때 로그인 코드 대신 입력하세요. 이 화면을 닫으면 다시 볼 수 없습니다.</p><div class="recovery-code-grid">${codes.map(code => `<code>${h(code)}</code>`).join('')}</div><button class="secondary-button" id="copy-recovery-codes" type="button">복구 코드 모두 복사 ⧉</button></div>`);
+  $('#copy-recovery-codes').addEventListener('click',async () => { try { await copyText(codes.join('\n')); toast('복구 코드를 복사했습니다.'); } catch { toast('코드를 선택해 복사해주세요.'); } });
+}
+function finishTotpSetup(setup) {
+  editor('인증 앱 연결',`<p class="dialog-help">인증 앱에서 QR 코드를 스캔하세요. 모바일에서는 아래 버튼으로 바로 열 수 있고, 열리지 않으면 설정 키를 직접 입력할 수 있습니다.</p><div class="totp-qr"><img src="${h(setup.qr_svg_data_uri)}" alt="Vibe Memory OTP 설정 QR 코드" width="220" height="220"></div><a class="secondary-button totp-open-link" href="${h(setup.otpauth_uri)}">인증 앱에서 열기 ↗</a><div class="totp-secret"><span>수동 설정 키</span><code>${h(setup.secret)}</code><button class="secondary-button" id="copy-totp-secret" type="button">키 복사 ⧉</button></div><label>인증 앱의 6자리 코드<input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required placeholder="000000"></label><p class="dialog-help">설정은 10분 후 만료됩니다.</p>`,async data => {
+    const result = await api('/auth/totp/enable',{method:'POST',body:JSON.stringify({code:data.get('code')})});
+    toast('OTP 로그인을 활성화했습니다.');
+    return () => showRecoveryCodes(result.recovery_codes);
+  },'OTP 활성화');
+  $('#copy-totp-secret').addEventListener('click',async () => { try { await copyText(setup.secret); toast('설정 키를 복사했습니다.'); } catch { toast('설정 키를 선택해 복사해주세요.'); } });
+}
+function beginTotpSetup() {
+  editor('OTP 설정 시작',`<p class="dialog-help">본인 확인을 위해 현재 비밀번호를 입력해주세요.</p><label>현재 비밀번호<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required></label>`,async data => {
+    const setup = await api('/auth/totp/setup',{method:'POST',body:JSON.stringify({password:data.get('password')})});
+    return () => finishTotpSetup(setup);
+  },'인증 앱 연결');
+}
+function regenerateRecoveryCodes() {
+  editor('복구 코드 재발급',`<p class="dialog-help">기존 복구 코드는 모두 폐기됩니다. 현재 비밀번호와 인증 앱 코드 또는 남아 있는 복구 코드를 입력하세요.</p><label>현재 비밀번호<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required></label><label>OTP 또는 복구 코드<input name="code" autocomplete="one-time-code" minlength="6" maxlength="32" required></label>`,async data => {
+    const result = await api('/auth/totp/recovery-codes',{method:'POST',body:JSON.stringify({password:data.get('password'),code:data.get('code')})});
+    toast('새 복구 코드를 발급했습니다.');
+    return () => showRecoveryCodes(result.recovery_codes);
+  },'새 코드 발급');
+}
+function disableTotp() {
+  editor('OTP 로그인 해제',`<p class="dialog-help security-warning">해제하면 비밀번호만으로 로그인할 수 있습니다. 현재 비밀번호와 인증 앱 코드 또는 복구 코드를 입력하세요.</p><label>현재 비밀번호<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required></label><label>OTP 또는 복구 코드<input name="code" autocomplete="one-time-code" minlength="6" maxlength="32" required></label>`,async data => {
+    await api('/auth/totp',{method:'DELETE',body:JSON.stringify({password:data.get('password'),code:data.get('code')})});
+    toast('OTP 로그인을 해제했습니다.');
+  },'OTP 해제');
+}
 function createKey() {
   editor('에이전트 API 키 만들기','<p class="dialog-help">어떤 에이전트에 사용할 키인지 이름을 붙여주세요.</p><label>에이전트 이름<input name="name" placeholder="예: Claude Code, Codex, OpenClaw, Hermes" maxlength="80" required></label><label class="check-field"><input type="checkbox" name="vault_access"> 이 키에 Vault 비밀값 사용 권한 허용</label><p class="dialog-help">Vault 권한은 저장된 모든 비밀값을 실행 프로세스에 전달할 수 있는 민감한 권한입니다.</p>', async data => {
     const record = await api('/auth/api-keys',{method:'POST',body:JSON.stringify({name:data.get('name'),vault_access:data.has('vault_access')})});
@@ -393,6 +437,9 @@ document.addEventListener('click', async event => {
       return;
     }
     if (action === 'create-key') return createKey();
+    if (action === 'setup-totp') return beginTotpSetup();
+    if (action === 'regenerate-recovery') return regenerateRecoveryCodes();
+    if (action === 'disable-totp') return disableTotp();
     if (action === 'rotate-vault') return editVault(name, description);
     if (action === 'toggle-vault-access') {
       const enabled = button.dataset.enabled === 'true';

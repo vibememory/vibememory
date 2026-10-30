@@ -137,6 +137,7 @@ def test_admin_user_directory_exposes_operational_counts_without_credentials(adm
     assert user["is_admin"] is False
     assert user["api_key_count"] == 1
     assert user["active_session_count"] == 0
+    assert user["totp_enabled"] is False
     assert user["record_count"] == 1
     assert user["storage_bytes"] >= user["memory_bytes"] > 0
     assert "password_hash" not in str(payload)

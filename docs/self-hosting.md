@@ -5,7 +5,7 @@ The console, login, REST endpoints, graph, local keyword embeddings, and file st
 ## Requirements
 
 - Linux amd64 with Docker Engine and Compose v2, or Python 3.12/3.13 with uv for source installs.
-- Persistent disk for PostgreSQL, uploaded files, the Vault key, and the model cache; about 220 MB is downloaded for the default model.
+- Persistent disk for PostgreSQL, uploaded files, the Vault/OTP encryption key, and the model cache; about 220 MB is downloaded for the default model.
 - Network access for dependencies during build and for the first embedding-model download. After the model is cached, keyword embeddings run locally.
 
 Other OS/CPU combinations are not claimed as container-tested. PostgreSQL/pgvector, ONNX wheels, and container base images must support the target architecture.
@@ -45,7 +45,7 @@ For ChatGPT or Claude remote MCP connections, expose the deployment through HTTP
 | `MEMORY_EMBEDDING_DIMENSION` | `384` | pgvector dimension; must match the configured model |
 | `MEMORY_API_KEYS` | `{}` | Optional source-install legacy key-to-user mapping; not required for console-issued keys |
 | `MEMORY_DATA_DIR` | `/data` in Docker | Uploaded files, Vault key, and model/cache data |
-| `MEMORY_VAULT_KEY_FILE` | `<data dir>/vault.key` | Persistent 32-byte Vault encryption-key file; generated with mode 0600 |
+| `MEMORY_VAULT_KEY_FILE` | `<data dir>/vault.key` | Persistent 32-byte Vault and TOTP encryption-key file; generated with mode 0600 |
 | `MEMORY_EMBEDDING_CACHE` | `/data/models` in Docker | Persistent local model cache |
 | `MEMORY_EMBEDDING_MODEL` | `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | Local keyword model |
 | `MEMORY_WEB_DIR` | bundled assets | Optional explicit directory containing index.html and console assets |
@@ -101,7 +101,7 @@ PostgreSQL is the source of truth for accounts, sessions, API keys, OAuth/MCP st
 
 The separate `memory_data` named volume contains:
 
-- `vault.key`: the 32-byte Vault encryption key, created with mode 0600.
+- `vault.key`: the 32-byte Vault and TOTP encryption key, created with mode 0600.
 - `files/`: uploaded originals.
 - `models/` and `cache/`: embedding model/download cache.
 
@@ -119,7 +119,7 @@ docker compose run --rm -T --no-deps --entrypoint python app -c \
 docker compose start app
 ```
 
-Keep both files private and together for recovery. The database dump contains personal records, authentication data, and Vault ciphertext; the file archive contains uploaded originals and the key capable of decrypting Vault entries. If `MEMORY_VAULT_KEY_FILE` points outside `/data`, back up that key separately and restore the exact same key. Losing the key makes Vault values unrecoverable; obtaining both the key and ciphertext reveals them.
+Keep both files private and together for recovery. The database dump contains personal records, authentication data, encrypted TOTP secrets, and Vault ciphertext; the file archive contains uploaded originals and the key capable of decrypting Vault entries and TOTP secrets. If `MEMORY_VAULT_KEY_FILE` points outside `/data`, back up that key separately and restore the exact same key. Losing the key makes Vault values unrecoverable and prevents TOTP verification unless a recovery code remains; obtaining both the key and ciphertext reveals the encrypted values.
 
 Restore into an **empty deployment**, with its app stopped. Start only PostgreSQL, restore its dump, then restore the app volume:
 
@@ -168,7 +168,7 @@ vibe-memory migrate-postgres \
   --apply
 ```
 
-The command imports accounts, sessions, keys, OAuth state, records, keyword embeddings, relations, events, feature requests, and Vault ciphertext in one PostgreSQL transaction. It rejects a non-empty destination, a locked Kuzu database, embedding model/dimension mismatches, or count differences. Raw `files/`, `vault.key`, and model caches stay in the same app data directory and are not copied into PostgreSQL.
+The command imports accounts, sessions, keys, OTP state and recovery-code hashes, OAuth state, records, keyword embeddings, relations, events, feature requests, and Vault ciphertext in one PostgreSQL transaction. It rejects a non-empty destination, a locked Kuzu database, embedding model/dimension mismatches, or count differences. Raw `files/`, `vault.key`, and model caches stay in the same app data directory and are not copied into PostgreSQL.
 
 For an existing Compose installation, pull the new code, set the PostgreSQL variables in `.env`, and run:
 

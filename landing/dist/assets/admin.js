@@ -70,13 +70,13 @@ async function load() {
 }
 function renderUsers() {
   $('#user-description').textContent = `${usersPayload.total}명의 사용자 중 ${usersPayload.items.length}명을 표시합니다.`;
-  $('#user-rows').innerHTML = usersPayload.items.length ? usersPayload.items.map(user => `<tr><td><strong>${h(user.name)}</strong><small>${h(user.email)}</small><code>${h(user.id)}</code></td><td><span class="admin-role ${user.is_admin ? 'administrator' : ''}">${user.is_admin ? '관리자' : '사용자'}</span></td><td><time>${h(utcDate(new Date(user.created_at * 1000).toISOString()))}</time></td><td><strong>${h(user.api_key_count + user.mcp_connection_count)}</strong><small>API 키 ${h(user.api_key_count)} · MCP ${h(user.mcp_connection_count)} · 세션 ${h(user.active_session_count)}</small></td><td><strong>${h(user.record_count)}</strong><small>관계 ${h(user.relation_count)} · Vault ${h(user.vault_entry_count)}</small></td><td><strong>${h(bytes(user.storage_bytes))}</strong><small>기억 ${h(bytes(user.memory_bytes))} · 파일 ${h(bytes(user.file_bytes))}</small></td></tr>`).join('') : '<tr><td colspan="6" class="admin-empty">조건에 맞는 사용자가 없습니다.</td></tr>';
+  $('#user-rows').innerHTML = usersPayload.items.length ? usersPayload.items.map(user => `<tr><td><strong>${h(user.name)}</strong><small>${h(user.email)}</small><code>${h(user.id)}</code></td><td><span class="admin-role ${user.is_admin ? 'administrator' : ''}">${user.is_admin ? '관리자' : '사용자'}</span></td><td><span class="admin-role ${user.totp_enabled ? 'otp-enabled' : ''}">${user.totp_enabled ? 'OTP 사용' : '비밀번호'}</span></td><td><time>${h(utcDate(new Date(user.created_at * 1000).toISOString()))}</time></td><td><strong>${h(user.api_key_count + user.mcp_connection_count)}</strong><small>API 키 ${h(user.api_key_count)} · MCP ${h(user.mcp_connection_count)} · 세션 ${h(user.active_session_count)}</small></td><td><strong>${h(user.record_count)}</strong><small>관계 ${h(user.relation_count)} · Vault ${h(user.vault_entry_count)}</small></td><td><strong>${h(bytes(user.storage_bytes))}</strong><small>기억 ${h(bytes(user.memory_bytes))} · 파일 ${h(bytes(user.file_bytes))}</small></td></tr>`).join('') : '<tr><td colspan="7" class="admin-empty">조건에 맞는 사용자가 없습니다.</td></tr>';
   $('#users-previous').disabled = userOffset === 0;
   $('#users-next').disabled = usersPayload.items.length < 50;
   $('#users-page-number').textContent = `${Math.floor(userOffset / 50) + 1} 페이지`;
 }
 async function loadUsers() {
-  $('#user-rows').innerHTML = '<tr><td colspan="6" class="admin-loading">불러오는 중…</td></tr>';
+  $('#user-rows').innerHTML = '<tr><td colspan="7" class="admin-loading">불러오는 중…</td></tr>';
   const query = $('#user-search').value.trim();
   usersPayload = await api(`/v1/admin/users?limit=50&offset=${userOffset}${query ? `&q=${encodeURIComponent(query)}` : ''}`);
   renderUsers();

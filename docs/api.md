@@ -4,7 +4,7 @@ Your own server exposes an interactive schema at `/docs` and machine-readable Op
 
 ## Authentication
 
-Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/logout`. The session cookie is HttpOnly; mutations must include an Origin exactly matching `MEMORY_PUBLIC_ORIGIN`.
+Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/logout`. The session cookie is HttpOnly; mutations must include an Origin exactly matching `MEMORY_PUBLIC_ORIGIN`. Users can optionally enable RFC 6238 authenticator-app TOTP in **Console → Account security**. A password-valid login then returns a five-minute challenge instead of a session; `/auth/login/otp` accepts a non-replayed six-digit code or one-time recovery code before issuing the cookie. TOTP secrets are AES-256-GCM encrypted and recovery codes are stored only as hashes.
 
 Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
 
@@ -51,6 +51,12 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/admin/feature-requests` | Admin-browser processing queue across workspaces |
 | PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser status and public-result update |
 | GET | `/v1/admin/users` | Admin-browser safe user list and usage/connection counts; no auth secrets |
+| GET | `/auth/security` | Browser-only TOTP state and remaining recovery-code count |
+| POST | `/auth/totp/setup` | Password-confirmed, ten-minute authenticator setup |
+| POST | `/auth/totp/enable` | Verify the first TOTP code and return recovery codes once |
+| POST | `/auth/login/otp` | Complete a password-valid login challenge with TOTP/recovery code |
+| POST | `/auth/totp/recovery-codes` | Revoke old codes and return a new set after password + second factor |
+| DELETE | `/auth/totp` | Disable TOTP after password + second factor |
 | GET/PUT | `/auth/mcp-connections/{client_id}/vault` | Browser-only list/replace of per-entry Vault grants for one owned MCP connection |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |

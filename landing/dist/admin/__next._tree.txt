@@ -1,8 +1,8 @@
-:HL["/assets/style.css?v=20261030-v022-0","style"]
-:HL["/assets/i18n.css?v=20261030-v022-0","style"]
-:HL["/assets/console-fixes.css?v=20261030-v022-0","style"]
-:HL["/assets/admin.css?v=20261030-v022-0","style"]
-:HL["/assets/ui-kit.css?v=20261030-v022-0","style"]
+:HL["/assets/style.css?v=20261030-v022-1","style"]
+:HL["/assets/i18n.css?v=20261030-v022-1","style"]
+:HL["/assets/console-fixes.css?v=20261030-v022-1","style"]
+:HL["/assets/admin.css?v=20261030-v022-1","style"]
+:HL["/assets/ui-kit.css?v=20261030-v022-1","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"admin","h":96,"c":"$Q2"}]]
-0:{"b":"E7lLtceYEOZZuO2k3jkyZ","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"xl5l5GS9KoBP9dXpBl2V8","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

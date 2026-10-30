@@ -26,7 +26,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     manifest = response.json()
     assert set(manifest["files"]) == {"SKILL.md", "scripts/memory.py"}
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
-    assert manifest["native_cli"]["version"] == "3.9.0"
+    assert manifest["native_cli"]["version"] == "3.9.1"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",

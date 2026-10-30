@@ -15,24 +15,24 @@
     "url": "/skills/vibe-memory/cli/3b63ccadfdde76a6af0c2de4389f23af8ef181fe3f03f8d63989ed0f3482b126/vibe-memory"
   },
   "native_cli": {
-    "version": "3.9.0",
+    "version": "3.9.1",
     "repository": "https://github.com/vibememory/cli",
     "targets": {
       "linux-x86_64": {
-        "sha256": "f019f0d8ebeb94e8f51846bab58888c251f66af4b7226459a17895ac9093a21f",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.9.0/vibe-memory-linux-x86_64"
+        "sha256": "f24a3117b248a941dec0eeffe0be0ed5322b87507a8d20566f577506c56d46f1",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.9.1/vibe-memory-linux-x86_64"
       },
       "macos-aarch64": {
-        "sha256": "7e8d94545661bbc341f9b633ebbb7929a14f18616c90e13dfb340663abe7ae6e",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.9.0/vibe-memory-macos-aarch64"
+        "sha256": "f01c350ecb42aa78106a860211acc972ee4bed8a2d9950d9ad9429774384b3b5",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.9.1/vibe-memory-macos-aarch64"
       },
       "macos-x86_64": {
-        "sha256": "5b1b05102c7324f0192e1f8c4d5a35f0d528c3ed62aecb544c51b2279c516b22",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.9.0/vibe-memory-macos-x86_64"
+        "sha256": "aa2100ab52707d7ec19a1a63aff4c3e9b6bd281ff152d593e4da83f9b98a440a",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.9.1/vibe-memory-macos-x86_64"
       },
       "windows-x86_64": {
-        "sha256": "e01140525acbb2f10546b364de762d3d982ae8e260bfb78919ee01c66889cc22",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.9.0/vibe-memory-windows-x86_64.exe"
+        "sha256": "6ec5674bcb583934d79c59f9ec30f6fc39351c2922108be96aaf4f28ad676c72",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.9.1/vibe-memory-windows-x86_64.exe"
       }
     }
   },

@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import hmac
+import json
 import os
 import re
 import secrets
@@ -10,6 +11,7 @@ import sqlite3
 import struct
 import threading
 from contextlib import contextmanager
+from typing import Literal
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -17,7 +19,7 @@ import segno
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .clock import utc_epoch_seconds
 from .postgres import IntegrityError, PostgresDatabase
@@ -28,6 +30,43 @@ TOTP_PERIOD = 30
 TOTP_SETUP_SECONDS = 10 * 60
 LOGIN_CHALLENGE_SECONDS = 5 * 60
 RECOVERY_CODE_COUNT = 10
+
+AgentPermission = Literal[
+    "memory:read",
+    "memory:write",
+    "files:read",
+    "files:write",
+    "messages:read",
+    "messages:write",
+    "feature:write",
+    "events:read",
+]
+DEFAULT_AGENT_PERMISSIONS: tuple[AgentPermission, ...] = (
+    "memory:read",
+    "memory:write",
+    "files:read",
+    "files:write",
+    "messages:read",
+    "messages:write",
+    "feature:write",
+    "events:read",
+)
+DEFAULT_AGENT_PERMISSIONS_JSON = json.dumps(
+    DEFAULT_AGENT_PERMISSIONS, ensure_ascii=True, separators=(",", ":")
+)
+
+
+def normalize_agent_permissions(values) -> list[AgentPermission]:
+    requested = set(values or [])
+    return [permission for permission in DEFAULT_AGENT_PERMISSIONS if permission in requested]
+
+
+def stored_agent_permissions(value) -> list[AgentPermission]:
+    try:
+        parsed = json.loads(value or DEFAULT_AGENT_PERMISSIONS_JSON)
+    except (TypeError, ValueError):
+        parsed = DEFAULT_AGENT_PERMISSIONS
+    return normalize_agent_permissions(parsed)
 
 
 class Credentials(BaseModel):
@@ -59,16 +98,43 @@ class KeyInput(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=80)
     vault_access: bool = False
+    permissions: list[AgentPermission] = Field(
+        default_factory=lambda: list(DEFAULT_AGENT_PERMISSIONS), max_length=8
+    )
+
+    @field_validator("permissions")
+    @classmethod
+    def unique_permissions(cls, value):
+        if len(value) != len(set(value)):
+            raise ValueError("permissions must be unique")
+        return normalize_agent_permissions(value)
 
 
-class DeviceStartInput(KeyInput):
+class DeviceStartInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=80)
+    vault_access: bool = False
     expires_in: int = Field(default=300, ge=60, le=900)
     upgrade: bool = False
 
 
 class KeyAccessUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    vault_access: bool
+    vault_access: bool | None = None
+    permissions: list[AgentPermission] | None = Field(default=None, max_length=8)
+
+    @field_validator("permissions")
+    @classmethod
+    def unique_updated_permissions(cls, value):
+        if value is not None and len(value) != len(set(value)):
+            raise ValueError("permissions must be unique")
+        return None if value is None else normalize_agent_permissions(value)
+
+    @model_validator(mode="after")
+    def at_least_one_change(self):
+        if self.vault_access is None and self.permissions is None:
+            raise ValueError("vault_access or permissions is required")
+        return self
 
 
 class FeatureRequestOperatorUpdate(BaseModel):
@@ -167,7 +233,21 @@ class AuthStore:
                     id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, prefix TEXT NOT NULL,
                     created_at INTEGER NOT NULL, vault_access INTEGER NOT NULL DEFAULT 0,
-                    feature_request_operator INTEGER NOT NULL DEFAULT 0);
+                    feature_request_operator INTEGER NOT NULL DEFAULT 0,
+                    permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read"]');
+                CREATE TABLE IF NOT EXISTS api_key_permission_events (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    api_key_id TEXT NOT NULL,
+                    key_name TEXT NOT NULL,
+                    key_prefix TEXT NOT NULL,
+                    changed_at INTEGER NOT NULL,
+                    before_permissions TEXT NOT NULL,
+                    after_permissions TEXT NOT NULL,
+                    before_vault_access INTEGER NOT NULL,
+                    after_vault_access INTEGER NOT NULL);
+                CREATE INDEX IF NOT EXISTS api_key_permission_events_owner_idx
+                    ON api_key_permission_events(user_id, changed_at DESC, id DESC);
                 CREATE TABLE IF NOT EXISTS device_logins (
                     device_hash TEXT PRIMARY KEY, user_hash TEXT UNIQUE NOT NULL,
                     name TEXT NOT NULL, expires_at INTEGER NOT NULL, state TEXT NOT NULL,
@@ -201,6 +281,11 @@ class AuthStore:
                 db.execute(
                     "ALTER TABLE api_keys ADD COLUMN feature_request_operator "
                     "INTEGER NOT NULL DEFAULT 0"
+                )
+            if "permissions" not in api_columns:
+                db.execute(
+                    "ALTER TABLE api_keys ADD COLUMN permissions TEXT NOT NULL DEFAULT "
+                    f"'{DEFAULT_AGENT_PERMISSIONS_JSON}'"
                 )
             device_columns = {row[1] for row in db.execute("PRAGMA table_info(device_logins)")}
             if "vault_access" not in device_columns:
@@ -564,7 +649,7 @@ class AuthStore:
     def principal_for_key(self, token):
         with self.connection() as db:
             row = db.execute(
-                """SELECT id,user_id,name,vault_access,feature_request_operator
+                """SELECT id,user_id,name,vault_access,feature_request_operator,permissions
                 FROM api_keys WHERE hash=?""",
                 (digest(token),),
             ).fetchone()
@@ -576,12 +661,13 @@ class AuthStore:
             "name": row["name"],
             "vault_access": bool(row["vault_access"]),
             "feature_request_operator": bool(row["feature_request_operator"]),
+            "permissions": stored_agent_permissions(row["permissions"]),
         }
 
     def list_keys(self, user_id):
         with self.connection() as db:
             rows = db.execute(
-                """SELECT id,name,prefix,created_at,vault_access,feature_request_operator
+                """SELECT id,name,prefix,created_at,vault_access,feature_request_operator,permissions
                 FROM api_keys
                 WHERE user_id=? ORDER BY created_at DESC,id""",
                 (user_id,),
@@ -591,12 +677,16 @@ class AuthStore:
                 **dict(row),
                 "vault_access": bool(row["vault_access"]),
                 "feature_request_operator": bool(row["feature_request_operator"]),
+                "permissions": stored_agent_permissions(row["permissions"]),
             }
             for row in rows
         ]
 
-    def create_key(self, user_id, name, vault_access=False):
+    def create_key(self, user_id, name, vault_access=False, permissions=None):
         token = "vm_" + secrets.token_urlsafe(36)
+        permissions = normalize_agent_permissions(
+            DEFAULT_AGENT_PERMISSIONS if permissions is None else permissions
+        )
         record = dict(
             id=str(uuid4()),
             name=name,
@@ -604,6 +694,7 @@ class AuthStore:
             created_at=utc_epoch_seconds(),
             vault_access=bool(vault_access),
             feature_request_operator=False,
+            permissions=permissions,
         )
         with self.connection() as db:
             if (
@@ -617,8 +708,8 @@ class AuthStore:
                 )
             db.execute(
                 """INSERT INTO api_keys(
-                    id,user_id,hash,name,prefix,created_at,vault_access
-                ) VALUES(?,?,?,?,?,?,?)""",
+                    id,user_id,hash,name,prefix,created_at,vault_access,permissions
+                ) VALUES(?,?,?,?,?,?,?,?)""",
                 (
                     record["id"],
                     user_id,
@@ -627,19 +718,82 @@ class AuthStore:
                     record["prefix"],
                     record["created_at"],
                     bool(record["vault_access"]),
+                    json.dumps(permissions, separators=(",", ":")),
                 ),
             )
         return {**record, "key": token}
 
-    def set_key_vault_access(self, user_id, id, vault_access):
+    def set_key_access(self, user_id, id, vault_access=None, permissions=None):
         with self.connection() as db:
-            result = db.execute(
-                "UPDATE api_keys SET vault_access=? WHERE id=? AND user_id=?",
-                (bool(vault_access), id, user_id),
-            )
-            if not result.rowcount:
+            row = db.execute(
+                """SELECT name,prefix,vault_access,permissions FROM api_keys
+                WHERE id=? AND user_id=?""",
+                (id, user_id),
+            ).fetchone()
+            if not row:
                 raise HTTPException(404, "키를 찾을 수 없습니다.")
-        return {"id": id, "vault_access": bool(vault_access)}
+            before_permissions = stored_agent_permissions(row["permissions"])
+            after_permissions = (
+                before_permissions
+                if permissions is None
+                else normalize_agent_permissions(permissions)
+            )
+            before_vault = bool(row["vault_access"])
+            after_vault = before_vault if vault_access is None else bool(vault_access)
+            db.execute(
+                """UPDATE api_keys SET vault_access=?,permissions=?
+                WHERE id=? AND user_id=?""",
+                (
+                    after_vault,
+                    json.dumps(after_permissions, separators=(",", ":")),
+                    id,
+                    user_id,
+                ),
+            )
+            if before_permissions != after_permissions or before_vault != after_vault:
+                db.execute(
+                    """INSERT INTO api_key_permission_events(
+                    id,user_id,api_key_id,key_name,key_prefix,changed_at,
+                    before_permissions,after_permissions,before_vault_access,after_vault_access
+                    ) VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        str(uuid4()),
+                        user_id,
+                        id,
+                        row["name"],
+                        row["prefix"],
+                        utc_epoch_seconds(),
+                        json.dumps(before_permissions, separators=(",", ":")),
+                        json.dumps(after_permissions, separators=(",", ":")),
+                        before_vault,
+                        after_vault,
+                    ),
+                )
+        return {"id": id, "vault_access": after_vault, "permissions": after_permissions}
+
+    def list_key_permission_events(self, user_id, id, limit=50):
+        with self.connection() as db:
+            if not db.execute(
+                "SELECT 1 FROM api_keys WHERE id=? AND user_id=?", (id, user_id)
+            ).fetchone():
+                raise HTTPException(404, "키를 찾을 수 없습니다.")
+            rows = db.execute(
+                """SELECT id,api_key_id,key_name,key_prefix,changed_at,
+                before_permissions,after_permissions,before_vault_access,after_vault_access
+                FROM api_key_permission_events WHERE user_id=? AND api_key_id=?
+                ORDER BY changed_at DESC,id DESC LIMIT ?""",
+                (user_id, id, limit),
+            ).fetchall()
+        return [
+            {
+                **dict(row),
+                "before_permissions": stored_agent_permissions(row["before_permissions"]),
+                "after_permissions": stored_agent_permissions(row["after_permissions"]),
+                "before_vault_access": bool(row["before_vault_access"]),
+                "after_vault_access": bool(row["after_vault_access"]),
+            }
+            for row in rows
+        ]
 
     def set_key_feature_request_operator(self, user_id, id, enabled):
         with self.connection() as db:

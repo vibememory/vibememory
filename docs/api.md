@@ -6,7 +6,7 @@ Your own server exposes an interactive schema at `/docs` and machine-readable Op
 
 Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/logout`. The session cookie is HttpOnly; mutations must include an Origin exactly matching `MEMORY_PUBLIC_ORIGIN`. Users can optionally enable RFC 6238 authenticator-app TOTP in **Console → Account security**. A password-valid login then returns a five-minute challenge instead of a session; `/auth/login/otp` accepts a non-replayed six-digit code or one-time recovery code before issuing the cookie. TOTP secrets are AES-256-GCM encrypted and recovery codes are stored only as hashes.
 
-Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. `vault_access` is a separate permission, defaults to false, and can be changed with `PATCH /auth/api-keys/{id}`. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' records return 404.
+Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. Each issued key has an editable permission set: `memory:read`, `memory:write`, `files:read`, `files:write`, `messages:read`, `messages:write`, `feature:write`, and `events:read`. Existing keys retain the formerly implicit full set. A signed-in owner can add or revoke permissions with `PATCH /auth/api-keys/{id}`; the same token observes the change immediately, and every change is recorded in the owner-scoped permission audit. `vault_access` remains a separate sensitive permission and defaults to false. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' keys and records return 404.
 
 Official native CLI requests identify their version without exposing credentials.
 Protected service routes return `Vibe-Memory-Minimum-CLI`; a recognized older,
@@ -28,6 +28,9 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/.well-known/oauth-protected-resource/mcp` | MCP resource and authorization-server discovery |
 | GET | `/.well-known/oauth-authorization-server` | OAuth endpoints, grants, scopes, and PKCE metadata |
 | GET | `/v1/me` | Authenticated user ID and keyword model |
+| GET/POST | `/auth/api-keys` | Browser-only list/create of agent keys and initial permissions |
+| PATCH | `/auth/api-keys/{id}` | Browser-only add/revoke of one owned key's permissions and Vault access |
+| GET | `/auth/api-keys/{id}/permission-events` | Browser-only permission change audit for one owned key |
 | GET | `/v1/agents` | This connection and same-account addressable agents |
 | POST | `/v1/agent-messages` | Queue an expiring message for one agent |
 | GET | `/v1/agent-messages/inbox` | This connection's non-expired inbox with sequence cursor |

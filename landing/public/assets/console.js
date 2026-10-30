@@ -11,6 +11,16 @@ const vaultAuditOutcome = outcome => ({
   not_found:['항목 없음','warning'], integrity_error:['무결성 오류','warning']
 }[outcome] || [outcome || '알 수 없음','neutral']);
 const vaultClientType = type => ({mcp:'MCP 연결','agent-key':'CLI · Agent 키',browser:'브라우저', 'legacy-key':'Legacy 키',unknown:'연결 해제됨'}[type] || type || '에이전트');
+const agentPermissionInfo = {
+  'memory:read':['기억 조회','기억·문서·엔티티·관계와 검색 결과를 읽습니다.'],
+  'memory:write':['기억 수정','기억·문서 메타정보·엔티티·관계를 생성하고 변경합니다.'],
+  'files:read':['파일 내려받기','저장된 원본 byte stream을 내려받습니다.'],
+  'files:write':['파일 관리','원본 byte stream을 업로드하거나 삭제합니다.'],
+  'messages:read':['메시지 수신','같은 계정의 에이전트와 수신함을 확인합니다.'],
+  'messages:write':['메시지 발신','다른 연결 에이전트에 메시지를 보내고 확인 처리합니다.'],
+  'feature:write':['기능 요청','기능 요청을 등록하고 자신의 처리 결과를 확인합니다.'],
+  'events:read':['실시간 이벤트','기억 변경 SSE 이벤트를 구독합니다.']
+};
 function formatBytes(value) {
   const bytes = Math.max(0, Number(value) || 0);
   if (bytes < 1024) return `${Math.round(bytes)} B`;
@@ -276,7 +286,7 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const [result, mcp] = await Promise.all([api('/auth/api-keys'), api('/auth/mcp-connections')]);
       const scopeName = {'memory:read':'기억 조회','memory:write':'기억 저장','feature:write':'기능 요청','vault:read':'Vault 항목 조회'};
       const mcpRows = mcp.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>MCP 클라이언트</th><th>허용 범위</th><th>마지막 사용</th><th></th></tr></thead><tbody>${mcp.items.map(connection => `<tr><td><strong>${h(connection.client_name)}</strong><span class="record-subtitle">OAuth · 웹 승인 연결</span></td><td>${connection.scopes.map(scope => `<span class="tag">${h(scopeName[scope] || scope)}</span>`).join('')}</td><td>${date(connection.last_used_at)}</td><td><div class="row-actions">${connection.scopes.includes('vault:read') ? `<button data-action="grant-mcp-vault" data-id="${h(connection.client_id)}" data-name="${h(connection.client_name)}">Vault 항목</button>` : '<span class="permission-toggle">Vault 재연결 필요</span>'}<button class="danger" data-action="revoke-mcp" data-id="${h(connection.client_id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : '<p class="mcp-empty">아직 연결된 원격 MCP 클라이언트가 없습니다.</p>';
-      html = `<section class="mcp-connect-card"><div class="mcp-connect-copy"><span>CHATGPT WORK PLUGIN · OAUTH 2.1</span><h2>ChatGPT Work에 바로 설치하세요.</h2><p>Plugin을 설치하면 Vibe Memory 로그인과 권한 승인이 이어집니다. Claude나 다른 MCP 클라이언트는 아래 주소로 연결할 수 있습니다.</p><code>${h(mcp.server_url)}</code></div><div class="mcp-connect-actions"><a class="button primary" href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec" target="_blank" rel="noopener"><img src="/assets/brands/codex.png" alt="">ChatGPT Work에 설치 ${icon('external-link')}</a><button class="button" type="button" data-action="copy-mcp-url" data-url="${h(mcp.server_url)}"><img src="/assets/brands/claude-code.png" alt="">다른 MCP용 주소 복사 ${icon('copy')}</button><a href="/guide#mcp" target="_blank" rel="noopener">연결 방법 보기 ${icon('external-link')}</a></div></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>원격 MCP 연결</h2><p>${mcp.items.length}개의 GPT·Claude 연결이 활성 상태입니다.</p></div></div>${mcpRows}</section><div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['Cursor','cursor.svg'],['Muse Code','muse.svg'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>CLI·Skill 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 ${icon('download')}</a></div><p class="key-note">Vault 권한은 기억 접근과 별도로 관리됩니다. 신뢰하는 에이전트에만 허용하고 언제든 철회하세요.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>Vault</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><button class="permission-toggle ${key.vault_access ? 'enabled' : ''}" data-action="toggle-vault-access" data-id="${h(key.id)}" data-enabled="${key.vault_access}">${key.vault_access ? '허용됨' : '차단됨'}</button></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.',`<a class="secondary-button" href="/guide" target="_blank">연결 방법 보기 ${icon('external-link')}</a>`)}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
+      html = `<section class="mcp-connect-card"><div class="mcp-connect-copy"><span>CHATGPT WORK PLUGIN · OAUTH 2.1</span><h2>ChatGPT Work에 바로 설치하세요.</h2><p>Plugin을 설치하면 Vibe Memory 로그인과 권한 승인이 이어집니다. Claude나 다른 MCP 클라이언트는 아래 주소로 연결할 수 있습니다.</p><code>${h(mcp.server_url)}</code></div><div class="mcp-connect-actions"><a class="button primary" href="https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec" target="_blank" rel="noopener"><img src="/assets/brands/codex.png" alt="">ChatGPT Work에 설치 ${icon('external-link')}</a><button class="button" type="button" data-action="copy-mcp-url" data-url="${h(mcp.server_url)}"><img src="/assets/brands/claude-code.png" alt="">다른 MCP용 주소 복사 ${icon('copy')}</button><a href="/guide#mcp" target="_blank" rel="noopener">연결 방법 보기 ${icon('external-link')}</a></div></section><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>원격 MCP 연결</h2><p>${mcp.items.length}개의 GPT·Claude 연결이 활성 상태입니다.</p></div></div>${mcpRows}</section><div class="agent-catalog" aria-label="지원하는 에이전트">${[['Claude Code','claude-code.png'],['Codex','codex.png'],['Cursor','cursor.svg'],['Muse Code','muse.svg'],['OpenClaw','openclaw.svg'],['Hermes','hermes.png']].map(([name,file]) => `<span><img src="/assets/brands/${file}" alt="" width="28" height="28">${name}</span>`).join('')}</div><section class="console-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>CLI·Skill 연결</h2><p>${result.items.length}개의 에이전트 키가 이 워크스페이스에 접근할 수 있습니다.</p></div><a class="secondary-button" href="/downloads/vibe-memory-skill.zip" download>Skill 다운로드 ${icon('download')}</a></div><p class="key-note">발급된 키의 기능 권한과 Vault 권한을 따로 추가하거나 회수할 수 있습니다. 변경 내용은 즉시 적용되고 감사 이력에 남습니다.</p>${result.items.length ? `<div class="table-scroll"><table class="records-table"><thead><tr><th>에이전트 이름</th><th>키 식별자</th><th>허용 권한</th><th>연결일</th><th></th></tr></thead><tbody>${result.items.map(key => `<tr><td><strong>${h(key.name)}</strong></td><td><code>${h(key.prefix)}</code></td><td><div class="agent-permission-summary"><span>${h((key.permissions || []).length)}개 기능</span><span class="permission-toggle ${key.vault_access ? 'enabled' : ''}">Vault ${key.vault_access ? '허용' : '차단'}</span></div></td><td>${date(key.created_at)}</td><td><div class="row-actions"><button data-action="manage-agent-permissions" data-id="${h(key.id)}" data-name="${h(key.name)}" data-permissions="${h((key.permissions || []).join('|'))}" data-vault-access="${key.vault_access}">권한 관리</button><button class="danger" data-action="revoke" data-id="${h(key.id)}">연결 해제</button></div></td></tr>`).join('')}</tbody></table></div>` : empty('연결된 에이전트가 없어요.','에이전트에게 Vibe Memory 연결을 요청하면 웹 승인 링크를 안내합니다.',`<a class="secondary-button" href="/guide" target="_blank">연결 방법 보기 ${icon('external-link')}</a>`)}</section><p class="section-caption">수동 키는 고급 설정용입니다. 새로 연결할 때는 에이전트가 만드는 웹 승인 링크를 권장합니다.</p>`;
     } else if (view === 'security') {
       const security = await api('/auth/security');
       const status = security.totp_enabled
@@ -406,6 +416,18 @@ async function editMcpVaultGrants(clientId, clientName) {
     toast('MCP Vault 항목 권한을 저장했습니다.');
   },'권한 저장');
 }
+async function editAgentPermissions(id, name, permissions, vaultAccess) {
+  const selected = new Set((permissions || '').split('|').filter(Boolean));
+  const history = await api('/auth/api-keys/' + encodeURIComponent(id) + '/permission-events?limit=5');
+  const choices = Object.entries(agentPermissionInfo).map(([permission,[label,description]]) => `<label class="check-field"><input type="checkbox" name="permission" value="${h(permission)}" ${selected.has(permission) ? 'checked' : ''}><span><strong>${h(label)}</strong><small>${h(description)}</small><code>${h(permission)}</code></span></label>`).join('');
+  const historyHtml = history.items.length ? `<div class="permission-history"><span>최근 변경</span>${history.items.map(item => `<p><time>${h(dateTime(item.changed_at))}</time><strong>${h(item.after_permissions.length)}개 기능 · Vault ${item.after_vault_access ? '허용' : '차단'}</strong></p>`).join('')}</div>` : '<p class="dialog-help">아직 권한 변경 이력이 없습니다.</p>';
+  editor(`${name} · ${t('권한 관리')}`,`<p class="dialog-help">선택한 기능만 이 agent token으로 호출할 수 있습니다. 변경은 같은 토큰에 즉시 적용되며 토큰 원문은 다시 노출되지 않습니다.</p><div class="agent-permission-list">${choices}</div><label class="ui-choice-card ui-choice-card--sensitive agent-vault-choice"><input class="ui-choice-input" type="checkbox" name="vault_access" ${vaultAccess ? 'checked' : ''}><span class="ui-choice-control" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="m5 10 3 3 7-7"/></svg></span><span class="ui-choice-copy"><span class="ui-choice-eyebrow">민감한 권한</span><strong>Vault 비밀값 사용</strong><small>저장된 모든 비밀값을 실행 프로세스에 전달할 수 있습니다.</small></span><span class="ui-choice-state" aria-hidden="true"></span></label>${historyHtml}`,async data => {
+    const nextVaultAccess = data.has('vault_access');
+    if (nextVaultAccess && !vaultAccess && !(await confirmAction('Vault 권한을 추가할까요?','이 에이전트는 저장된 모든 비밀값을 실행 프로세스에 전달할 수 있습니다. 신뢰하는 에이전트에만 허용하세요.','권한 추가','default'))) throw new Error('권한 변경을 취소했습니다.');
+    await api('/auth/api-keys/' + encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({permissions:data.getAll('permission'),vault_access:nextVaultAccess})});
+    toast('에이전트 권한을 저장했습니다.');
+  },'권한 저장');
+}
 function primaryAction() {
   if (currentView === 'overview') return copyInstallPrompt();
   if (currentView === 'keys') return createKey();
@@ -429,7 +451,7 @@ document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return navigate(nav.dataset.view);
   const button = event.target.closest('[data-action]'); if (!button) return;
-  const {action,id,name,description,sourceName,targetName,relation,reason,url} = button.dataset;
+  const {action,id,name,description,sourceName,targetName,relation,reason,url,permissions,vaultAccess} = button.dataset;
   try {
     if (action === 'toggle-account') {
       if (window.innerWidth <= 820) {
@@ -462,17 +484,11 @@ document.addEventListener('click', async event => {
       return;
     }
     if (action === 'create-key') return createKey();
+    if (action === 'manage-agent-permissions') return editAgentPermissions(id,name,permissions,vaultAccess === 'true');
     if (action === 'setup-totp') return beginTotpSetup();
     if (action === 'regenerate-recovery') return regenerateRecoveryCodes();
     if (action === 'disable-totp') return disableTotp();
     if (action === 'rotate-vault') return editVault(name, description);
-    if (action === 'toggle-vault-access') {
-      const enabled = button.dataset.enabled === 'true';
-      if (!enabled && !(await confirmAction('Vault 권한을 허용할까요?','이 에이전트는 저장된 모든 비밀값을 실행 프로세스에 전달할 수 있습니다. 신뢰하는 에이전트인지 확인하세요.','권한 허용','default'))) return;
-      await api('/auth/api-keys/' + encodeURIComponent(id),{method:'PATCH',body:JSON.stringify({vault_access:!enabled})});
-      toast(enabled ? 'Vault 권한을 차단했습니다.' : 'Vault 권한을 허용했습니다.');
-      return navigate(currentView,false);
-    }
     if (action === 'reload') return navigate(currentView, false);
     if (action === 'next') { pageOffset += 50; return navigate(currentView, false); }
     if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); return navigate(currentView, false); }

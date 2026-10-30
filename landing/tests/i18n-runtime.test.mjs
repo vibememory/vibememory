@@ -50,6 +50,14 @@ test('all seven locales translate core and newly added UI labels', () => {
     assert.equal(window.vmSetLocale(locale), true);
     assert.equal(window.vmTranslateText('지원됨'), translated);
   }
+  const permissions = {
+    ko: '권한 관리', en: 'Manage permissions', zh: '管理权限', ja: '権限を管理',
+    es: 'Gestionar permisos', vi: 'Quản lý quyền', th: 'จัดการสิทธิ์',
+  };
+  for (const [locale, translated] of Object.entries(permissions)) {
+    window.vmSetLocale(locale);
+    assert.equal(window.vmTranslateText('권한 관리'), translated);
+  }
   window.vmSetLocale('en');
   assert.equal(window.vmTranslateText('다크 모드로 전환'), 'Switch to dark mode');
   window.vmSetLocale('th');

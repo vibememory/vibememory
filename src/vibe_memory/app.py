@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .auth import (
     COOKIE,
+    DEFAULT_AGENT_PERMISSIONS,
     SESSION_SECONDS,
     AuthStore,
     Credentials,
@@ -170,7 +171,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.26.4",
+        version="0.27.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -257,6 +258,7 @@ def create_app(settings=None, embedder=None):
             ):
                 raise HTTPException(403, "기능 요청 운영 권한이 필요합니다.")
             request.state.vault_access = principal["vault_access"]
+            request.state.permissions = set(principal["permissions"])
             request.state.feature_request_operator = True
             request.state.auth_kind = "agent-key"
             request.state.key_id = principal["key_id"]
@@ -275,12 +277,14 @@ def create_app(settings=None, embedder=None):
     def owner(request: Request, credentials: HTTPAuthorizationCredentials | None = Depends(auth)):
         request.state.vault_access = False
         request.state.feature_request_operator = False
+        request.state.permissions = set()
         request.state.auth_kind = "none"
         if credentials and credentials.scheme.lower() == "bearer":
             supplied = hashlib.sha256(credentials.credentials.encode()).digest()
             for expected, user in key_hashes:
                 if hmac.compare_digest(expected, supplied):
                     request.state.auth_kind = "legacy-key"
+                    request.state.permissions = set(DEFAULT_AGENT_PERMISSIONS)
                     return bind_agent(
                         request,
                         user,
@@ -291,6 +295,7 @@ def create_app(settings=None, embedder=None):
             principal = accounts.principal_for_key(credentials.credentials)
             if principal:
                 request.state.vault_access = principal["vault_access"]
+                request.state.permissions = set(principal["permissions"])
                 request.state.feature_request_operator = principal[
                     "feature_request_operator"
                 ]
@@ -309,6 +314,7 @@ def create_app(settings=None, embedder=None):
                 if request.method not in {"GET", "HEAD", "OPTIONS"}:
                     check_origin(request)
                 request.state.vault_access = True
+                request.state.permissions = set(DEFAULT_AGENT_PERMISSIONS)
                 request.state.auth_kind = "browser-session"
                 return bind_agent(
                     request,
@@ -320,6 +326,23 @@ def create_app(settings=None, embedder=None):
         raise HTTPException(
             401, "Invalid or missing API key", headers={"WWW-Authenticate": "Bearer"}
         )
+
+    def permission_user(permission):
+        def permitted(request: Request, user=Depends(owner)):
+            if permission not in request.state.permissions:
+                raise HTTPException(403, f"Agent permission required: {permission}")
+            return user
+
+        return permitted
+
+    memory_reader = permission_user("memory:read")
+    memory_writer = permission_user("memory:write")
+    files_reader = permission_user("files:read")
+    files_writer = permission_user("files:write")
+    messages_reader = permission_user("messages:read")
+    messages_writer = permission_user("messages:write")
+    feature_writer = permission_user("feature:write")
+    events_reader = permission_user("events:read")
 
     def vault_user(request: Request, user=Depends(owner)):
         if not request.state.vault_access:
@@ -614,11 +637,23 @@ def create_app(settings=None, embedder=None):
 
     @app.post("/auth/api-keys", status_code=201, tags=["account"])
     def create_api_key(data: KeyInput, user=Depends(browser_user)):
-        return accounts.create_key(user["id"], data.name, data.vault_access)
+        return accounts.create_key(
+            user["id"], data.name, data.vault_access, data.permissions
+        )
 
     @app.patch("/auth/api-keys/{id}", tags=["account"])
     def update_api_key(id: str, data: KeyAccessUpdate, user=Depends(browser_user)):
-        return accounts.set_key_vault_access(user["id"], id, data.vault_access)
+        return accounts.set_key_access(
+            user["id"], id, data.vault_access, data.permissions
+        )
+
+    @app.get("/auth/api-keys/{id}/permission-events", tags=["account"])
+    def api_key_permission_events(
+        id: str,
+        limit: int = Query(default=50, ge=1, le=100),
+        user=Depends(browser_user),
+    ):
+        return {"items": accounts.list_key_permission_events(user["id"], id, limit)}
 
     @app.get(
         "/v1/admin/operator-agents",
@@ -1148,13 +1183,13 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     async def upload_file(
         request: Request,
         filename: str = Query(default="file", min_length=1, max_length=255),
-        user=Depends(owner),
+        user=Depends(files_writer),
         db=Depends(store),
     ):
         return await files.upload(request, db, user, filename)
 
     @app.get("/v1/files/{id}", tags=["files"])
-    def download_file(id: str, user=Depends(owner), db=Depends(store)):
+    def download_file(id: str, user=Depends(files_reader), db=Depends(store)):
         record = db.get(user, id)
         if record["kind"] != "file" or not files.path(id).is_file():
             raise NotFound()
@@ -1173,7 +1208,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 files.path(id).unlink(missing_ok=True)
 
     @app.delete("/v1/files/{id}", status_code=204, tags=["files"])
-    def delete_file(id: str, user=Depends(owner), db=Depends(store)):
+    def delete_file(id: str, user=Depends(files_writer), db=Depends(store)):
         with db.lock:
             if db.get(user, id)["kind"] != "file":
                 raise NotFound()
@@ -1188,7 +1223,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         request: Request,
         after: int = Query(default=0, ge=0, le=9223372036854775807),
         seconds: int = Query(default=25, ge=1, le=60),
-        user=Depends(owner),
+        user=Depends(events_reader),
         db=Depends(store),
     ):
         last_id = request.headers.get("Last-Event-ID")
@@ -1214,7 +1249,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     current = await anyio.to_thread.run_sync(owner, request, credentials)
                 except HTTPException:
                     return
-                if current != user:
+                if current != user or "events:read" not in request.state.permissions:
                     return
                 batch = await anyio.to_thread.run_sync(db.events, user, cursor)
                 for event in batch:
@@ -1243,6 +1278,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             "embedding_model": embedder.model_name,
             "vault_access": bool(request.state.vault_access),
             "feature_request_operator": bool(request.state.feature_request_operator),
+            "permissions": sorted(request.state.permissions),
             "agent": {
                 "id": request.state.agent_id,
                 "name": request.state.agent_name,
@@ -1251,7 +1287,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         }
 
     @app.get("/v1/agents", tags=["agent messages"])
-    def agents(request: Request, user=Depends(owner), db=Depends(store)):
+    def agents(request: Request, user=Depends(messages_reader), db=Depends(store)):
         return {
             "self": {
                 "id": request.state.agent_id,
@@ -1273,7 +1309,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def send_agent_message(
         data: AgentMessageInput,
         request: Request,
-        user=Depends(owner),
+        user=Depends(messages_writer),
         db=Depends(store),
     ):
         try:
@@ -1296,7 +1332,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         after: int = Query(default=0, ge=0, le=9223372036854775807),
         limit: int = Query(default=50, ge=1, le=100),
         status: Literal["queued", "delivered", "read", "acked"] | None = None,
-        user=Depends(owner),
+        user=Depends(messages_reader),
         db=Depends(store),
     ):
         items = db.inbox_messages(user, request.state.agent_id, after, limit, status)
@@ -1308,7 +1344,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         request: Request,
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
-        user=Depends(owner),
+        user=Depends(messages_reader),
         db=Depends(store),
     ):
         return {
@@ -1322,7 +1358,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         request: Request,
         after: int = Query(default=0, ge=0, le=9223372036854775807),
         seconds: int = Query(default=25, ge=1, le=60),
-        user=Depends(owner),
+        user=Depends(messages_reader),
         db=Depends(store),
     ):
         last_id = request.headers.get("Last-Event-ID")
@@ -1348,7 +1384,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     current = await anyio.to_thread.run_sync(owner, request, credentials)
                 except HTTPException:
                     return
-                if current != user or request.state.agent_id != recipient:
+                if (
+                    current != user
+                    or request.state.agent_id != recipient
+                    or "messages:read" not in request.state.permissions
+                ):
                     return
                 batch = await anyio.to_thread.run_sync(
                     db.inbox_messages, user, recipient, cursor, 100, None
@@ -1370,7 +1410,9 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         )
 
     @app.get("/v1/agent-messages/{id}", tags=["agent messages"])
-    def agent_message(id: str, request: Request, user=Depends(owner), db=Depends(store)):
+    def agent_message(
+        id: str, request: Request, user=Depends(messages_reader), db=Depends(store)
+    ):
         return db.get_message(user, request.state.agent_id, id)
 
     @app.post("/v1/agent-messages/{id}/ack", tags=["agent messages"])
@@ -1378,7 +1420,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         id: str,
         data: AgentMessageAck,
         request: Request,
-        user=Depends(owner),
+        user=Depends(messages_writer),
         db=Depends(store),
     ):
         return db.ack_message(user, request.state.agent_id, id, data.status)
@@ -1537,7 +1579,9 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             409: {"description": "Client request ID reused with different content"},
         },
     )
-    def submit_feature_request(data: FeatureRequestInput, user=Depends(owner), db=Depends(store)):
+    def submit_feature_request(
+        data: FeatureRequestInput, user=Depends(feature_writer), db=Depends(store)
+    ):
         try:
             record, created = db.add_feature_request(user, data)
         except DuplicateRequestConflict:
@@ -1554,7 +1598,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def feature_requests(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
-        user=Depends(owner),
+        user=Depends(feature_writer),
         db=Depends(store),
     ):
         return {
@@ -1564,7 +1608,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         }
 
     @app.get("/v1/feature-requests/{id}", tags=["feature requests"])
-    def feature_request(id: str, user=Depends(owner), db=Depends(store)):
+    def feature_request(id: str, user=Depends(feature_writer), db=Depends(store)):
         return db.get_feature_request(user, id)
 
     def admin_request_record(record):
@@ -1668,22 +1712,28 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return admin_request_record({**record, "owner_id": owner_id})
 
     @app.post("/v1/memories", status_code=201, tags=["memories"])
-    def add_memory(data: MemoryInput, request: Request, user=Depends(owner), db=Depends(store)):
+    def add_memory(
+        data: MemoryInput, request: Request, user=Depends(memory_writer), db=Depends(store)
+    ):
         return ingest(db, user, "memory", data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/documents", status_code=201, tags=["documents"])
-    def add_document(data: DocumentInput, request: Request, user=Depends(owner), db=Depends(store)):
+    def add_document(
+        data: DocumentInput, request: Request, user=Depends(memory_writer), db=Depends(store)
+    ):
         return ingest(db, user, "document", data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/entities", status_code=201, tags=["entities"])
-    def add_entity(data: EntityInput, request: Request, user=Depends(owner), db=Depends(store)):
+    def add_entity(
+        data: EntityInput, request: Request, user=Depends(memory_writer), db=Depends(store)
+    ):
         return ingest(db, user, "entity", data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/entities/batch", tags=["entities"])
     def add_entities_batch(
         data: EntityCreateMany,
         request: Request,
-        user=Depends(owner),
+        user=Depends(memory_writer),
         db=Depends(store),
     ):
         results = []
@@ -1710,7 +1760,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.put("/v1/records/{id}/keywords", tags=["memories"])
     def update_keywords(
         id: str, data: KeywordUpdate, request: Request,
-        user=Depends(owner), db=Depends(store)
+        user=Depends(memory_writer), db=Depends(store)
     ):
         db.get(user, id)
         return db.update_keywords(
@@ -1722,7 +1772,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def update_records_batch(
         data: RecordUpdateMany,
         request: Request,
-        user=Depends(owner),
+        user=Depends(memory_writer),
         db=Depends(store),
     ):
         results = []
@@ -1756,7 +1806,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.patch("/v1/records/{id}", tags=["memories"])
     def update_record(
         id: str, data: RecordUpdate, request: Request,
-        user=Depends(owner), db=Depends(store)
+        user=Depends(memory_writer), db=Depends(store)
     ):
         vectors = vectors_for(data.keywords) if data.keywords is not None else None
         return db.update_record(
@@ -1766,25 +1816,29 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.patch("/v1/records/{id}/security", tags=["memories"])
     def update_record_security(
         id: str, data: RecordSecurityUpdate, request: Request,
-        user=Depends(owner), db=Depends(store)
+        user=Depends(memory_writer), db=Depends(store)
     ):
         return db.update_security(
             user, id, data, request.state.agent_id, request.state.agent_name
         )
 
     @app.post("/v1/records/{id}/archive", tags=["memories"])
-    def archive_record(id: str, data: RecordArchive, user=Depends(owner), db=Depends(store)):
+    def archive_record(
+        id: str, data: RecordArchive, user=Depends(memory_writer), db=Depends(store)
+    ):
         return db.archive(user, id, data.expected_version, data.reason)
 
     @app.post("/v1/records/{id}/restore", tags=["memories"])
-    def restore_record(id: str, data: RecordArchive, user=Depends(owner), db=Depends(store)):
+    def restore_record(
+        id: str, data: RecordArchive, user=Depends(memory_writer), db=Depends(store)
+    ):
         return db.restore(user, id, data.expected_version, data.reason)
 
     @app.get("/v1/trash", tags=["memories"])
     def trash(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         return {"items": db.archived(user, limit, offset), "limit": limit, "offset": offset}
@@ -1793,17 +1847,17 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def quarantine(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         return {"items": db.quarantined(user, limit, offset), "limit": limit, "offset": offset}
 
     @app.post("/v1/records/merge", tags=["memories"])
-    def merge_records(data: RecordMerge, user=Depends(owner), db=Depends(store)):
+    def merge_records(data: RecordMerge, user=Depends(memory_writer), db=Depends(store)):
         return db.merge(user, data)
 
     @app.get("/v1/stats", tags=["memories"])
-    def stats(user=Depends(owner), db=Depends(store)):
+    def stats(user=Depends(memory_reader), db=Depends(store)):
         return db.stats(user)
 
     @app.get("/v1/records", tags=["memories"])
@@ -1817,7 +1871,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         include_history: bool = True,
         include_untrusted: bool = False,
         include_quarantined: bool = False,
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         if include_quarantined and not include_untrusted:
@@ -1851,7 +1905,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         }
 
     @app.get("/v1/records/{id}", tags=["memories"])
-    def get_record(id: str, user=Depends(owner), db=Depends(store)):
+    def get_record(id: str, user=Depends(memory_reader), db=Depends(store)):
         record = db.get(user, id)
         annotate_corrections(db, user, [record])
         return record
@@ -1860,7 +1914,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def correct_memory(
         data: MemoryCorrectionInput,
         request: Request,
-        user=Depends(owner),
+        user=Depends(memory_writer),
         db=Depends(store),
     ):
         def execute():
@@ -1897,14 +1951,21 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return result
 
     @app.delete("/v1/records/{id}", status_code=204, tags=["memories"])
-    def delete_record(id: str, user=Depends(owner), db=Depends(store)):
+    def delete_record(
+        id: str,
+        request: Request,
+        user=Depends(memory_writer),
+        db=Depends(store),
+    ):
+        if db.get(user, id)["kind"] == "file" and "files:write" not in request.state.permissions:
+            raise HTTPException(403, "Agent permission required: files:write")
         remove_record(db, user, id)
 
     @app.post("/v1/relations", status_code=201, tags=["graph"])
     def add_relation(
         data: RelationInput,
         request: Request,
-        user=Depends(owner),
+        user=Depends(memory_writer),
         db=Depends(store),
     ):
         try:
@@ -1921,7 +1982,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def add_relations_batch(
         data: RelationCreateMany,
         request: Request,
-        user=Depends(owner),
+        user=Depends(memory_writer),
         db=Depends(store),
     ):
         results = []
@@ -1962,7 +2023,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         cursor: int = Query(default=0, ge=0),
         fields: str | None = Query(default=None, max_length=1000),
         include_history: bool = True,
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         try:
@@ -1998,13 +2059,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         }
 
     @app.patch("/v1/relations/{id}", tags=["graph"])
-    def update_relation(id: str, data: RelationUpdate, user=Depends(owner), db=Depends(store)):
+    def update_relation(
+        id: str, data: RelationUpdate, user=Depends(memory_writer), db=Depends(store)
+    ):
         return db.update_link(user, id, data)
 
     @app.post("/v1/context-bundle", tags=["retrieval"])
     def get_context_bundle(
         data: ContextBundleInput,
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         try:
@@ -2015,7 +2078,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.post("/v1/graph/audit", tags=["graph"])
     def audit_graph(
         data: GraphAuditInput,
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         return graph_audit(db, user, data)
@@ -2023,7 +2086,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.post("/v1/graph/diff", tags=["graph"])
     def diff_graph(
         data: GraphDiffInput,
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         return graph_diff(db, user, data)
@@ -2032,7 +2095,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def apply_graph_diff(
         data: GraphApplyInput,
         request: Request,
-        user=Depends(owner),
+        user=Depends(memory_writer),
         db=Depends(store),
     ):
         diff_input = GraphDiffInput.model_validate(
@@ -2144,7 +2207,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         min_confidence: float | None = Query(default=None, ge=0, le=1),
         extraction_method: str = Query(default="", max_length=100),
         relation: str = Query(default="", max_length=80, pattern=r"^$|^[A-Z][A-Z0-9_]*$"),
-        user=Depends(owner),
+        user=Depends(memory_reader),
         db=Depends(store),
     ):
         if include_quarantined and not include_untrusted:
@@ -2165,7 +2228,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return result
 
     @app.post("/v1/search", tags=["retrieval"])
-    def search(data: SearchInput, user=Depends(owner), db=Depends(store)):
+    def search(data: SearchInput, user=Depends(memory_reader), db=Depends(store)):
         try:
             # A consistent snapshot prevents concurrent index replacement during scoring.
             with db.lock:

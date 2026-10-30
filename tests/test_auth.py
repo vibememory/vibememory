@@ -123,7 +123,9 @@ def test_revocable_agent_keys_separate_from_browser_auth(web, web_settings):
     changed = web.patch(
         "/auth/api-keys/" + key["id"], json={"vault_access": True}
     ).json()
-    assert changed == {"id": key["id"], "vault_access": True}
+    assert changed["id"] == key["id"]
+    assert changed["vault_access"] is True
+    assert changed["permissions"] == key["permissions"]
     with sqlite3.connect(web_settings.data_dir / "auth.sqlite") as db:
         row = db.execute("SELECT hash FROM api_keys").fetchone()
         assert row[0] == digest(key["key"]) and row[0] != key["key"]
@@ -141,6 +143,79 @@ def test_revocable_agent_keys_separate_from_browser_auth(web, web_settings):
     assert web.get("/v1/agents").json()["items"] == []
     assert web.get("/v1/records", headers=headers).status_code == 401
     assert web.get("/v1/records").status_code == 200
+
+
+def test_issued_agent_key_permissions_can_be_added_and_revoked(web):
+    signup(web)
+    key = web.post(
+        "/auth/api-keys",
+        json={"name": "Read only", "permissions": ["memory:read"]},
+    ).json()
+    headers = {"Authorization": "Bearer " + key["key"], "Origin": ""}
+
+    assert web.get("/v1/me", headers=headers).json()["permissions"] == ["memory:read"]
+    assert web.get("/v1/records", headers=headers).status_code == 200
+    assert (
+        web.post(
+            "/v1/memories",
+            headers=headers,
+            json={"content": "denied", "keywords": ["denied"]},
+        ).status_code
+        == 403
+    )
+    assert web.get("/v1/agent-messages/inbox", headers=headers).status_code == 403
+    assert (
+        web.post(
+            "/v1/files?filename=denied.txt",
+            headers={**headers, "Content-Type": "application/octet-stream"},
+            content=b"denied",
+        ).status_code
+        == 403
+    )
+    assert (
+        web.post(
+            "/v1/feature-requests",
+            headers=headers,
+            json={
+                "title": "denied",
+                "description": "denied feature request",
+                "agent_name": "Read only",
+            },
+        ).status_code
+        == 403
+    )
+
+    changed = web.patch(
+        "/auth/api-keys/" + key["id"],
+        json={"permissions": ["memory:read", "memory:write", "messages:read"]},
+    ).json()
+    assert changed["permissions"] == ["memory:read", "memory:write", "messages:read"]
+    assert (
+        web.post(
+            "/v1/memories",
+            headers=headers,
+            json={"content": "allowed", "keywords": ["allowed"]},
+        ).status_code
+        == 201
+    )
+    assert web.get("/v1/agent-messages/inbox", headers=headers).status_code == 200
+
+    changed = web.patch(
+        "/auth/api-keys/" + key["id"],
+        json={"permissions": ["memory:write"]},
+    ).json()
+    assert changed["permissions"] == ["memory:write"]
+    assert web.get("/v1/records", headers=headers).status_code == 403
+    events = web.get(
+        "/auth/api-keys/" + key["id"] + "/permission-events"
+    ).json()["items"]
+    assert len(events) == 2
+    revoked = next(event for event in events if event["after_permissions"] == ["memory:write"])
+    assert revoked["before_permissions"] == [
+        "memory:read",
+        "memory:write",
+        "messages:read",
+    ]
 
 
 def test_accounts_isolated_and_session_expiry(web, web_settings):

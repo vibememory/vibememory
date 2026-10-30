@@ -282,6 +282,11 @@ public confirmation code. Denial/expiry stops login. No arbitrary callback URLs
 are accepted. This polling flow also works when the agent is on a remote host.
 `--vault-access` is optional and appears as a separate sensitive permission on
 the approval page. Existing and ordinary keys do not receive it automatically.
+After issuance, the user can open **Console → Agent connections → Permission
+management** to add or revoke memory, file, message, feature-request, and event
+permissions without rotating the token. Changes take effect on the next request;
+active SSE streams also stop when their read permission is removed. Existing
+keys keep the legacy full non-Vault permission set until the user narrows it.
 
 ### Encrypted Vault
 

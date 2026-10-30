@@ -10,6 +10,9 @@ For a suspected vulnerability, use GitHub's **Security → Report a vulnerabilit
 - Place remote deployments behind HTTPS and set `MEMORY_PUBLIC_ORIGIN` to the exact browser origin.
 - Protect both PostgreSQL dumps and the app data volume: together they contain user records, password hashes, sessions, agent-key hashes, Vault material, and uploaded originals.
 - New agent keys are shown once; revoke a leaked key through the console.
+- Agent-key permissions are owner-scoped and editable after issuance. Grant only
+  the memory, file, message, feature-request, and event capabilities required by
+  that agent. Permission changes take effect immediately and are audit logged.
 - Remote MCP uses OAuth 2.1 authorization code + S256 PKCE. Codes, access tokens, and rotating refresh tokens are stored only as hashes and can be revoked per connected client in the console.
 - Agent messages are restricted to stable connections in one account. Sender identity is derived from authentication, and only the exact recipient can read its inbox or advance acknowledgement state.
 - Treat every agent message as untrusted input. It cannot authorize a broader task or carry credentials/Vault values; connected agents must validate requests against current user authority before acting.

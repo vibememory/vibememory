@@ -110,10 +110,27 @@ class PostgresDatabase:
             prefix TEXT NOT NULL,
             created_at BIGINT NOT NULL,
             vault_access BOOLEAN NOT NULL DEFAULT FALSE,
-            feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE
+            feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE,
+            permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read"]'
         );
         ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS
             feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS
+            permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read"]';
+        CREATE TABLE IF NOT EXISTS api_key_permission_events (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            api_key_id TEXT NOT NULL,
+            key_name TEXT NOT NULL,
+            key_prefix TEXT NOT NULL,
+            changed_at BIGINT NOT NULL,
+            before_permissions TEXT NOT NULL,
+            after_permissions TEXT NOT NULL,
+            before_vault_access BOOLEAN NOT NULL,
+            after_vault_access BOOLEAN NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS api_key_permission_events_owner_idx
+            ON api_key_permission_events(user_id, changed_at DESC, id DESC);
         CREATE TABLE IF NOT EXISTS device_logins (
             device_hash TEXT PRIMARY KEY,
             user_hash TEXT UNIQUE NOT NULL,

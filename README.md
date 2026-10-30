@@ -44,6 +44,9 @@ docker compose up -d --build
 ```
 
 Open **http://localhost:8080**, create an account, then open the **Console → Agent API keys** page.
+Issued agent keys support owner-managed memory, file, message, feature-request,
+and event permissions. Add or revoke them later without rotating the token;
+Vault remains a separate sensitive permission and every change is audit logged.
 
 The app container serves the website, console, and REST API. Separate named volumes preserve PostgreSQL data and uploaded files, the Vault key, and model cache. The first keyword embedding downloads the multilingual model (about 220 MB); signup and the console do not require this download.
 

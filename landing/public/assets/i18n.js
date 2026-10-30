@@ -952,6 +952,31 @@
     ['연결 방법 보기','View connection guide','查看连接方法','接続方法を見る','Ver guía de conexión','Xem cách kết nối','ดูวิธีเชื่อมต่อ'],
     ['원격 MCP 연결','Remote MCP connections','远程 MCP 连接','リモートMCP接続','Conexiones MCP remotas','Kết nối MCP từ xa','การเชื่อมต่อ MCP ระยะไกล'],
     ['허용 범위','Granted scopes','授权范围','許可スコープ','Ámbitos permitidos','Phạm vi được phép','ขอบเขตที่อนุญาต'],
+    ['허용 권한','Granted permissions','已授予权限','許可された権限','Permisos concedidos','Quyền đã cấp','สิทธิ์ที่อนุญาต'],
+    ['권한 관리','Manage permissions','管理权限','権限を管理','Gestionar permisos','Quản lý quyền','จัดการสิทธิ์'],
+    ['권한 저장','Save permissions','保存权限','権限を保存','Guardar permisos','Lưu quyền','บันทึกสิทธิ์'],
+    ['기억 조회','Read memory','读取记忆','記憶を読む','Leer memoria','Đọc ký ức','อ่านความจำ'],
+    ['기억 수정','Modify memory','修改记忆','記憶を変更','Modificar memoria','Sửa ký ức','แก้ไขความจำ'],
+    ['파일 내려받기','Download files','下载文件','ファイルを取得','Descargar archivos','Tải tệp xuống','ดาวน์โหลดไฟล์'],
+    ['파일 관리','Manage files','管理文件','ファイルを管理','Gestionar archivos','Quản lý tệp','จัดการไฟล์'],
+    ['메시지 수신','Receive messages','接收消息','メッセージを受信','Recibir mensajes','Nhận tin nhắn','รับข้อความ'],
+    ['메시지 발신','Send messages','发送消息','メッセージを送信','Enviar mensajes','Gửi tin nhắn','ส่งข้อความ'],
+    ['기능 요청','Feature requests','功能请求','機能リクエスト','Solicitudes de funciones','Yêu cầu tính năng','คำขอฟีเจอร์'],
+    ['실시간 이벤트','Live events','实时事件','リアルタイムイベント','Eventos en tiempo real','Sự kiện thời gian thực','เหตุการณ์เรียลไทม์'],
+    ['기억·문서·엔티티·관계와 검색 결과를 읽습니다.','Read memories, documents, entities, relationships, and search results.','读取记忆、文档、实体、关系和搜索结果。','記憶・文書・エンティティ・関係・検索結果を読みます。','Lee memorias, documentos, entidades, relaciones y resultados.','Đọc ký ức, tài liệu, thực thể, quan hệ và kết quả tìm kiếm.','อ่านความจำ เอกสาร เอนทิตี ความสัมพันธ์ และผลค้นหา'],
+    ['기억·문서 메타정보·엔티티·관계를 생성하고 변경합니다.','Create and modify memories, document metadata, entities, and relationships.','创建和修改记忆、文档元数据、实体与关系。','記憶・文書メタデータ・エンティティ・関係を作成・変更します。','Crea y modifica memorias, metadatos, entidades y relaciones.','Tạo và sửa ký ức, metadata tài liệu, thực thể và quan hệ.','สร้างและแก้ไขความจำ เมทาดาทาเอกสาร เอนทิตี และความสัมพันธ์'],
+    ['저장된 원본 byte stream을 내려받습니다.','Download stored original byte streams.','下载保存的原始字节流。','保存された元のbyte streamを取得します。','Descarga los byte streams originales guardados.','Tải byte stream gốc đã lưu.','ดาวน์โหลด byte stream ต้นฉบับที่บันทึกไว้'],
+    ['원본 byte stream을 업로드하거나 삭제합니다.','Upload or delete original byte streams.','上传或删除原始字节流。','元のbyte streamをアップロードまたは削除します。','Sube o elimina byte streams originales.','Tải lên hoặc xóa byte stream gốc.','อัปโหลดหรือลบ byte stream ต้นฉบับ'],
+    ['같은 계정의 에이전트와 수신함을 확인합니다.','View same-account agents and the inbox.','查看同一账户的智能体和收件箱。','同じアカウントのエージェントと受信箱を確認します。','Consulta agentes de la misma cuenta y la bandeja de entrada.','Xem tác nhân cùng tài khoản và hộp thư đến.','ดูเอเจนต์ในบัญชีเดียวกันและกล่องข้อความ'],
+    ['다른 연결 에이전트에 메시지를 보내고 확인 처리합니다.','Send messages to connected agents and acknowledge them.','向已连接智能体发送消息并确认处理。','接続エージェントへ送信し確認処理します。','Envía mensajes a agentes conectados y los confirma.','Gửi tin nhắn cho tác nhân đã kết nối và xác nhận.','ส่งข้อความให้เอเจนต์ที่เชื่อมต่อและยืนยัน'],
+    ['기능 요청을 등록하고 자신의 처리 결과를 확인합니다.','Submit feature requests and view their outcomes.','提交功能请求并查看处理结果。','機能リクエストを送信し結果を確認します。','Envía solicitudes y consulta sus resultados.','Gửi yêu cầu tính năng và xem kết quả.','ส่งคำขอฟีเจอร์และดูผลลัพธ์'],
+    ['기억 변경 SSE 이벤트를 구독합니다.','Subscribe to memory-change SSE events.','订阅记忆变更 SSE 事件。','記憶変更SSEイベントを購読します。','Suscríbete a eventos SSE de cambios de memoria.','Đăng ký sự kiện SSE thay đổi ký ức.','สมัครรับเหตุการณ์ SSE การเปลี่ยนความจำ'],
+    ['Vault 비밀값 사용','Use Vault secrets','使用 Vault 密钥','Vault秘密値を使用','Usar secretos de Vault','Dùng bí mật Vault','ใช้ความลับ Vault'],
+    ['저장된 모든 비밀값을 실행 프로세스에 전달할 수 있습니다.','Can pass every saved secret to an execution process.','可将所有已保存的秘密传递给执行进程。','保存済みの全秘密値を実行プロセスへ渡せます。','Puede pasar todos los secretos guardados a un proceso.','Có thể chuyển mọi bí mật đã lưu cho tiến trình.','สามารถส่งความลับทั้งหมดที่บันทึกไว้ให้โปรเซส'],
+    ['최근 변경','Recent changes','最近更改','最近の変更','Cambios recientes','Thay đổi gần đây','การเปลี่ยนแปลงล่าสุด'],
+    ['아직 권한 변경 이력이 없습니다.','No permission changes yet.','尚无权限变更记录。','権限変更履歴はまだありません。','Aún no hay cambios de permisos.','Chưa có thay đổi quyền.','ยังไม่มีประวัติการเปลี่ยนสิทธิ์'],
+    ['발급된 키의 기능 권한과 Vault 권한을 따로 추가하거나 회수할 수 있습니다. 변경 내용은 즉시 적용되고 감사 이력에 남습니다.','Add or revoke capability and Vault permissions separately. Changes apply immediately and remain in the audit history.','可分别添加或撤销功能与 Vault 权限。更改立即生效并保留在审计记录中。','機能権限とVault権限を個別に追加・取り消せます。変更は即時反映され、監査履歴に残ります。','Añade o revoca por separado los permisos funcionales y de Vault. Los cambios son inmediatos y quedan auditados.','Thêm hoặc thu hồi riêng quyền chức năng và Vault. Thay đổi có hiệu lực ngay và được ghi nhật ký.','เพิ่มหรือถอนสิทธิ์ฟังก์ชันและ Vault แยกกัน การเปลี่ยนแปลงมีผลทันทีและถูกบันทึก'],
+    ['선택한 기능만 이 agent token으로 호출할 수 있습니다. 변경은 같은 토큰에 즉시 적용되며 토큰 원문은 다시 노출되지 않습니다.','This agent token can call only selected capabilities. Changes apply immediately to the same token, whose secret is never shown again.','该智能体令牌只能调用所选功能。更改立即作用于同一令牌，令牌原文不会再次显示。','このagent tokenは選択した機能だけ呼び出せます。変更は同じトークンに即時反映され、秘密値は再表示されません。','Este token solo puede usar las capacidades elegidas. Los cambios son inmediatos y el secreto no vuelve a mostrarse.','Token tác nhân chỉ gọi được chức năng đã chọn. Thay đổi áp dụng ngay và giá trị token không hiển thị lại.','โทเค็นเอเจนต์เรียกได้เฉพาะฟังก์ชันที่เลือก การเปลี่ยนแปลงมีผลทันทีและจะไม่แสดงค่าโทเค็นอีก'],
     ['OAuth · 웹 승인 연결','OAuth · web-approved connection','OAuth · 网页授权连接','OAuth · Web承認接続','OAuth · conexión aprobada en la web','OAuth · kết nối phê duyệt trên web','OAuth · การเชื่อมต่อที่อนุมัติผ่านเว็บ'],
     ['Vault 항목','Vault items','Vault 条目','Vault項目','Elementos de Vault','Mục Vault','รายการ Vault'],
     ['Vault 재연결 필요','Reconnect to enable Vault','需重新连接以启用 Vault','Vault利用には再接続が必要','Reconecta para activar Vault','Kết nối lại để dùng Vault','เชื่อมต่อใหม่เพื่อใช้ Vault'],
@@ -1388,6 +1413,18 @@
     if (secrets) return {en:`${secrets[1]} secrets stored.`,zh:`已保存 ${secrets[1]} 个秘密。`,ja:`${secrets[1]}件の秘密値を保存しています。`,es:`${secrets[1]} secretos guardados.`,vi:`Đã lưu ${secrets[1]} bí mật.`,th:`บันทึกความลับ ${secrets[1]} รายการ`}[locale];
     const mcpConnections = value.match(/^(\d+)개의 GPT·Claude 연결이 활성 상태입니다\.$/);
     if (mcpConnections) return {en:`${mcpConnections[1]} GPT or Claude connections active.`,zh:`${mcpConnections[1]} 个 GPT 或 Claude 连接处于活动状态。`,ja:`${mcpConnections[1]}件のGPT・Claude接続が有効です。`,es:`${mcpConnections[1]} conexiones de GPT o Claude activas.`,vi:`${mcpConnections[1]} kết nối GPT hoặc Claude đang hoạt động.`,th:`การเชื่อมต่อ GPT หรือ Claude ${mcpConnections[1]} รายการกำลังทำงาน`}[locale];
+    const capabilityCount = value.match(/^(\d+)개 기능$/);
+    if (capabilityCount) return {en:`${capabilityCount[1]} capabilities`,zh:`${capabilityCount[1]} 项功能`,ja:`${capabilityCount[1]}機能`,es:`${capabilityCount[1]} capacidades`,vi:`${capabilityCount[1]} chức năng`,th:`${capabilityCount[1]} ความสามารถ`}[locale];
+    const vaultPermission = value.match(/^Vault (허용|차단)$/);
+    if (vaultPermission) {
+      const allowed = vaultPermission[1] === '허용';
+      return {en:`Vault ${allowed ? 'allowed' : 'blocked'}`,zh:`Vault ${allowed ? '允许' : '阻止'}`,ja:`Vault ${allowed ? '許可' : 'ブロック'}`,es:`Vault ${allowed ? 'permitido' : 'bloqueado'}`,vi:`Vault ${allowed ? 'được phép' : 'bị chặn'}`,th:`Vault ${allowed ? 'อนุญาต' : 'บล็อก'}`}[locale];
+    }
+    const permissionSnapshot = value.match(/^(\d+)개 기능 · Vault (허용|차단)$/);
+    if (permissionSnapshot) {
+      const allowed = permissionSnapshot[2] === '허용';
+      return {en:`${permissionSnapshot[1]} capabilities · Vault ${allowed ? 'allowed' : 'blocked'}`,zh:`${permissionSnapshot[1]} 项功能 · Vault ${allowed ? '允许' : '阻止'}`,ja:`${permissionSnapshot[1]}機能 · Vault ${allowed ? '許可' : 'ブロック'}`,es:`${permissionSnapshot[1]} capacidades · Vault ${allowed ? 'permitido' : 'bloqueado'}`,vi:`${permissionSnapshot[1]} chức năng · Vault ${allowed ? 'được phép' : 'bị chặn'}`,th:`${permissionSnapshot[1]} ความสามารถ · Vault ${allowed ? 'อนุญาต' : 'บล็อก'}`}[locale];
+    }
     const displayed = value.match(/^(\d+)개 표시$/);
     if (displayed) return {en:`${displayed[1]} shown`,zh:`显示 ${displayed[1]} 个`,ja:`${displayed[1]}件表示`,es:`${displayed[1]} mostradas`,vi:`Hiển thị ${displayed[1]}`,th:`แสดง ${displayed[1]} รายการ`}[locale];
     const itemCount = value.match(/^(\d+)개$/);

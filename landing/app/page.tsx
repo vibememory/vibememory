@@ -69,7 +69,7 @@ export default function Home() {
         description,
         applicationCategory: "DeveloperApplication",
         operatingSystem: "Web, Linux, macOS, Windows",
-        softwareVersion: "0.26.4",
+        softwareVersion: "0.27.0",
         isAccessibleForFree: true,
         offers: {
           "@type": "Offer",

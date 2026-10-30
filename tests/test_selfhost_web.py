@@ -116,14 +116,16 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v023-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v023-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v023-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v023-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v023-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v023-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261030-v023-1" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261030-v023-1" defer="">' in admin
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261030-v024-0"' in landing
+        assert '<script src="/assets/theme.js?v=20261030-v024-0" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261030-v024-0" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v024-0" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v024-0" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v024-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v024-0" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v024-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261030-v024-0" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261030-v024-0" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -162,7 +164,19 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261030-v023-1' in connect
+        assert '/assets/ui-kit.css?v=20261030-v024-0' in connect
+        assert '/assets/theme.css?v=20261030-v024-0' in connect
+        theme_script = client.get("/assets/theme.js").text
+        theme_styles = client.get("/assets/theme.css").text
+        assert "prefers-color-scheme: dark" in landing
+        assert "localStorage.getItem('vm-theme')" in landing
+        assert "window.vmTheme" in theme_script
+        assert "vm-theme-change" in theme_script
+        assert 'id="moon"' in client.get("/assets/icons.svg").text
+        assert 'id="sun"' in client.get("/assets/icons.svg").text
+        assert 'html[data-theme="dark"]' in theme_styles
+        assert "relationshipGraphStyles" in console_script.text
+        assert "vm-theme-change" in console_script.text
         assert '.ui-choice-input:checked+.ui-choice-control' in ui_styles.text
         assert '.ui-choice-card--sensitive:has(.ui-choice-input:checked)' in ui_styles.text
         assert "Vault 권한:" in client.get("/assets/connect.js").text

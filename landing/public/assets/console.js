@@ -103,6 +103,25 @@ function relationshipGraph(records, relations, totals) {
   const accessibleEdges = relations.map(edge => `<button type="button" data-action="relation-detail" data-source-name="${h(graphTitle(recordMap.get(edge.source_id)))}" data-target-name="${h(graphTitle(recordMap.get(edge.target_id)))}" data-relation="${h(edge.relation)}" data-reason="${h(edge.reason)}">${h(t(`${edge.relation} 관계`))}</button>`).join('');
   return `<section class="relationship-panel" aria-label="${h(t('관계 그래프.'))} ${h(summary)}"><div class="relationship-graph-stage" role="application" aria-label="기억 관계 그래프. 드래그하여 이동하고 휠로 확대할 수 있습니다."></div><div class="relationship-graph-a11y"><p>${h(summary)}</p>${accessibleNodes}${accessibleEdges}</div><div class="relationship-graph-meta"><span><i></i>${h(summary)}</span><span>노드나 관계를 선택하면 상세 정보를 확인할 수 있습니다.</span></div><div class="relationship-graph-controls" aria-label="그래프 화면 조절"><button type="button" data-graph-command="zoom-in" aria-label="확대">${icon('plus')}</button><button type="button" data-graph-command="zoom-out" aria-label="축소">${icon('minus')}</button><button type="button" data-graph-command="fit" aria-label="그래프 전체 보기">${icon('maximize')}</button></div></section>`;
 }
+function relationshipGraphStyles() {
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const palette = dark ? {
+    node:'#151e2e',text:'#e6edf8',border:'#52627d',memory:'#6f8eff',memoryBg:'#17264a',entity:'#a98bdd',entityBg:'#281f3c',document:'#63bda2',documentBg:'#132d29',file:'#d5a064',fileBg:'#302315',selected:'#88a2ff',selectedBg:'#20305a',edge:'#5f708d',arrow:'#7185aa',edgeText:'#b9c7dd',label:'#111827',labelBorder:'#344158'
+  } : {
+    node:'#ffffff',text:'#3d4a62',border:'#aebce0',memory:'#7892ec',memoryBg:'#f9fbff',entity:'#a991d8',entityBg:'#fcfaff',document:'#72b9a5',documentBg:'#f8fdfa',file:'#d9a36d',fileBg:'#fffaf5',selected:'#315bfb',selectedBg:'#f0f4ff',edge:'#aeb9d5',arrow:'#8fa0ca',edgeText:'#60719a',label:'#ffffff',labelBorder:'#dde4f2'
+  };
+  return [
+    {selector:'node',style:{'shape':'roundrectangle','width':168,'height':60,'background-color':palette.node,'border-width':1.4,'border-color':palette.border,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':10,'font-weight':500,'text-wrap':'wrap','text-max-width':145,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
+    {selector:'node.kind-memory',style:{'border-color':palette.memory,'background-color':palette.memoryBg}},
+    {selector:'node.kind-entity',style:{'border-color':palette.entity,'background-color':palette.entityBg}},
+    {selector:'node.kind-document',style:{'border-color':palette.document,'background-color':palette.documentBg}},
+    {selector:'node.kind-file',style:{'border-color':palette.file,'background-color':palette.fileBg}},
+    {selector:'node:selected, node.highlighted',style:{'border-width':2.4,'border-color':palette.selected,'background-color':palette.selectedBg}},
+    {selector:'edge',style:{'width':1.45,'curve-style':'bezier','control-point-step-size':45,'line-color':palette.edge,'target-arrow-color':palette.arrow,'target-arrow-shape':'triangle','arrow-scale':.85,'label':'data(relation)','font-family':'ui-monospace, SFMono-Regular, Consolas, monospace','font-size':8,'color':palette.edgeText,'text-background-color':palette.label,'text-background-opacity':.94,'text-background-padding':4,'text-border-color':palette.labelBorder,'text-border-width':1,'text-border-opacity':1,'text-rotation':'autorotate','text-margin-y':-9,'overlay-opacity':0,'transition-property':'line-color, target-arrow-color, width, opacity','transition-duration':'160ms'}},
+    {selector:'edge:selected, edge.highlighted',style:{'width':2.4,'line-color':palette.selected,'target-arrow-color':palette.selected,'color':palette.selected,'z-index':10}},
+    {selector:'.faded',style:{'opacity':.12,'text-opacity':.08}}
+  ];
+}
 async function bindRelationshipGraph(records, relations) {
   const stage = $('.relationship-graph-stage');
   if (!stage) return;
@@ -138,17 +157,7 @@ async function bindRelationshipGraph(records, relations) {
     minZoom:.3,
     maxZoom:2.4,
     boxSelectionEnabled:false,
-    style:[
-      {selector:'node',style:{'shape':'roundrectangle','width':168,'height':60,'background-color':'#ffffff','border-width':1.4,'border-color':'#aebce0','label':'data(label)','color':'#3d4a62','font-family':'VibeSans, Arial, sans-serif','font-size':10,'font-weight':500,'text-wrap':'wrap','text-max-width':145,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
-      {selector:'node.kind-memory',style:{'border-color':'#7892ec','background-color':'#f9fbff'}},
-      {selector:'node.kind-entity',style:{'border-color':'#a991d8','background-color':'#fcfaff'}},
-      {selector:'node.kind-document',style:{'border-color':'#72b9a5','background-color':'#f8fdfa'}},
-      {selector:'node.kind-file',style:{'border-color':'#d9a36d','background-color':'#fffaf5'}},
-      {selector:'node:selected, node.highlighted',style:{'border-width':2.4,'border-color':'#315bfb','background-color':'#f0f4ff'}},
-      {selector:'edge',style:{'width':1.45,'curve-style':'bezier','control-point-step-size':45,'line-color':'#aeb9d5','target-arrow-color':'#8fa0ca','target-arrow-shape':'triangle','arrow-scale':.85,'label':'data(relation)','font-family':'ui-monospace, SFMono-Regular, Consolas, monospace','font-size':8,'color':'#60719a','text-background-color':'#ffffff','text-background-opacity':.94,'text-background-padding':4,'text-border-color':'#dde4f2','text-border-width':1,'text-border-opacity':1,'text-rotation':'autorotate','text-margin-y':-9,'overlay-opacity':0,'transition-property':'line-color, target-arrow-color, width, opacity','transition-duration':'160ms'}},
-      {selector:'edge:selected, edge.highlighted',style:{'width':2.4,'line-color':'#315bfb','target-arrow-color':'#315bfb','color':'#315bfb','z-index':10}},
-      {selector:'.faded',style:{'opacity':.12,'text-opacity':.08}}
-    ],
+    style:relationshipGraphStyles(),
     layout:{
       name:records.length > 1 ? 'cose' : 'grid',
       animate:true,
@@ -512,6 +521,9 @@ window.addEventListener('popstate',() => {
   if (view !== currentView) navigate(view, true, 'none');
 });
 window.addEventListener('vm-language-change',() => navigate(currentView, false, 'none'));
+window.addEventListener('vm-theme-change',() => {
+  if (relationshipCy) relationshipCy.style(relationshipGraphStyles()).update();
+});
 $('#logout').addEventListener('click',async () => {
   try { await api('/auth/logout',{method:'POST'}); window.VMUI.closeFlyout(); $('#view-content').replaceChildren(); location.replace('/login'); }
   catch (error) { toast(error.message); }

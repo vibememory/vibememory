@@ -510,6 +510,8 @@
   if (viRows.length !== rows.length || thRows.length !== rows.length) throw new Error('Locale rows are incomplete');
   const translations = new Map(rows.map((row, index) => [row[0].trim(), {ko:row[0].trim(),en:row[1].trim(),zh:row[2].trim(),ja:row[3].trim(),es:row[4].trim(),vi:viRows[index].trim(),th:thRows[index].trim()}]));
   const extraRows = [
+    ['다크 모드로 전환','Switch to dark mode','切换到深色模式','ダークモードに切り替え','Cambiar al modo oscuro','Chuyển sang chế độ tối','เปลี่ยนเป็นโหมดมืด'],
+    ['라이트 모드로 전환','Switch to light mode','切换到浅色模式','ライトモードに切り替え','Cambiar al modo claro','Chuyển sang chế độ sáng','เปลี่ยนเป็นโหมดสว่าง'],
     ['본문으로 바로가기','Skip to content','跳到正文','本文へ移動','Ir al contenido','Đi tới nội dung','ข้ามไปยังเนื้อหา'],
     ['주 메뉴','Main menu','主菜单','メインメニュー','Menú principal','Menu chính','เมนูหลัก'],
     ['연결 가이드','Connection guide','连接指南','接続ガイド','Guía de conexión','Hướng dẫn kết nối','คู่มือการเชื่อมต่อ'],

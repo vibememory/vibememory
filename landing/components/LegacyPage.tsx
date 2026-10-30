@@ -9,7 +9,7 @@ type Props = {
   slot?: { marker: string; node: ReactNode };
 };
 
-const assetVersion = "20261030-v023-1";
+const assetVersion = "20261030-v024-0";
 const versioned = (path: string) => `${path}?v=${assetVersion}`;
 
 export function LegacyPage({ body, bodyClass = "", pageStylesheet, pageStylesheets = [], scripts = [], slot }: Props) {
@@ -19,6 +19,7 @@ export function LegacyPage({ body, bodyClass = "", pageStylesheet, pageStyleshee
   return (
     <>
       {stylesheets.map((href) => <link key={href} rel="stylesheet" href={versioned(href)} />)}
+      {stylesheets.length > 0 ? <link rel="stylesheet" href={versioned("/assets/theme.css")} /> : null}
       {slot ? (
         <div className={bodyClass || undefined}>
           <div dangerouslySetInnerHTML={{ __html: parts[0] }} />

@@ -210,6 +210,14 @@ class PostgresDatabase:
             created_at BIGINT NOT NULL,
             expires_at BIGINT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS oauth_token_revocations (
+            hash TEXT PRIMARY KEY,
+            reason TEXT NOT NULL DEFAULT 'revoked',
+            revoked_at BIGINT NOT NULL,
+            expires_at BIGINT NOT NULL
+        );
+        ALTER TABLE oauth_token_revocations ADD COLUMN IF NOT EXISTS
+            reason TEXT NOT NULL DEFAULT 'revoked';
         CREATE TABLE IF NOT EXISTS oauth_connections (
             client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

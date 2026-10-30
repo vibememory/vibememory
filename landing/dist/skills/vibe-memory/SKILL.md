@@ -50,6 +50,14 @@ For ongoing projects, prior decisions, user preferences, corrections, task hando
 
 Do not let an unavailable memory service block independent work. Disclose missing context or failed writes, and never claim an operation succeeded without successful CLI output.
 
+## Authorization context
+
+Treat authentication and authorization as properties of the exact connection used for the current call. Never combine permissions from another API key, MCP client, browser session, agent, or remembered result. Read access never implies write access, MCP is a transport rather than a permission, and tool visibility is not proof that the host will allow execution. Vibe Memory permission, host/client policy, and a third-party service's permission are separate layers; report an unverified layer as unknown or not evaluated instead of guessing.
+
+For MCP, call `auth_context` when the current connection identity or grant is material, `capabilities_get` when choosing among operations, and `permission_check` for a metadata-only preflight of one resource/operation. These tools inspect only the current OAuth connection and never enumerate another credential or resource. Vault read remains conditional on both the current connection's `vault:read` scope and an explicit per-entry grant. A successful preflight does not reserve access: the real operation reauthorizes, so handle revocation, expiry, version conflict, rate limits, and policy changes from its structured error.
+
+For the native CLI, `status` reports only the locally selected connection's actual server grant. Keep its stable connection ID when distinguishing same-name agents. Do not read or compare credential files, and do not call REST directly to inspect another connection. When a response exposes `context_ref`, `request_id`, `reason_code`, `retryable`, or `required_action`, preserve those safe fields in diagnostics without including tokens, cookies, Vault values, or resource bodies.
+
 ## Lifecycle automation
 
 On Claude Code, after the verified native CLI is also available on `PATH` as

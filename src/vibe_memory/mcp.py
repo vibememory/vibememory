@@ -1,5 +1,6 @@
 """Stateless Streamable HTTP MCP tool dispatch for Vibe Memory."""
 
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
@@ -13,6 +14,12 @@ from .batch import (
     project_record,
     project_relation,
     request_hash,
+)
+from .capabilities import (
+    build_auth_context,
+    capability_contract,
+    permission_check,
+    structured_error,
 )
 from .corrections import annotate_corrections
 from .deterministic import (
@@ -50,7 +57,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.28.0"
+SERVER_VERSION = "0.29.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -79,12 +86,22 @@ SERVER_INSTRUCTIONS = (
     "commit atomically; never choose between competing claims by timestamp alone. "
     "Vault tools are available only after explicit per-entry browser approval. A value returned "
     "by vault_get enters the MCP client and model context and may be retained there; retrieve it "
-    "only for the active user-authorized task. Vibe Memory never executes an external API call."
+    "only for the active user-authorized task. Vibe Memory never executes an external API call. "
+    "Authorization facts always describe only this MCP connection and current principal. Never "
+    "combine permissions from another token or connection, infer write access from read access, "
+    "or treat host policy, tool exposure, Vibe Memory grants, and third-party service permissions "
+    "as interchangeable. Use auth_context and permission_check; unverified external permissions "
+    "remain unknown."
 )
 
 
 class EmptyInput(Input):
     pass
+
+
+class PermissionCheckInput(Input):
+    resource: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
+    operation: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
 
 
 class RecordIdInput(Input):
@@ -220,7 +237,7 @@ def _tool(
         },
         "_meta": {
             "vibememory/scope": scope,
-            "securitySchemes": [{"type": "oauth2", "scopes": [scope]}],
+            "securitySchemes": [{"type": "oauth2", "scopes": [scope] if scope else []}],
         },
     }
     if profile:
@@ -229,6 +246,33 @@ def _tool(
 
 
 TOOLS = [
+    _tool(
+        "auth_context",
+        "Inspect this connection's authentication context",
+        "Return only the current MCP connection, principal, OAuth scopes, validity, and explicit "
+        "limits. It never inspects other tokens, host policy, or third-party permissions.",
+        EmptyInput,
+        None,
+        read_only=True,
+    ),
+    _tool(
+        "capabilities_get",
+        "Inspect supported operations and effective grants",
+        "Return the versioned capability matrix for this MCP connection. Feature support, tool "
+        "exposure, OAuth scope, and per-resource policy are reported separately.",
+        EmptyInput,
+        None,
+        read_only=True,
+    ),
+    _tool(
+        "permission_check",
+        "Preflight one operation",
+        "Metadata-only check for one resource operation under this exact MCP connection. It does "
+        "not read, mutate, delete, enumerate, or reveal a resource; the real call reauthorizes.",
+        PermissionCheckInput,
+        None,
+        read_only=True,
+    ),
     _tool(
         "profile_get",
         "Get connected Vibe Memory account",
@@ -552,6 +596,9 @@ TOOLS = [
 ]
 TOOL_MAP = {tool["name"]: tool for tool in TOOLS}
 MODEL_MAP = {
+    "auth_context": EmptyInput,
+    "capabilities_get": EmptyInput,
+    "permission_check": PermissionCheckInput,
     "profile_get": EmptyInput,
     "vault_list": EmptyInput,
     "vault_get": VaultNameInput,
@@ -598,8 +645,41 @@ def _text_result(message, data):
     }
 
 
-def _tool_error(message):
-    return {"content": [{"type": "text", "text": message}], "isError": True}
+def _tool_error(message, reason_code="TOOL_CALL_FAILED", *, retryable=False, required_action=None):
+    return {
+        "content": [{"type": "text", "text": message}],
+        "structuredContent": {
+            "error": structured_error(
+                request_id="",
+                context_ref=None,
+                operation="tool_call",
+                resource_type="service",
+                reason_code=reason_code,
+                retryable=retryable,
+                required_action=required_action,
+            )
+        },
+        "isError": True,
+    }
+
+
+def _auth_context(principal):
+    expires_at = principal.get("expires_at")
+    if isinstance(expires_at, (int, float)):
+        expires_at = datetime.fromtimestamp(expires_at, UTC).isoformat()
+    return build_auth_context(
+        connection_id="oauth:" + principal["client_id"],
+        connection_name=principal["client_name"],
+        transport="mcp",
+        credential_type="oauth",
+        audience=principal.get("resource", "vibe_memory_mcp"),
+        principal_id=principal["user_id"],
+        principal_name=principal["name"],
+        grants=principal.get("scopes", []),
+        vault_access="vault:read" in principal.get("scopes", set()),
+        vault_names=principal.get("vault_names", []),
+        expires_at=expires_at,
+    )
 
 
 def _jsonrpc_result(id_value, result):
@@ -750,14 +830,19 @@ class MCPHandler:
             }
 
     def available_tools(self, principal):
-        return [tool for tool in TOOLS if tool["_meta"]["vibememory/scope"] in principal["scopes"]]
+        return [
+            tool
+            for tool in TOOLS
+            if not tool["_meta"]["vibememory/scope"]
+            or tool["_meta"]["vibememory/scope"] in principal["scopes"]
+        ]
 
     def call_tool(self, name, arguments, principal, db):
         tool = TOOL_MAP.get(name)
         if not tool:
             return _tool_error(f"Unknown Vibe Memory tool: {name}")
         required_scope = tool["_meta"]["vibememory/scope"]
-        if required_scope not in principal["scopes"]:
+        if required_scope and required_scope not in principal["scopes"]:
             if name == "vault_get" and self.vault:
                 candidate = (arguments or {}).get("name", "")
                 if isinstance(candidate, str) and candidate:
@@ -767,7 +852,11 @@ class MCPHandler:
                         )
                     except Exception:
                         pass
-            return _tool_error(f"OAuth scope required: {required_scope}")
+            return _tool_error(
+                f"OAuth scope required: {required_scope}",
+                "PERMISSION_REQUIRED",
+                required_action="grant_required_scope",
+            )
         try:
             data = MODEL_MAP[name].model_validate(arguments or {})
         except ValidationError as error:
@@ -775,10 +864,28 @@ class MCPHandler:
                 f"{'.'.join(str(item) for item in issue['loc'])}: {issue['msg']}"
                 for issue in error.errors(include_url=False)
             )
-            return _tool_error("Invalid tool arguments. " + details)
+            return _tool_error("Invalid tool arguments. " + details, "INVALID_ARGUMENT")
 
         owner = principal["user_id"]
         try:
+            if name == "auth_context":
+                context = _auth_context(principal)
+                return _text_result(
+                    "Reported authorization facts for this MCP connection only.",
+                    {"auth_context": context},
+                )
+            if name == "capabilities_get":
+                contract = capability_contract(_auth_context(principal))
+                return _text_result(
+                    "Reported feature support and effective grants for this connection.",
+                    contract,
+                )
+            if name == "permission_check":
+                result = permission_check(_auth_context(principal), data.resource, data.operation)
+                return _text_result(
+                    f"Permission preflight is {result['authorization']['status']}.",
+                    result,
+                )
             if name == "profile_get":
                 profile = {
                     "id": owner,
@@ -788,7 +895,7 @@ class MCPHandler:
                 return _text_result(f"Connected as {principal['name']}.", {"profile": profile})
             if name == "vault_list":
                 if not self.vault:
-                    return _tool_error("Vault is unavailable.")
+                    return _tool_error("Vault is unavailable.", "UNSUPPORTED_CAPABILITY")
                 allowed = set(principal.get("vault_names", []))
                 items = [item for item in self.vault.list(owner) if item["name"] in allowed]
                 self.vault.audit_access(owner, principal["client_id"], "*", "list_success")
@@ -798,17 +905,24 @@ class MCPHandler:
                 )
             if name == "vault_get":
                 if not self.vault:
-                    return _tool_error("Vault is unavailable.")
+                    return _tool_error("Vault is unavailable.", "UNSUPPORTED_CAPABILITY")
                 if data.name not in set(principal.get("vault_names", [])):
                     self.vault.audit_access(
                         owner, principal["client_id"], data.name, "denied_grant"
                     )
-                    return _tool_error("Vault entry is not authorized for this MCP connection.")
+                    return _tool_error(
+                        "Vault entry is not authorized for this MCP connection.",
+                        "RESOURCE_GRANT_REQUIRED",
+                        required_action="grant_vault_entry",
+                    )
                 try:
                     secret = self.vault.get(owner, data.name)
                 except Exception:
                     self.vault.audit_access(owner, principal["client_id"], data.name, "not_found")
-                    return _tool_error("Vault entry is unavailable or no longer authorized.")
+                    return _tool_error(
+                        "Vault entry is unavailable or no longer authorized.",
+                        "RESOURCE_NOT_FOUND_OR_NOT_VISIBLE",
+                    )
                 self.vault.audit_access(owner, principal["client_id"], data.name, "success")
                 return _text_result(
                     "Retrieved the authorized Vault entry. Its value is present in MCP client "
@@ -972,13 +1086,12 @@ class MCPHandler:
                 record = self._ingest(db, owner, "memory", data, principal)
                 return _text_result(f"Stored memory {record['id']}.", {"record": record})
             if name == "memory_correct":
+
                 def execute_correction():
                     previous = db.get(owner, data.previous_id)
                     if previous["version"] != data.expected_previous_version:
                         raise Conflict()
-                    replacement = self._ingest(
-                        db, owner, "memory", data.replacement, principal
-                    )
+                    replacement = self._ingest(db, owner, "memory", data.replacement, principal)
                     relation = db.link(
                         owner,
                         RelationInput(
@@ -1074,8 +1187,12 @@ class MCPHandler:
             if name == "record_update":
                 vectors = self._vectors(data.keywords) if data.keywords is not None else None
                 record = db.update_record(
-                    owner, data.id, data, vectors,
-                    principal["agent_id"], principal["agent_name"],
+                    owner,
+                    data.id,
+                    data,
+                    vectors,
+                    principal["agent_id"],
+                    principal["agent_name"],
                 )
                 return _text_result(f"Updated record {record['id']}.", {"record": record})
             if name == "record_update_many":
@@ -1090,8 +1207,12 @@ class MCPHandler:
                             self._vectors(update.keywords) if update.keywords is not None else None
                         )
                         return db.update_record(
-                            owner, item.id, update, vectors,
-                            principal["agent_id"], principal["agent_name"],
+                            owner,
+                            item.id,
+                            update,
+                            vectors,
+                            principal["agent_id"],
+                            principal["agent_name"],
                         )
 
                     results.append(
@@ -1111,8 +1232,11 @@ class MCPHandler:
                 return _text_result(f"Processed {len(results)} record update items.", response)
             if name == "record_security_update":
                 record = db.update_security(
-                    owner, data.id, data,
-                    principal["agent_id"], principal["agent_name"],
+                    owner,
+                    data.id,
+                    data,
+                    principal["agent_id"],
+                    principal["agent_name"],
                 )
                 return _text_result(
                     f"Updated security state for record {record['id']}.",
@@ -1151,26 +1275,21 @@ class MCPHandler:
                 if current["diff_hash"] != data.approved_diff_hash.lower():
                     raise SnapshotConflict()
                 classifications = {
-                    item["client_request_id"]: item["classification"]
-                    for item in current["items"]
+                    item["client_request_id"]: item["classification"] for item in current["items"]
                 }
                 invalid_creates = [
                     client_id
                     for client_id in data.approved_create_client_ids
                     if classifications.get(client_id) != "create"
                 ]
-                retract_by_id = {
-                    item["id"]: item for item in current["retract_candidates"]
-                }
+                retract_by_id = {item["id"]: item for item in current["retract_candidates"]}
                 invalid_retracts = [
                     relation_id
                     for relation_id in data.approved_retract_ids
                     if relation_id not in retract_by_id
                 ]
                 if invalid_creates or invalid_retracts:
-                    raise ValueError(
-                        "approved IDs must refer to create or retract_candidate items"
-                    )
+                    raise ValueError("approved IDs must refer to create or retract_candidate items")
                 approved_creates = set(data.approved_create_client_ids)
                 created = []
                 for index, item in enumerate(data.items):
@@ -1252,20 +1371,37 @@ class MCPHandler:
                 verb = "Submitted" if created else "Found existing"
                 return _text_result(f"{verb} feature request {record['id']}.", {"request": record})
         except NotFound:
-            return _tool_error("Record or relationship not found in the connected account.")
+            return _tool_error(
+                "Record or relationship not found in the connected account.",
+                "RESOURCE_NOT_FOUND_OR_NOT_VISIBLE",
+            )
         except Conflict:
-            return _tool_error("The stored resource changed; fetch it again before retrying.")
+            return _tool_error(
+                "The stored resource changed; fetch it again before retrying.",
+                "VERSION_CONFLICT",
+                required_action="refetch_and_retry",
+            )
         except SnapshotConflict:
             return _tool_error(
-                "The graph snapshot changed; rerun graph_diff or restart context pagination."
+                "The graph snapshot changed; rerun graph_diff or restart context pagination.",
+                "SNAPSHOT_CONFLICT",
+                required_action="rerun_preflight",
             )
         except DuplicateRequestConflict:
-            return _tool_error("client_request_id was already used with different content.")
+            return _tool_error(
+                "client_request_id was already used with different content.",
+                "IDEMPOTENCY_CONFLICT",
+            )
         except ValueError as error:
-            return _tool_error(str(error))
+            return _tool_error(str(error), "INVALID_ARGUMENT")
         except Exception:
-            return _tool_error("Vibe Memory could not complete the tool call.")
-        return _tool_error("Tool handler is unavailable.")
+            return _tool_error(
+                "Vibe Memory could not complete the tool call.",
+                "TRANSIENT_SERVER_ERROR",
+                retryable=True,
+                required_action="retry_later",
+            )
+        return _tool_error("Tool handler is unavailable.", "UNSUPPORTED_CAPABILITY")
 
     def dispatch(self, message, principal, db):
         if not isinstance(message, dict) or message.get("jsonrpc") != "2.0":
@@ -1296,5 +1432,18 @@ class MCPHandler:
             if not isinstance(params, dict) or not isinstance(params.get("name"), str):
                 return _jsonrpc_error(id_value, -32602, "Invalid tool call parameters")
             result = self.call_tool(params["name"], params.get("arguments") or {}, principal, db)
+            context = _auth_context(principal)
+            result.setdefault("_meta", {})["vibememory/contextRef"] = context["context_ref"]
+            if result.get("isError"):
+                error = result.setdefault("structuredContent", {}).setdefault("error", {})
+                operation = params["name"][:100]
+                error.update(
+                    {
+                        "context": {"ref": context["context_ref"]},
+                        "operation": operation,
+                        "resource_type": operation.split("_", 1)[0],
+                        "request_id": principal.get("request_id", ""),
+                    }
+                )
             return _jsonrpc_result(id_value, result)
         return _jsonrpc_error(id_value, -32601, "Method not found")

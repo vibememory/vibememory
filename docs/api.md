@@ -15,6 +15,32 @@ agent to the separate `check-update` and explicit verified install flow. Generic
 REST/MCP clients are not version-gated. Distribution manifest paths remain
 reachable so an old CLI can update, and they never receive a service bearer token.
 
+### Current-connection authorization contract
+
+`GET /v1/auth-context` reports only the principal and credential authenticating
+that request: stable connection ID and display name, transport (`rest`, `cli`, or
+`web`), credential type, audience, current grants, validity, and UTC check time.
+It never returns a raw token, inspects another connection, or treats host/client
+policy and third-party permissions as Vibe Memory grants. Unverified external
+permissions are `not_evaluated`; project/namespace policy is explicitly reported
+as unsupported while account-owner isolation remains enforced.
+
+`GET /v1/capabilities` separates server feature support from this connection's
+effective action-level authorization. `POST /v1/permission-check` accepts a
+`resource` and `operation` and performs a metadata-only preflight: it does not
+read, write, delete, enumerate, or confirm the existence of a resource. Every
+real request reauthorizes. Read and write are independent, MCP-only tool exposure
+is reported separately, and MCP Vault reads remain `conditional` until the named
+entry has an explicit per-connection grant.
+
+Private REST responses include `X-Request-ID`; authenticated responses also
+include `Vibe-Memory-Context-Ref`. Error bodies retain the compatible `detail`
+field and add a versioned `error` object with safe context reference, operation,
+resource type, `reason_code`, `retryable`, `required_action`, and request ID.
+Owner non-enumeration is preserved with `RESOURCE_NOT_FOUND_OR_NOT_VISIBLE`.
+MCP exposes the same contract through `auth_context`, `capabilities_get`, and
+`permission_check`, and tool results carry the context reference in `_meta`.
+
 An account listed in `MEMORY_ADMIN_EMAILS` can approve one of its own API-key connections as a feature-request operator from the browser admin console. The permission defaults to false, is checked against the current administrator allowlist on every request, and can be revoked immediately. It grants only cross-workspace feature-request list/update access; it does not grant user-directory, memory, file, message, graph, or Vault access. Approval and revocation use the signed-in administrator session with same-origin protection.
 
 Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent keys. Discovery is published at `/.well-known/oauth-protected-resource/mcp` and `/.well-known/oauth-authorization-server`; dynamic public-client registration uses `/oauth/register`. Access tokens are accepted only by `/mcp`, are bound to that resource and their granted scopes, and can be revoked from the authenticated console. OAuth codes and tokens are stored only as SHA-256 hashes. A signed-in owner can add or revoke `memory:read`, `memory:write`, `feature:write`, and `vault:read` on an existing connection with `PATCH /auth/mcp-connections/{client_id}`. The current access and rotating refresh tokens observe the new maximum grant immediately, so reconnection is not required; pending authorization codes are invalidated and every change is audited in UTC. Removing `vault:read` also deletes that connection's individual Vault grants. Adding it still exposes no entry until the owner separately grants individual Vault names.
@@ -76,6 +102,9 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/admin/feature-requests` | Admin-browser or approved operator processing queue across workspaces |
 | PATCH | `/v1/admin/feature-requests/{owner_id}/{id}` | Admin-browser or approved operator status and public-result update |
 | GET | `/v1/admin/users` | Admin-browser safe user list and usage/connection counts; no auth secrets |
+| GET | `/v1/auth-context` | Current credential/principal facts only; no raw token or cross-connection lookup |
+| GET | `/v1/capabilities` | Versioned feature support and action-level authorization matrix for the current connection |
+| POST | `/v1/permission-check` | Metadata-only current-connection preflight for one resource and operation |
 | GET | `/auth/security` | Browser-only TOTP state and remaining recovery-code count |
 | POST | `/auth/totp/setup` | Password-confirmed, ten-minute authenticator setup |
 | POST | `/auth/totp/enable` | Verify the first TOTP code and return recovery codes once |

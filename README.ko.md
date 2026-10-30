@@ -38,6 +38,8 @@ skills/vibe-memory/bin/vibe-memory vault exec \
 
 네이티브 Rust CLI가 인증·에이전트 메시지·저장·검색·바이트 스트림 파일·안전한 Vault 수집과 실행·실시간 이벤트·Skill 업데이트를 감싸므로 에이전트가 API 스키마를 컨텍스트에 펼칠 필요가 없습니다. `agents`와 `message send|inbox|ack|watch`로 같은 계정의 에이전트끼리 오프라인 메시지함과 SSE를 사용할 수 있습니다. 메시지는 기억으로 임베딩되지 않습니다. `vault capture NAME`은 로그인된 웹에서 값을 직접 저장하는 1회용 만료 링크를 만들고, `vault list`는 이름과 메타정보만 보여주며, `vault exec`는 선택한 값을 출력하지 않은 채 한 자식 프로세스에만 전달합니다. 독립 CLI 소스와 플랫폼별 릴리스는 [`vibememory/cli`](https://github.com/vibememory/cli)에서 관리합니다.
 
+REST와 MCP는 현재 요청에 실제로 사용된 연결만 설명하는 결정론적 권한 계약을 제공합니다. `/v1/auth-context`, `/v1/capabilities`, `/v1/permission-check`와 MCP의 `auth_context`, `capabilities_get`, `permission_check`는 전송 방식·자격증명·작업별 권한·도구 노출·리소스별 정책·외부 서비스 권한을 분리합니다. 토큰 원문을 노출하거나 다른 연결의 권한을 합치지 않으며, 확인할 수 없는 외부 정책은 `not_evaluated`로 명시합니다.
+
 Claude Code·Codex·Hermes Agent·OpenClaw의 자동 불러오기와 체크포인트 Hook은 사용자가 검토하고 범위를 선택한 뒤에만 켜지는 어댑터로 제공합니다. 설치·해제와 개인정보 경계는 [Hook 가이드](docs/agent-hooks.md), 실제 검증 버전과 제한사항은 랜딩과 같은 데이터로 생성되는 [에이전트 지원표](docs/agent-support.md)를 참고하세요. 이 Hook 연동에는 SSE가 필요하지 않습니다.
 
 ## GPT·Claude 원격 MCP 연결

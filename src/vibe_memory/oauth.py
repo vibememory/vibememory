@@ -86,6 +86,12 @@ class OAuthStore:
                     created_at INTEGER NOT NULL,
                     expires_at INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS oauth_token_revocations (
+                    hash TEXT PRIMARY KEY,
+                    reason TEXT NOT NULL DEFAULT 'revoked',
+                    revoked_at INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS oauth_connections (
                     client_id TEXT NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -136,8 +142,20 @@ class OAuthStore:
     @staticmethod
     def _cleanup(db, now):
         db.execute("DELETE FROM oauth_codes WHERE expires_at <= ?", (now,))
+        expired = db.execute(
+            "SELECT hash FROM oauth_access_tokens WHERE expires_at <= ?", (now,)
+        ).fetchall()
+        for row in expired:
+            db.execute(
+                """INSERT INTO oauth_token_revocations(hash,reason,revoked_at,expires_at)
+                VALUES(?,?,?,?) ON CONFLICT(hash) DO UPDATE SET
+                reason=excluded.reason,revoked_at=excluded.revoked_at,
+                expires_at=excluded.expires_at""",
+                (row["hash"], "expired", now, now + ACCESS_TOKEN_SECONDS),
+            )
         db.execute("DELETE FROM oauth_access_tokens WHERE expires_at <= ?", (now,))
         db.execute("DELETE FROM oauth_refresh_tokens WHERE expires_at <= ?", (now,))
+        db.execute("DELETE FROM oauth_token_revocations WHERE expires_at <= ?", (now,))
         db.execute(
             """DELETE FROM oauth_connections
             WHERE NOT EXISTS (
@@ -401,36 +419,71 @@ class OAuthStore:
                 update_connection=False,
             )
 
-    def principal(self, token, resource):
+    def authenticate(self, token, resource):
+        """Return the current principal and a non-enumerating credential status."""
+
         now = utc_epoch_seconds()
+        digest = token_digest(token)
         with self.connection() as db:
-            self._cleanup(db, now)
             row = db.execute(
                 """SELECT a.client_id,a.user_id,a.scope,a.resource,a.expires_at,
                     c.client_name,u.name,u.email
                 FROM oauth_access_tokens a
                 JOIN oauth_clients c ON c.client_id=a.client_id
                 JOIN users u ON u.id=a.user_id
-                WHERE a.hash=? AND a.expires_at>? AND a.resource=?""",
-                (token_digest(token), now, resource),
+                WHERE a.hash=? AND a.resource=?""",
+                (digest, resource),
             ).fetchone()
             if not row:
-                return None
+                failure = db.execute(
+                    """SELECT reason FROM oauth_token_revocations
+                    WHERE hash=? AND expires_at>?""",
+                    (digest, now),
+                ).fetchone()
+                self._cleanup(db, now)
+                return None, failure["reason"] if failure else "invalid"
+            if row["expires_at"] <= now:
+                self._cleanup(db, now)
+                return None, "expired"
             db.execute(
                 """UPDATE oauth_connections SET last_used_at=?
                 WHERE client_id=? AND user_id=?""",
                 (now, row["client_id"], row["user_id"]),
             )
+            self._cleanup(db, now)
         result = dict(row)
         result["scopes"] = set(result.pop("scope").split())
-        return result
+        return result, "valid"
+
+    def principal(self, token, resource):
+        return self.authenticate(token, resource)[0]
+
+    @staticmethod
+    def _remember_revocations(db, rows, now):
+        for row in rows:
+            if row["expires_at"] > now:
+                db.execute(
+                    """INSERT INTO oauth_token_revocations(
+                    hash,reason,revoked_at,expires_at
+                    ) VALUES(?,?,?,?) ON CONFLICT(hash) DO UPDATE SET
+                    reason=excluded.reason,revoked_at=excluded.revoked_at,
+                    expires_at=excluded.expires_at""",
+                    (row["hash"], "revoked", now, row["expires_at"]),
+                )
 
     def revoke_token(self, token):
         digest = token_digest(token)
+        now = utc_epoch_seconds()
         with self.connection() as db:
+            rows = db.execute(
+                """SELECT hash,expires_at FROM oauth_access_tokens WHERE hash=?
+                UNION ALL SELECT hash,expires_at FROM oauth_refresh_tokens WHERE hash=?""",
+                (digest, digest),
+            ).fetchall()
+            self._remember_revocations(db, rows, now)
             db.execute("DELETE FROM oauth_access_tokens WHERE hash=?", (digest,))
             db.execute("DELETE FROM oauth_refresh_tokens WHERE hash=?", (digest,))
-            self._cleanup(db, utc_epoch_seconds())
+            self._cleanup(db, now)
 
     def list_connections(self, user_id):
         now = utc_epoch_seconds()
@@ -576,7 +629,16 @@ class OAuthStore:
         return list(names)
 
     def revoke_connection(self, user_id, client_id):
+        now = utc_epoch_seconds()
         with self.connection() as db:
+            rows = db.execute(
+                """SELECT hash,expires_at FROM oauth_access_tokens
+                WHERE user_id=? AND client_id=? UNION ALL
+                SELECT hash,expires_at FROM oauth_refresh_tokens
+                WHERE user_id=? AND client_id=?""",
+                (user_id, client_id, user_id, client_id),
+            ).fetchall()
+            self._remember_revocations(db, rows, now)
             db.execute(
                 "DELETE FROM oauth_vault_grants WHERE user_id=? AND client_id=?",
                 (user_id, client_id),

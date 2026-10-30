@@ -9,9 +9,12 @@ import time
 from contextlib import asynccontextmanager
 from typing import Literal
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 import anyio
 from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
     FileResponse,
     HTMLResponse,
@@ -48,6 +51,12 @@ from .batch import (
     project_record,
     project_relation,
     request_hash,
+)
+from .capabilities import (
+    build_auth_context,
+    capability_contract,
+    permission_check,
+    structured_error,
 )
 from .config import Settings
 from .corrections import annotate_corrections
@@ -133,9 +142,9 @@ class OAuthRegistration(BaseModel):
 
 class McpScopeUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    scopes: list[
-        Literal["memory:read", "memory:write", "feature:write", "vault:read"]
-    ] = Field(max_length=4)
+    scopes: list[Literal["memory:read", "memory:write", "feature:write", "vault:read"]] = Field(
+        max_length=4
+    )
 
     @field_validator("scopes")
     @classmethod
@@ -143,6 +152,12 @@ class McpScopeUpdate(BaseModel):
         if len(value) != len(set(value)):
             raise ValueError("scopes must be unique")
         return value
+
+
+class PermissionCheckInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    resource: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
+    operation: str = Field(min_length=1, max_length=80, pattern=r"^[a-z][a-z0-9_]*$")
 
 
 def create_app(settings=None, embedder=None):
@@ -185,10 +200,20 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.28.0",
+        version="0.29.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
+
+    @app.middleware("http")
+    async def request_contract(request: Request, call_next):
+        request.state.request_id = uuid4().hex
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        context_ref = getattr(request.state, "context_ref", "")
+        if context_ref:
+            response.headers["Vibe-Memory-Context-Ref"] = context_ref
+        return response
 
     @app.middleware("http")
     async def require_supported_cli(request: Request, call_next):
@@ -212,6 +237,7 @@ def create_app(settings=None, embedder=None):
         response = await call_next(request)
         response.headers["Vibe-Memory-Minimum-CLI"] = MINIMUM_CLI_VERSION
         return response
+
     auth = HTTPBearer(auto_error=False)
     mcp_handler = MCPHandler(embedder, vault)
     public_origin = settings.public_origin.rstrip("/")
@@ -233,7 +259,19 @@ def create_app(settings=None, embedder=None):
         request.state.agent_id = agent_id
         request.state.agent_name = name
         request.state.agent_transport = transport
+        request.state.context_ref = "connection:" + agent_id
         request.app.state.store.register_agent(user, agent_id, name, transport)
+        return user
+
+    def bind_browser_context(request, user):
+        request.state.agent_id = "browser:" + user["id"]
+        request.state.agent_name = user["name"]
+        request.state.agent_transport = "browser"
+        request.state.auth_kind = "browser-session"
+        request.state.vault_access = True
+        request.state.feature_request_operator = False
+        request.state.permissions = set(DEFAULT_AGENT_PERMISSIONS)
+        request.state.context_ref = "connection:browser:" + user["id"]
         return user
 
     def check_origin(request):
@@ -246,10 +284,44 @@ def create_app(settings=None, embedder=None):
             raise HTTPException(401, "로그인이 필요합니다.")
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             check_origin(request)
-        return user
+        return bind_browser_context(request, user)
 
     def is_admin(user):
         return user["email"].casefold() in settings.admin_emails
+
+    def rest_auth_context(request, user_id):
+        account = accounts.user(user_id)
+        raw_transport = getattr(request.state, "agent_transport", "api-key")
+        if raw_transport == "browser":
+            transport = "web"
+        elif CLI_USER_AGENT.match(request.headers.get("user-agent", "")):
+            transport = "cli"
+        else:
+            transport = "rest"
+        auth_kind = getattr(request.state, "auth_kind", "unknown")
+        credential_type = {
+            "agent-key": "api_key",
+            "legacy-key": "legacy_api_key",
+            "browser-session": "session",
+        }.get(auth_kind, "unknown")
+        grants = set(getattr(request.state, "permissions", set()))
+        if getattr(request.state, "vault_access", False):
+            grants.add("vault:read")
+        return build_auth_context(
+            connection_id=getattr(request.state, "agent_id", "unknown"),
+            connection_name=getattr(request.state, "agent_name", "Unknown connection"),
+            transport=transport,
+            credential_type=credential_type,
+            audience="web_console" if transport == "web" else "vibe_memory_api",
+            principal_id=user_id,
+            principal_name=account["name"] if account else str(user_id),
+            grants=grants,
+            vault_access=bool(getattr(request.state, "vault_access", False)),
+            feature_request_operator=bool(
+                getattr(request.state, "feature_request_operator", False)
+            ),
+            is_admin=bool(account and is_admin(account)),
+        )
 
     def admin_user(user=Depends(browser_user)):
         if not is_admin(user):
@@ -265,11 +337,7 @@ def create_app(settings=None, embedder=None):
             if not principal:
                 raise HTTPException(401, "에이전트 연결이 유효하지 않거나 해제되었습니다.")
             account = accounts.user(principal["user_id"])
-            if (
-                not account
-                or not is_admin(account)
-                or not principal["feature_request_operator"]
-            ):
+            if not account or not is_admin(account) or not principal["feature_request_operator"]:
                 raise HTTPException(403, "기능 요청 운영 권한이 필요합니다.")
             request.state.vault_access = principal["vault_access"]
             request.state.permissions = set(principal["permissions"])
@@ -310,9 +378,7 @@ def create_app(settings=None, embedder=None):
             if principal:
                 request.state.vault_access = principal["vault_access"]
                 request.state.permissions = set(principal["permissions"])
-                request.state.feature_request_operator = principal[
-                    "feature_request_operator"
-                ]
+                request.state.feature_request_operator = principal["feature_request_operator"]
                 request.state.auth_kind = "agent-key"
                 request.state.key_id = principal["key_id"]
                 return bind_agent(
@@ -499,8 +565,25 @@ def create_app(settings=None, embedder=None):
         authorization = request.headers.get("authorization", "")
         scheme, _, token = authorization.partition(" ")
         if scheme.casefold() != "bearer" or not token:
+            request.state.mcp_auth_status = "missing"
             return None
-        return oauth.principal(token, mcp_resource)
+        principal, status = oauth.authenticate(token, mcp_resource)
+        request.state.mcp_auth_status = status
+        return principal
+
+    def mcp_authentication_error(request):
+        status = getattr(request.state, "mcp_auth_status", "invalid")
+        reason_code = {
+            "expired": "AUTHENTICATION_EXPIRED",
+            "revoked": "AUTHENTICATION_REVOKED",
+            "missing": "AUTHENTICATION_REQUIRED",
+        }.get(status, "AUTHENTICATION_INVALID")
+        return {
+            "error": "unauthorized",
+            "error_description": "OAuth login is required",
+            "reason_code": reason_code,
+            "request_id": getattr(request.state, "request_id", ""),
+        }
 
     @app.middleware("http")
     async def no_private_cache(request: Request, call_next):
@@ -574,9 +657,7 @@ def create_app(settings=None, embedder=None):
 
     @app.post("/auth/device/approve", tags=["account"])
     def approve_device(data: DeviceApproval, user=Depends(browser_user)):
-        return accounts.approve_device(
-            user["id"], data.user_code, data.approved, data.vault_access
-        )
+        return accounts.approve_device(user["id"], data.user_code, data.approved, data.vault_access)
 
     @app.post("/auth/signup", tags=["account"])
     def signup(data: Signup, request: Request):
@@ -651,15 +732,11 @@ def create_app(settings=None, embedder=None):
 
     @app.post("/auth/api-keys", status_code=201, tags=["account"])
     def create_api_key(data: KeyInput, user=Depends(browser_user)):
-        return accounts.create_key(
-            user["id"], data.name, data.vault_access, data.permissions
-        )
+        return accounts.create_key(user["id"], data.name, data.vault_access, data.permissions)
 
     @app.patch("/auth/api-keys/{id}", tags=["account"])
     def update_api_key(id: str, data: KeyAccessUpdate, user=Depends(browser_user)):
-        return accounts.set_key_access(
-            user["id"], id, data.vault_access, data.permissions
-        )
+        return accounts.set_key_access(user["id"], id, data.vault_access, data.permissions)
 
     @app.get("/auth/api-keys/{id}/permission-events", tags=["account"])
     def api_key_permission_events(
@@ -978,12 +1055,13 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         principal = mcp_principal(request)
         if not principal:
             return JSONResponse(
-                {"error": "unauthorized", "error_description": "OAuth login is required"},
+                mcp_authentication_error(request),
                 status_code=401,
                 headers=mcp_challenge(),
             )
         principal["agent_id"] = "oauth:" + principal["client_id"]
         principal["agent_name"] = principal["client_name"]
+        principal["request_id"] = getattr(request.state, "request_id", "")
         try:
             principal["vault_names"] = oauth.vault_grants(
                 principal["user_id"], principal["client_id"]
@@ -1051,54 +1129,149 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             headers={"Allow": "POST, GET, OPTIONS", "Cache-Control": "no-store"},
         )
 
+    def error_response(request, status_code, detail, *, reason_code=None, headers=None):
+        route = request.scope.get("route")
+        operation = getattr(route, "name", None) or request.method.casefold()
+        parts = [part for part in request.url.path.split("/") if part]
+        resource = next(
+            (
+                part.replace("-", "_")
+                for part in parts
+                if part not in {"v1", "auth", "admin", "oauth"}
+                and not re.fullmatch(r"[0-9a-fA-F-]{16,}", part)
+            ),
+            "service",
+        )
+        if reason_code is None:
+            lowered = str(detail).casefold()
+            if status_code == 401:
+                reason_code = "AUTHENTICATION_INVALID_EXPIRED_OR_REVOKED"
+            elif status_code == 403 and ("scope" in lowered or "permission" in lowered):
+                reason_code = "PERMISSION_REQUIRED"
+            elif status_code == 403:
+                reason_code = "POLICY_DENIED"
+            elif status_code == 404:
+                reason_code = "RESOURCE_NOT_FOUND_OR_NOT_VISIBLE"
+            elif status_code == 409:
+                reason_code = "VERSION_CONFLICT"
+            elif status_code == 410:
+                reason_code = "RESOURCE_EXPIRED"
+            elif status_code == 422:
+                reason_code = "INVALID_ARGUMENT"
+            elif status_code == 426:
+                reason_code = "CLIENT_UPDATE_REQUIRED"
+            elif status_code == 429:
+                reason_code = "RATE_LIMITED"
+            elif status_code >= 500:
+                reason_code = "TRANSIENT_SERVER_ERROR"
+            else:
+                reason_code = "REQUEST_REJECTED"
+        action = {
+            "AUTHENTICATION_INVALID_EXPIRED_OR_REVOKED": "reauthenticate",
+            "PERMISSION_REQUIRED": "grant_required_permission",
+            "POLICY_DENIED": "use_an_authorized_connection",
+            "VERSION_CONFLICT": "refetch_and_retry",
+            "CLIENT_UPDATE_REQUIRED": "update_client",
+            "RATE_LIMITED": "retry_later",
+            "TRANSIENT_SERVER_ERROR": "retry_later",
+        }.get(reason_code)
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "detail": detail,
+                "error": structured_error(
+                    request_id=getattr(request.state, "request_id", ""),
+                    context_ref=getattr(request.state, "context_ref", None),
+                    operation=operation,
+                    resource_type=resource,
+                    reason_code=reason_code,
+                    retryable=status_code == 429 or status_code >= 500,
+                    required_action=action,
+                ),
+            },
+            headers=headers,
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_error(request, error):
+        return error_response(
+            request,
+            error.status_code,
+            error.detail,
+            headers=error.headers,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request, error):
+        details = [
+            {
+                "type": issue["type"],
+                "loc": list(issue["loc"]),
+                "msg": issue["msg"],
+            }
+            for issue in error.errors()
+        ]
+        return error_response(
+            request,
+            422,
+            jsonable_encoder(details),
+            reason_code="INVALID_ARGUMENT",
+        )
+
     @app.exception_handler(NotFound)
     async def missing(request, error):
-        return JSONResponse(status_code=404, content={"detail": "Record or relationship not found"})
+        return error_response(request, 404, "Record or relationship not found")
 
     @app.exception_handler(Conflict)
     async def conflict(request, error):
-        return JSONResponse(
-            status_code=409, content={"detail": "Version conflict; reload the current resource"}
-        )
+        return error_response(request, 409, "Version conflict; reload the current resource")
 
     @app.exception_handler(SnapshotConflict)
     async def snapshot_conflict(request, error):
-        return JSONResponse(
-            status_code=409,
-            content={"detail": "Snapshot changed; rerun the dry-run or restart pagination"},
+        return error_response(
+            request,
+            409,
+            "Snapshot changed; rerun the dry-run or restart pagination",
+            reason_code="SNAPSHOT_CONFLICT",
         )
 
     @app.exception_handler(FileInUse)
     async def file_in_use(request, error):
-        return JSONResponse(
-            status_code=409,
-            content={"detail": "File is referenced by a document; delete the document first"},
+        return error_response(
+            request,
+            409,
+            "File is referenced by a document; delete the document first",
+            reason_code="RESOURCE_IN_USE",
         )
 
     @app.exception_handler(SecurityPolicyError)
     async def security_policy_error(request, error):
-        return JSONResponse(status_code=422, content={"detail": str(error)})
+        return error_response(request, 422, str(error), reason_code="POLICY_VALIDATION_FAILED")
 
     @app.exception_handler(VaultNotFound)
     async def vault_missing(request, error):
-        return JSONResponse(status_code=404, content={"detail": "Vault entry not found"})
+        return error_response(request, 404, "Vault entry not found")
 
     @app.exception_handler(VaultIntegrityError)
     async def vault_integrity(request, error):
         log.error("Vault ciphertext authentication failed")
-        return JSONResponse(status_code=500, content={"detail": "Vault entry cannot be decrypted"})
+        return error_response(
+            request, 500, "Vault entry cannot be decrypted", reason_code="VAULT_INTEGRITY_ERROR"
+        )
 
     @app.exception_handler(VaultCaptureNotFound)
     async def vault_capture_missing(request, error):
-        return JSONResponse(status_code=404, content={"detail": "Vault capture link not found"})
+        return error_response(request, 404, "Vault capture link not found")
 
     @app.exception_handler(VaultCaptureExpired)
     async def vault_capture_expired(request, error):
-        return JSONResponse(status_code=410, content={"detail": "Vault capture link expired"})
+        return error_response(request, 410, "Vault capture link expired")
 
     @app.exception_handler(VaultCaptureConsumed)
     async def vault_capture_consumed(request, error):
-        return JSONResponse(status_code=409, content={"detail": "Vault capture link already used"})
+        return error_response(
+            request, 409, "Vault capture link already used", reason_code="RESOURCE_ALREADY_CONSUMED"
+        )
 
     @app.post("/v1/vault/captures", status_code=201, tags=["vault"])
     def create_vault_capture(
@@ -1310,6 +1483,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.get("/v1/me", tags=["service"])
     def me(request: Request, user=Depends(owner)):
+        auth_context = rest_auth_context(request, user)
         return {
             "user_id": user,
             "embedding_model": embedder.model_name,
@@ -1321,7 +1495,30 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "name": request.state.agent_name,
                 "transport": request.state.agent_transport,
             },
+            "auth_context_ref": auth_context["context_ref"],
         }
+
+    @app.get("/v1/auth-context", tags=["service"])
+    def auth_context(request: Request, user=Depends(owner)):
+        """Describe only the credential and principal authenticating this request."""
+
+        return rest_auth_context(request, user)
+
+    @app.get("/v1/capabilities", tags=["service"])
+    def capabilities(request: Request, user=Depends(owner)):
+        """Return feature support and current-connection authorization separately."""
+
+        return capability_contract(rest_auth_context(request, user))
+
+    @app.post("/v1/permission-check", tags=["service"])
+    def check_permission(
+        data: PermissionCheckInput,
+        request: Request,
+        user=Depends(owner),
+    ):
+        """Metadata-only preflight; every real operation still reauthorizes."""
+
+        return permission_check(rest_auth_context(request, user), data.resource, data.operation)
 
     @app.get("/v1/agents", tags=["agent messages"])
     def agents(request: Request, user=Depends(messages_reader), db=Depends(store)):
@@ -1447,9 +1644,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         )
 
     @app.get("/v1/agent-messages/{id}", tags=["agent messages"])
-    def agent_message(
-        id: str, request: Request, user=Depends(messages_reader), db=Depends(store)
-    ):
+    def agent_message(id: str, request: Request, user=Depends(messages_reader), db=Depends(store)):
         return db.get_message(user, request.state.agent_id, id)
 
     @app.post("/v1/agent-messages/{id}/ack", tags=["agent messages"])
@@ -1785,8 +1980,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     index,
                     item,
                     lambda entity=entity: ingest(
-                        db, user, "entity", entity,
-                        request.state.agent_id, request.state.agent_name,
+                        db,
+                        user,
+                        "entity",
+                        entity,
+                        request.state.agent_id,
+                        request.state.agent_name,
                     ),
                     "created",
                     data.return_mode,
@@ -1796,13 +1995,20 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.put("/v1/records/{id}/keywords", tags=["memories"])
     def update_keywords(
-        id: str, data: KeywordUpdate, request: Request,
-        user=Depends(memory_writer), db=Depends(store)
+        id: str,
+        data: KeywordUpdate,
+        request: Request,
+        user=Depends(memory_writer),
+        db=Depends(store),
     ):
         db.get(user, id)
         return db.update_keywords(
-            user, id, data.keywords, vectors_for(data.keywords),
-            request.state.agent_id, request.state.agent_name,
+            user,
+            id,
+            data.keywords,
+            vectors_for(data.keywords),
+            request.state.agent_id,
+            request.state.agent_name,
         )
 
     @app.patch("/v1/records/batch", tags=["memories"])
@@ -1821,8 +2027,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             def apply_update(item=item, update=update):
                 vectors = vectors_for(update.keywords) if update.keywords is not None else None
                 return db.update_record(
-                    user, item.id, update, vectors,
-                    request.state.agent_id, request.state.agent_name,
+                    user,
+                    item.id,
+                    update,
+                    vectors,
+                    request.state.agent_id,
+                    request.state.agent_name,
                 )
 
             results.append(
@@ -1842,8 +2052,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.patch("/v1/records/{id}", tags=["memories"])
     def update_record(
-        id: str, data: RecordUpdate, request: Request,
-        user=Depends(memory_writer), db=Depends(store)
+        id: str,
+        data: RecordUpdate,
+        request: Request,
+        user=Depends(memory_writer),
+        db=Depends(store),
     ):
         vectors = vectors_for(data.keywords) if data.keywords is not None else None
         return db.update_record(
@@ -1852,12 +2065,13 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.patch("/v1/records/{id}/security", tags=["memories"])
     def update_record_security(
-        id: str, data: RecordSecurityUpdate, request: Request,
-        user=Depends(memory_writer), db=Depends(store)
+        id: str,
+        data: RecordSecurityUpdate,
+        request: Request,
+        user=Depends(memory_writer),
+        db=Depends(store),
     ):
-        return db.update_security(
-            user, id, data, request.state.agent_id, request.state.agent_name
-        )
+        return db.update_security(user, id, data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/records/{id}/archive", tags=["memories"])
     def archive_record(
@@ -1959,8 +2173,12 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             if previous["version"] != data.expected_previous_version:
                 raise Conflict()
             replacement = ingest(
-                db, user, "memory", data.replacement,
-                request.state.agent_id, request.state.agent_name,
+                db,
+                user,
+                "memory",
+                data.replacement,
+                request.state.agent_id,
+                request.state.agent_name,
             )
             relation = db.link(
                 user,
@@ -2149,8 +2367,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         if current["diff_hash"] != data.approved_diff_hash.lower():
             raise SnapshotConflict()
         classifications = {
-            item["client_request_id"]: item["classification"]
-            for item in current["items"]
+            item["client_request_id"]: item["classification"] for item in current["items"]
         }
         invalid_creates = sorted(
             client_id

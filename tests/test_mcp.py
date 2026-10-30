@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import re
+import sqlite3
 from urllib.parse import parse_qs, urlsplit
 
 from conftest import SpyEmbedder
@@ -214,6 +215,9 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         tools = mcp(client, credentials["access_token"], 2, "tools/list")["result"]["tools"]
         names = {tool["name"] for tool in tools}
         assert {
+            "auth_context",
+            "capabilities_get",
+            "permission_check",
             "profile_get",
             "memory_search",
             "memory_create",
@@ -312,6 +316,38 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "record_id": created["id"],
             "kind": "memory",
         }
+        auth_result = mcp(
+            client,
+            credentials["access_token"],
+            21,
+            "tools/call",
+            {"name": "auth_context", "arguments": {}},
+        )["result"]
+        auth_context = auth_result["structuredContent"]["auth_context"]
+        assert auth_context["connection"]["id"] == "oauth:" + registration["client_id"]
+        assert auth_context["connection"]["transport"] == "mcp"
+        assert auth_context["connection"]["credential_type"] == "oauth"
+        assert auth_context["authorization"]["grants"] == [
+            "feature:write",
+            "memory:read",
+            "memory:write",
+        ]
+        assert auth_context["external_service_permissions"]["status"] == "not_evaluated"
+        assert auth_result["_meta"]["vibememory/contextRef"] == auth_context["context_ref"]
+
+        preflight = mcp(
+            client,
+            credentials["access_token"],
+            22,
+            "tools/call",
+            {
+                "name": "permission_check",
+                "arguments": {"resource": "vault", "operation": "read"},
+            },
+        )["result"]["structuredContent"]
+        assert preflight["authorization"]["status"] == "denied"
+        assert preflight["authorization"]["required_grant"] == "vault:read"
+        assert preflight["resource_existence_checked"] is False
 
         external = mcp(
             client,
@@ -550,14 +586,13 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         )
         assert revoked.status_code == 204
         assert client.get("/v1/agents").json()["items"] == []
-        assert (
-            client.post(
-                "/mcp",
-                headers={"Authorization": "Bearer " + credentials["access_token"]},
-                json={"jsonrpc": "2.0", "id": 6, "method": "ping"},
-            ).status_code
-            == 401
+        revoked_call = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer " + credentials["access_token"]},
+            json={"jsonrpc": "2.0", "id": 6, "method": "ping"},
         )
+        assert revoked_call.status_code == 401
+        assert revoked_call.json()["reason_code"] == "AUTHENTICATION_REVOKED"
 
 
 def test_mcp_read_only_scope_and_oauth_validation(settings):
@@ -593,6 +628,20 @@ def test_mcp_read_only_scope_and_oauth_validation(settings):
         )
         assert denied["result"]["isError"] is True
         assert "memory:write" in denied["result"]["content"][0]["text"]
+        denied_error = denied["result"]["structuredContent"]["error"]
+        assert denied_error["reason_code"] == "PERMISSION_REQUIRED"
+        assert denied_error["context"]["ref"] == "connection:oauth:" + registration["client_id"]
+        assert denied_error["operation"] == "memory_create"
+
+        with sqlite3.connect(settings.data_dir / "auth.sqlite") as db:
+            db.execute("UPDATE oauth_access_tokens SET expires_at=0")
+        expired = client.post(
+            "/mcp",
+            headers={"Authorization": "Bearer " + credentials["access_token"]},
+            json={"jsonrpc": "2.0", "id": 3, "method": "ping"},
+        )
+        assert expired.status_code == 401
+        assert expired.json()["reason_code"] == "AUTHENTICATION_EXPIRED"
 
         refreshed = client.post(
             "/oauth/token",
@@ -628,9 +677,7 @@ def test_existing_mcp_connection_permissions_can_be_added_and_revoked(settings):
         credentials = token(client, registration, code, verifier)
         path = f"/auth/mcp-connections/{registration['client_id']}"
 
-        initial_tools = mcp(
-            client, credentials["access_token"], 1, "tools/list"
-        )["result"]["tools"]
+        initial_tools = mcp(client, credentials["access_token"], 1, "tools/list")["result"]["tools"]
         assert "memory_create" not in {tool["name"] for tool in initial_tools}
 
         expanded = client.patch(
@@ -651,32 +698,29 @@ def test_existing_mcp_connection_permissions_can_be_added_and_revoked(settings):
             "feature:write",
             "vault:read",
         }
-        expanded_tools = mcp(
-            client, credentials["access_token"], 2, "tools/list"
-        )["result"]["tools"]
+        expanded_tools = mcp(client, credentials["access_token"], 2, "tools/list")["result"][
+            "tools"
+        ]
         expanded_names = {tool["name"] for tool in expanded_tools}
-        assert {"memory_create", "feature_request_submit", "vault_get"}.issubset(
-            expanded_names
-        )
+        assert {"memory_create", "feature_request_submit", "vault_get"}.issubset(expanded_names)
 
-        assert client.put(
-            "/v1/vault/SCOPED_TOKEN",
-            json={"value": "secret", "description": "permission test"},
-        ).status_code == 200
+        assert (
+            client.put(
+                "/v1/vault/SCOPED_TOKEN",
+                json={"value": "secret", "description": "permission test"},
+            ).status_code
+            == 200
+        )
         grants_path = path + "/vault"
         assert client.put(grants_path, json={"names": ["SCOPED_TOKEN"]}).status_code == 200
 
         reduced = client.patch(path, json={"scopes": ["memory:read"]})
         assert reduced.status_code == 200, reduced.text
-        reduced_tools = mcp(
-            client, credentials["access_token"], 3, "tools/list"
-        )["result"]["tools"]
+        reduced_tools = mcp(client, credentials["access_token"], 3, "tools/list")["result"]["tools"]
         reduced_names = {tool["name"] for tool in reduced_tools}
         assert "memory_search" in reduced_names
         assert not {"memory_create", "feature_request_submit", "vault_get"} & reduced_names
-        assert all(
-            not item["granted"] for item in client.get(grants_path).json()["items"]
-        )
+        assert all(not item["granted"] for item in client.get(grants_path).json()["items"])
 
         history = client.get(path + "/permission-events?limit=5")
         assert history.status_code == 200, history.text

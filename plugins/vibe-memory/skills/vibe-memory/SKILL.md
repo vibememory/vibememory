@@ -19,6 +19,12 @@ For non-trivial work where previous context may matter:
 
 An unavailable memory service must not block independent work. Never claim a read or write succeeded unless the tool returned success.
 
+## Authorization context
+
+Authorization belongs to the exact current MCP connection. Never combine its scopes with another token, browser session, agent, or remembered grant; read never implies write. MCP transport, host/client policy, Vibe Memory permission, per-resource policy, tool exposure, and third-party service permission are separate layers. If a layer cannot be verified, report it as unknown or not evaluated.
+
+Use `auth_context` when connection identity or grant matters, `capabilities_get` to separate supported features from effective authorization, and metadata-only `permission_check` before a consequential operation. These tools inspect only the current principal and do not enumerate or access resources. Vault reads additionally require an explicit grant for the named entry. The real operation always reauthorizes, so honor structured `reason_code`, `retryable`, `required_action`, `request_id`, and `context` fields after revocation, expiry, policy, scope, resource-grant, version, or transient failures. Never put credentials or secret values in diagnostics.
+
 ## What to preserve
 
 Store concise durable context: accepted decisions, stable preferences, corrections, constraints, verified outcomes, project state, blockers, next actions, and compact handoffs. For a session checkpoint, use keywords containing the stable project name, `session checkpoint`, and the current topic.

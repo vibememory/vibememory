@@ -120,7 +120,10 @@ def test_vault_restart_rotation_deletion_and_tamper_detection(settings):
             )
         response = client.get("/v1/vault/API_TOKEN", headers=allowed)
         assert response.status_code == 500
-        assert response.json() == {"detail": "Vault entry cannot be decrypted"}
+        payload = response.json()
+        assert payload["detail"] == "Vault entry cannot be decrypted"
+        assert payload["error"]["reason_code"] == "VAULT_INTEGRITY_ERROR"
+        assert payload["error"]["request_id"] == response.headers["x-request-id"]
 
         client.headers["Origin"] = ORIGIN
         assert client.post(

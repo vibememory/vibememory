@@ -90,6 +90,13 @@ skills/vibe-memory/bin/vibe-memory vault exec \
 
 The native Rust CLI wraps browser authentication, persistent agent messages, storage, search, deterministic context bundles, graph audit/diff/apply, byte-stream files, secure Vault capture and execution, live events, and explicit Skill updates so agents do not need to load API schemas into context. Data, login, message, and Vault commands contact only the configured service origin; `network-plan` is local, `check-update` is a non-mutating credential-free distribution check, and `sync` is the separate checksum-verified update action. Browser login reports the permissions actually granted, supports 60–900 second approval links, and can elevate an existing connection to Vault access. Relationship claims can preserve version/hash/UTC-pinned evidence references, explicit coverage and an agent-authored input-manifest record without storing prompts or reasoning. `vault capture NAME` returns an expiring signed-in browser link that writes directly to Vault, `vault list` exposes names and metadata only, and `vault exec` injects selected values into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
+REST and MCP expose a deterministic current-connection authorization contract.
+`/v1/auth-context`, `/v1/capabilities`, and `/v1/permission-check` (plus MCP
+`auth_context`, `capabilities_get`, and `permission_check`) keep transport,
+credential, action-level grants, tool exposure, per-resource policy, and external
+service permissions separate. They never expose tokens or merge permissions from
+another connection; unknown external policy remains explicitly unevaluated.
+
 Claude Code users can also install the repository's marketplace plugin after the
 native CLI is available on `PATH`:
 

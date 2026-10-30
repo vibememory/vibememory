@@ -84,12 +84,12 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261029-chatgpt-work-plugin-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261029-chatgpt-work-plugin-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261029-chatgpt-work-plugin-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261029-chatgpt-work-plugin-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261029-chatgpt-work-plugin-1" defer="">' in console
-        assert '<script src="/assets/admin.js?v=20261029-chatgpt-work-plugin-1" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-admin-users-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-admin-users-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-admin-users-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-admin-users-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-admin-users-1" defer="">' in console
+        assert '<script src="/assets/admin.js?v=20261030-admin-users-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")

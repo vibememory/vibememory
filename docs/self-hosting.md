@@ -32,6 +32,11 @@ For ChatGPT or Claude remote MCP connections, expose the deployment through HTTP
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `MEMORY_PUBLIC_ORIGIN` | `http://localhost:8080` in Compose | Exact browser origin for cookie security and CSRF checks |
+| `MEMORY_HSTS_ENABLED` | `true` | Send HSTS when the request is HTTPS or arrived through an HTTPS proxy |
+| `MEMORY_HSTS_MAX_AGE` | `31536000` | HSTS max-age in seconds (`0` explicitly clears it) |
+| `MEMORY_HSTS_INCLUDE_SUBDOMAINS` | `true` | Add `includeSubDomains`; make every subdomain HTTPS-ready first |
+| `MEMORY_HSTS_PRELOAD` | `false` | Add the preload token; only enable after meeting browser preload requirements |
+| `MEMORY_PUBLIC_OPENAPI_INCLUDE_ADMIN` | `false` | Include browser-admin routes in OpenAPI; routes still require an admin session either way |
 | `MEMORY_BIND_ADDRESS` | `127.0.0.1` | Compose host-side bind address |
 | `MEMORY_HTTP_PORT` | `8080` | Compose host-side port |
 | `MEMORY_SIGNUP_ENABLED` | `true` | Accept new accounts; set `false` after creating your accounts if desired |
@@ -78,6 +83,19 @@ docker compose -f compose.yaml -f compose.https.yaml up -d --build
 ```
 
 The included Caddy configuration terminates TLS and forwards requests to `app:8080`. The application's direct port remains bound to localhost by default. No Cloudflare login is involved.
+
+Run the local posture check after every deployment. It makes direct HTTP/DNS
+queries and sends no data to a scanner service:
+
+```sh
+python scripts/check_deployment.py https://memory.example.com
+```
+
+It verifies HSTS, the `www` (or `--www-host`) response/redirect, absence of
+admin routes from public OpenAPI, and DMARC when `dig` is installed. Configure
+the secondary hostname before enabling `includeSubDomains`. For mail DNS, start
+with a monitored `v=DMARC1; p=none` policy, then raise it to `quarantine` or
+`reject` after validating legitimate senders.
 
 ## Source installation
 

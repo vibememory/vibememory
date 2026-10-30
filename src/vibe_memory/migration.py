@@ -181,6 +181,9 @@ def read_legacy(data_dir: Path):
                     "file_id": node.get("file_id") or None,
                     "version": node.get("version") or 1,
                     "archived_at": node.get("archived_at") or None,
+                    "creator_agent_id": node.get("creator_agent_id") or "unknown",
+                    "creator_agent_name": node.get("creator_agent_name") or "Unknown agent",
+                    "writer_history": json.loads(node.get("writer_history") or "[]"),
                 }
             )
         for row in _kuzu_rows(connection, "MATCH (n:Item {kind: 'keyword'}) RETURN n"):
@@ -222,6 +225,7 @@ def read_legacy(data_dir: Path):
                     "input_manifest_id": relation.get("input_manifest_id") or None,
                     "extraction_method": relation.get("extraction_method") or "",
                     "extraction_version": relation.get("extraction_version") or "",
+                    "correction_scope": relation.get("correction_scope") or "unknown",
                 }
             )
         for row in _kuzu_rows(connection, "MATCH (e:ChangeEvent) RETURN e ORDER BY e.id"):
@@ -331,8 +335,9 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                 connection.execute(
                     """INSERT INTO records(
                         owner,id,kind,subtype,title,content,source,tags,created_at,
-                        keywords,metadata,file_id,version,archived_at
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        keywords,metadata,file_id,version,archived_at,
+                        creator_agent_id,creator_agent_name,writer_history
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
                         record["owner"],
                         record["id"],
@@ -348,6 +353,9 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                         record["file_id"],
                         record["version"],
                         record["archived_at"],
+                        record.get("creator_agent_id") or "unknown",
+                        record.get("creator_agent_name") or "Unknown agent",
+                        Jsonb(record.get("writer_history") or []),
                     ),
                 )
             for keyword in payload["keyword_embeddings"]:
@@ -373,8 +381,9 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                     """INSERT INTO relations(
                         owner,id,source_id,target_id,relation,reason,status,version,created_at,history,
                         creator_agent_id,creator_agent_name,confidence,evidence_record_ids,evidence,
-                        evidence_coverage,input_manifest_id,extraction_method,extraction_version
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        evidence_coverage,input_manifest_id,extraction_method,extraction_version,
+                        correction_scope
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
                         relation["owner"],
                         relation["id"],
@@ -395,6 +404,7 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                         relation.get("input_manifest_id") or None,
                         relation.get("extraction_method") or "",
                         relation.get("extraction_version") or "",
+                        relation.get("correction_scope") or "unknown",
                     ),
                 )
             for operation in payload["batch_operations"]:

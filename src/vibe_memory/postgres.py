@@ -229,6 +229,9 @@ class PostgresDatabase:
             content_hash TEXT NOT NULL DEFAULT '',
             security_warnings TEXT[] NOT NULL DEFAULT '{{}}',
             security_history JSONB NOT NULL DEFAULT '[]',
+            creator_agent_id TEXT NOT NULL DEFAULT 'unknown',
+            creator_agent_name TEXT NOT NULL DEFAULT 'Unknown agent',
+            writer_history JSONB NOT NULL DEFAULT '[]',
             PRIMARY KEY(owner, id)
         );
         ALTER TABLE records ADD COLUMN IF NOT EXISTS trust_level TEXT NOT NULL
@@ -239,6 +242,9 @@ class PostgresDatabase:
         ALTER TABLE records ADD COLUMN IF NOT EXISTS content_hash TEXT NOT NULL DEFAULT '';
         ALTER TABLE records ADD COLUMN IF NOT EXISTS security_warnings TEXT[] NOT NULL DEFAULT '{{}}';
         ALTER TABLE records ADD COLUMN IF NOT EXISTS security_history JSONB NOT NULL DEFAULT '[]';
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS creator_agent_id TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS creator_agent_name TEXT NOT NULL DEFAULT 'Unknown agent';
+        ALTER TABLE records ADD COLUMN IF NOT EXISTS writer_history JSONB NOT NULL DEFAULT '[]';
         CREATE INDEX IF NOT EXISTS records_owner_kind_created_idx
             ON records(owner, kind, created_at DESC, id);
         CREATE INDEX IF NOT EXISTS records_owner_active_idx
@@ -283,6 +289,8 @@ class PostgresDatabase:
             input_manifest_id TEXT,
             extraction_method TEXT NOT NULL DEFAULT '',
             extraction_version TEXT NOT NULL DEFAULT '',
+            correction_scope TEXT NOT NULL DEFAULT 'unknown'
+                CHECK (correction_scope IN ('unknown','full','partial')),
             PRIMARY KEY(owner, id),
             FOREIGN KEY(owner, source_id) REFERENCES records(owner, id) ON DELETE CASCADE,
             FOREIGN KEY(owner, target_id) REFERENCES records(owner, id) ON DELETE CASCADE,
@@ -298,6 +306,7 @@ class PostgresDatabase:
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence_record_ids TEXT[] NOT NULL DEFAULT '{{}}';
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence JSONB NOT NULL DEFAULT '[]'::jsonb;
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS evidence_coverage TEXT NOT NULL DEFAULT 'unknown';
+        ALTER TABLE relations ADD COLUMN IF NOT EXISTS correction_scope TEXT NOT NULL DEFAULT 'unknown';
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS input_manifest_id TEXT;
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_method TEXT NOT NULL DEFAULT '';
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_version TEXT NOT NULL DEFAULT '';

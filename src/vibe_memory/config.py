@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     embedding_cache: Path = Path(".data/models")
     public_origin: str = "http://127.0.0.1:8080"
+    hsts_enabled: bool = True
+    hsts_max_age: int = Field(default=31536000, ge=0, le=63072000)
+    hsts_include_subdomains: bool = True
+    hsts_preload: bool = False
+    public_openapi_include_admin: bool = False
     signup_enabled: bool = True
     # Browser-session administrators. Agent/API keys never receive administrator access.
     admin_emails: set[str] = Field(default_factory=set)

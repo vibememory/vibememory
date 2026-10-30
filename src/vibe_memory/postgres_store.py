@@ -128,6 +128,9 @@ class PostgresStore:
         )
         result["security_warnings"] = result.get("security_warnings") or []
         result["security_history"] = result.get("security_history") or []
+        result["creator_agent_id"] = result.get("creator_agent_id") or "unknown"
+        result["creator_agent_name"] = result.get("creator_agent_name") or "Unknown agent"
+        result["writer_history"] = result.get("writer_history") or []
         result.pop("owner", None)
         result.pop("archived_at", None)
         return result
@@ -146,6 +149,7 @@ class PostgresStore:
         result["input_manifest_id"] = result.get("input_manifest_id") or ""
         result["extraction_method"] = result.get("extraction_method") or ""
         result["extraction_version"] = result.get("extraction_version") or ""
+        result["correction_scope"] = result.get("correction_scope") or "unknown"
         result["claim_group"] = f"{result['source_id']}:{result['target_id']}"
         return result
 
@@ -373,6 +377,8 @@ class PostgresStore:
         file_id="",
         record_id=None,
         security=None,
+        creator_agent_id="unknown",
+        creator_agent_name="Unknown agent",
     ):
         if len(vectors) != len(keywords):
             raise ValueError("Embedding count does not match keyword count")
@@ -385,8 +391,8 @@ class PostgresStore:
                 """INSERT INTO records(
                     owner,id,kind,subtype,title,content,source,tags,created_at,keywords,metadata,file_id,
                     trust_level,security_state,provenance,content_hash,security_warnings,
-                    security_history
-                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    security_history,creator_agent_id,creator_agent_name,writer_history
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     owner,
                     record_id,
@@ -406,6 +412,15 @@ class PostgresStore:
                     security["content_hash"],
                     security["security_warnings"],
                     Jsonb(security["security_history"]),
+                    creator_agent_id,
+                    creator_agent_name,
+                    Jsonb([{
+                        "at": created,
+                        "version": 1,
+                        "operation": "created",
+                        "writer_agent_id": creator_agent_id,
+                        "writer_agent_name": creator_agent_name,
+                    }]),
                 ),
             )
             self._index(owner, record_id, keywords, vectors)
@@ -435,7 +450,9 @@ class PostgresStore:
                     (owner, record_id, keyword, keyword.casefold(), vector_literal(vector)),
                 )
 
-    def update_keywords(self, owner, id, keywords, vectors):
+    def update_keywords(
+        self, owner, id, keywords, vectors, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+    ):
         if len(vectors) != len(keywords):
             raise ValueError("Embedding count does not match keyword count")
         with self.transaction(), self._connection() as connection:
@@ -443,9 +460,13 @@ class PostgresStore:
             connection.execute(
                 "DELETE FROM keyword_embeddings WHERE owner=%s AND record_id=%s", (owner, id)
             )
+            history = [*record.get("writer_history", []), {
+                "at": now(), "version": record["version"] + 1, "operation": "keywords_updated",
+                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
+            }]
             connection.execute(
-                "UPDATE records SET keywords=%s,version=version+1 WHERE owner=%s AND id=%s",
-                (keywords, owner, id),
+                "UPDATE records SET keywords=%s,writer_history=%s,version=version+1 WHERE owner=%s AND id=%s",
+                (keywords, Jsonb(history), owner, id),
             )
             self._index(owner, id, keywords, vectors)
             self._event(
@@ -455,7 +476,9 @@ class PostgresStore:
             )
         return self.get(owner, id)
 
-    def update_record(self, owner, id, data, vectors=None):
+    def update_record(
+        self, owner, id, data, vectors=None, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+    ):
         if data.keywords is not None and (vectors is None or len(vectors) != len(data.keywords)):
             raise ValueError("Embedding count does not match keyword count")
         with self.transaction(), self._connection() as connection:
@@ -477,6 +500,10 @@ class PostgresStore:
                 or security["trust_level"] != previous["trust_level"]
                 or security["security_warnings"] != previous["security_warnings"]
             )
+            writer_history = [*previous.get("writer_history", []), {
+                "at": now(), "version": row["version"] + 1, "operation": "record_updated",
+                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
+            }]
             connection.execute(
                 """UPDATE records SET
                 content=COALESCE(%s,content),title=COALESCE(%s,title),
@@ -484,7 +511,7 @@ class PostgresStore:
                 tags=COALESCE(%s::text[],tags),keywords=COALESCE(%s::text[],keywords),
                 metadata=COALESCE(%s,metadata),trust_level=%s,security_state=%s,
                 provenance=%s,content_hash=%s,security_warnings=%s,
-                security_history=%s,version=version+1
+                security_history=%s,writer_history=%s,version=version+1
                 WHERE owner=%s AND id=%s""",
                 (
                     data.content,
@@ -500,6 +527,7 @@ class PostgresStore:
                     security["content_hash"],
                     security["security_warnings"],
                     Jsonb(security["security_history"]),
+                    Jsonb(writer_history),
                     owner,
                     id,
                 ),
@@ -535,7 +563,9 @@ class PostgresStore:
                 )
         return self.get(owner, id)
 
-    def update_security(self, owner, id, data):
+    def update_security(
+        self, owner, id, data, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+    ):
         with self.transaction(), self._connection() as connection:
             row = connection.execute(
                 """SELECT * FROM records WHERE owner=%s AND id=%s
@@ -548,9 +578,14 @@ class PostgresStore:
                 raise Conflict()
             record = self._record(row)
             security = apply_security_update(record, data)
+            writer_history = [*record.get("writer_history", []), {
+                "at": now(), "version": row["version"] + 1, "operation": "security_updated",
+                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
+            }]
             connection.execute(
                 """UPDATE records SET trust_level=%s,security_state=%s,provenance=%s,
-                content_hash=%s,security_warnings=%s,security_history=%s,version=version+1
+                content_hash=%s,security_warnings=%s,security_history=%s,
+                writer_history=%s,version=version+1
                 WHERE owner=%s AND id=%s""",
                 (
                     security["trust_level"],
@@ -559,6 +594,7 @@ class PostgresStore:
                     security["content_hash"],
                     security["security_warnings"],
                     Jsonb(security["security_history"]),
+                    Jsonb(writer_history),
                     owner,
                     id,
                 ),
@@ -872,7 +908,8 @@ class PostgresStore:
                     owner,id,source_id,target_id,relation,reason,status,version,created_at,history,
                     creator_agent_id,creator_agent_name,confidence,evidence_record_ids,
                     evidence,evidence_coverage,input_manifest_id,extraction_method,extraction_version
-                ) VALUES(%s,%s,%s,%s,%s,%s,'active',1,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    ,correction_scope
+                ) VALUES(%s,%s,%s,%s,%s,%s,'active',1,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     owner,
                     id,
@@ -891,6 +928,7 @@ class PostgresStore:
                     data.input_manifest_id,
                     data.extraction_method,
                     data.extraction_version,
+                    data.correction_scope,
                 ),
             )
             self._event(
@@ -914,6 +952,7 @@ class PostgresStore:
                 e.version,e.created_at,e.history,e.creator_agent_id,e.creator_agent_name,
                 e.confidence,e.evidence_record_ids,e.evidence,e.evidence_coverage,
                 e.input_manifest_id,e.extraction_method,e.extraction_version
+                ,e.correction_scope
                 FROM relations e
                 JOIN records a ON a.owner=e.owner AND a.id=e.source_id
                 JOIN records b ON b.owner=e.owner AND b.id=e.target_id
@@ -1023,6 +1062,7 @@ class PostgresStore:
                 e.version,e.created_at,e.history,e.creator_agent_id,e.creator_agent_name,
                 e.confidence,e.evidence_record_ids,e.evidence,e.evidence_coverage,
                 e.input_manifest_id,e.extraction_method,e.extraction_version
+                ,e.correction_scope
                 FROM relations e
                 JOIN records a ON a.owner=e.owner AND a.id=e.source_id
                 JOIN records b ON b.owner=e.owner AND b.id=e.target_id
@@ -1046,6 +1086,31 @@ class PostgresStore:
             edge["parallel_claim_ids"] = [
                 claim_id for claim_id in groups[edge["claim_group"]] if claim_id != edge["id"]
             ]
+        return result
+
+    def correction_relations(self, owner, record_ids):
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT e.*,a.archived_at AS source_archived_at,
+                b.archived_at AS target_archived_at
+                FROM relations e
+                JOIN records a ON a.owner=e.owner AND a.id=e.source_id
+                JOIN records b ON b.owner=e.owner AND b.id=e.target_id
+                WHERE e.owner=%s AND e.relation IN ('SUPERSEDES','CORRECTS')
+                AND (e.source_id=ANY(%s) OR e.target_id=ANY(%s))
+                ORDER BY e.created_at,e.id""",
+                (owner, list(record_ids), list(record_ids)),
+            ).fetchall()
+        result = []
+        for row in rows:
+            edge = self._relation(row)
+            edge["source_lifecycle"] = (
+                "archived" if edge.pop("source_archived_at", None) else "active"
+            )
+            edge["target_lifecycle"] = (
+                "archived" if edge.pop("target_archived_at", None) else "active"
+            )
+            result.append(edge)
         return result
 
     def update_link(self, owner, id, data):
@@ -1411,6 +1476,8 @@ class PostgresStore:
                     + octet_length(COALESCE(file_id,'')) + octet_length(provenance::text)
                     + octet_length(to_jsonb(security_warnings)::text)
                     + octet_length(security_history::text)
+                    + octet_length(creator_agent_id) + octet_length(creator_agent_name)
+                    + octet_length(writer_history::text)
                 ),0)::bigint AS memory_bytes,
                 COALESCE(sum(CASE
                     WHEN kind='file' AND metadata->>'size_bytes' ~ '^[0-9]+$'
@@ -1430,6 +1497,7 @@ class PostgresStore:
                     + octet_length(evidence::text) + octet_length(evidence_coverage)
                     + octet_length(COALESCE(input_manifest_id,''))
                     + octet_length(extraction_method) + octet_length(extraction_version)
+                    + octet_length(correction_scope)
                 ),0)::bigint AS bytes FROM relations WHERE owner=%s""",
                 (owner,),
             ).fetchone()["bytes"]

@@ -160,6 +160,7 @@ class RelationInput(Input):
     input_manifest_id: str | None = Field(default=None, min_length=1, max_length=100)
     extraction_method: str = Field(default="", max_length=100)
     extraction_version: str = Field(default="", max_length=100)
+    correction_scope: Literal["unknown", "full", "partial"] = "unknown"
 
     @field_validator("relation")
     @classmethod
@@ -195,6 +196,16 @@ class RelationInput(Input):
             dict.fromkeys([*self.evidence_record_ids, *referenced])
         )
         return self
+
+
+class MemoryCorrectionInput(Input):
+    previous_id: str = Field(min_length=1, max_length=100)
+    expected_previous_version: int = Field(ge=1)
+    replacement: MemoryInput
+    relation: Literal["SUPERSEDES", "CORRECTS"] = "SUPERSEDES"
+    correction_scope: Literal["full", "partial"] = "full"
+    reason: str = Field(min_length=1, max_length=1000)
+    client_request_id: str = Field(min_length=1, max_length=100)
 
 
 class EntityCreateManyItem(EntityInput):
@@ -372,6 +383,7 @@ class SearchInput(KeywordsInput):
     created_before: datetime | None = None
     include_untrusted: bool = False
     include_quarantined: bool = False
+    exclude_resolved_superseded: bool = False
 
     @field_validator("must_keywords", "exclude_keywords")
     @classmethod

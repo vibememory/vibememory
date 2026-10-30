@@ -48,6 +48,7 @@ from .batch import (
     request_hash,
 )
 from .config import Settings
+from .corrections import annotate_corrections
 from .embeddings import Embedder
 from .files import FileStorage
 from .mcp import LATEST_PROTOCOL, MCPHandler
@@ -60,6 +61,7 @@ from .models import (
     FeatureRequestInput,
     FeatureRequestUpdate,
     KeywordUpdate,
+    MemoryCorrectionInput,
     MemoryInput,
     RecordArchive,
     RecordMerge,
@@ -155,7 +157,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.16.0",
+        version="0.17.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -390,6 +392,16 @@ def create_app(settings=None, embedder=None):
         if request.url.path.startswith(("/v1/", "/auth/", "/oauth/", "/mcp", "/.well-known/")):
             response.headers["Cache-Control"] = "no-store"
             response.headers["X-Content-Type-Options"] = "nosniff"
+        forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+        if settings.hsts_enabled and (
+            request.url.scheme == "https" or forwarded_proto.casefold() == "https"
+        ):
+            value = f"max-age={settings.hsts_max_age}"
+            if settings.hsts_include_subdomains:
+                value += "; includeSubDomains"
+            if settings.hsts_preload:
+                value += "; preload"
+            response.headers["Strict-Transport-Security"] = value
         return response
 
     def signed_in(user):
@@ -1230,7 +1242,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             log.exception("Keyword embedding failed")
             raise HTTPException(503, "Keyword embedding unavailable; nothing was saved") from None
 
-    def ingest(db, user, kind, data):
+    def ingest(db, user, kind, data, agent_id="unknown", agent_name="Unknown agent"):
         if kind == "document" and data.file_id:
             if db.get(user, data.file_id)["kind"] != "file":
                 raise NotFound()
@@ -1255,6 +1267,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             vectors,
             file_id=(data.file_id or "") if kind == "document" else "",
             security=security,
+            creator_agent_id=agent_id,
+            creator_agent_name=agent_name,
         )
 
     def batch_item(
@@ -1416,7 +1430,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             ),
         }
 
-    @app.get("/v1/admin/users", tags=["admin"])
+    @app.get(
+        "/v1/admin/users",
+        tags=["admin"],
+        include_in_schema=settings.public_openapi_include_admin,
+    )
     def admin_users(
         q: str = Query(default="", max_length=200),
         limit: int = Query(default=50, ge=1, le=100),
@@ -1450,7 +1468,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             "offset": offset,
         }
 
-    @app.get("/v1/admin/feature-requests", tags=["admin"])
+    @app.get(
+        "/v1/admin/feature-requests",
+        tags=["admin"],
+        include_in_schema=settings.public_openapi_include_admin,
+    )
     def admin_feature_requests(
         status: Literal["received", "reviewing", "planned", "in_progress", "completed", "declined"]
         | None = None,
@@ -1482,7 +1504,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             "offset": offset,
         }
 
-    @app.patch("/v1/admin/feature-requests/{owner_id}/{id}", tags=["admin"])
+    @app.patch(
+        "/v1/admin/feature-requests/{owner_id}/{id}",
+        tags=["admin"],
+        include_in_schema=settings.public_openapi_include_admin,
+    )
     def admin_update_feature_request(
         owner_id: str,
         id: str,
@@ -1494,16 +1520,16 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return admin_request_record({**record, "owner_id": owner_id})
 
     @app.post("/v1/memories", status_code=201, tags=["memories"])
-    def add_memory(data: MemoryInput, user=Depends(owner), db=Depends(store)):
-        return ingest(db, user, "memory", data)
+    def add_memory(data: MemoryInput, request: Request, user=Depends(owner), db=Depends(store)):
+        return ingest(db, user, "memory", data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/documents", status_code=201, tags=["documents"])
-    def add_document(data: DocumentInput, user=Depends(owner), db=Depends(store)):
-        return ingest(db, user, "document", data)
+    def add_document(data: DocumentInput, request: Request, user=Depends(owner), db=Depends(store)):
+        return ingest(db, user, "document", data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/entities", status_code=201, tags=["entities"])
-    def add_entity(data: EntityInput, user=Depends(owner), db=Depends(store)):
-        return ingest(db, user, "entity", data)
+    def add_entity(data: EntityInput, request: Request, user=Depends(owner), db=Depends(store)):
+        return ingest(db, user, "entity", data, request.state.agent_id, request.state.agent_name)
 
     @app.post("/v1/entities/batch", tags=["entities"])
     def add_entities_batch(
@@ -1523,7 +1549,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     "entity_create",
                     index,
                     item,
-                    lambda entity=entity: ingest(db, user, "entity", entity),
+                    lambda entity=entity: ingest(
+                        db, user, "entity", entity,
+                        request.state.agent_id, request.state.agent_name,
+                    ),
                     "created",
                     data.return_mode,
                 )
@@ -1531,9 +1560,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return batch_response(results)
 
     @app.put("/v1/records/{id}/keywords", tags=["memories"])
-    def update_keywords(id: str, data: KeywordUpdate, user=Depends(owner), db=Depends(store)):
+    def update_keywords(
+        id: str, data: KeywordUpdate, request: Request,
+        user=Depends(owner), db=Depends(store)
+    ):
         db.get(user, id)
-        return db.update_keywords(user, id, data.keywords, vectors_for(data.keywords))
+        return db.update_keywords(
+            user, id, data.keywords, vectors_for(data.keywords),
+            request.state.agent_id, request.state.agent_name,
+        )
 
     @app.patch("/v1/records/batch", tags=["memories"])
     def update_records_batch(
@@ -1550,7 +1585,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
             def apply_update(item=item, update=update):
                 vectors = vectors_for(update.keywords) if update.keywords is not None else None
-                return db.update_record(user, item.id, update, vectors)
+                return db.update_record(
+                    user, item.id, update, vectors,
+                    request.state.agent_id, request.state.agent_name,
+                )
 
             results.append(
                 batch_item(
@@ -1568,15 +1606,23 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return batch_response(results)
 
     @app.patch("/v1/records/{id}", tags=["memories"])
-    def update_record(id: str, data: RecordUpdate, user=Depends(owner), db=Depends(store)):
+    def update_record(
+        id: str, data: RecordUpdate, request: Request,
+        user=Depends(owner), db=Depends(store)
+    ):
         vectors = vectors_for(data.keywords) if data.keywords is not None else None
-        return db.update_record(user, id, data, vectors)
+        return db.update_record(
+            user, id, data, vectors, request.state.agent_id, request.state.agent_name
+        )
 
     @app.patch("/v1/records/{id}/security", tags=["memories"])
     def update_record_security(
-        id: str, data: RecordSecurityUpdate, user=Depends(owner), db=Depends(store)
+        id: str, data: RecordSecurityUpdate, request: Request,
+        user=Depends(owner), db=Depends(store)
     ):
-        return db.update_security(user, id, data)
+        return db.update_security(
+            user, id, data, request.state.agent_id, request.state.agent_name
+        )
 
     @app.post("/v1/records/{id}/archive", tags=["memories"])
     def archive_record(id: str, data: RecordArchive, user=Depends(owner), db=Depends(store)):
@@ -1640,6 +1686,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             include_untrusted,
             include_quarantined,
         )
+        annotate_corrections(db, user, items)
         return {
             "items": [
                 project_record(
@@ -1657,7 +1704,49 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.get("/v1/records/{id}", tags=["memories"])
     def get_record(id: str, user=Depends(owner), db=Depends(store)):
-        return db.get(user, id)
+        record = db.get(user, id)
+        annotate_corrections(db, user, [record])
+        return record
+
+    @app.post("/v1/corrections/memories", status_code=201, tags=["memories"])
+    def correct_memory(
+        data: MemoryCorrectionInput,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        def execute():
+            previous = db.get(user, data.previous_id)
+            if previous["version"] != data.expected_previous_version:
+                raise Conflict()
+            replacement = ingest(
+                db, user, "memory", data.replacement,
+                request.state.agent_id, request.state.agent_name,
+            )
+            relation = db.link(
+                user,
+                RelationInput(
+                    source_id=replacement["id"],
+                    target_id=data.previous_id,
+                    relation=data.relation,
+                    reason=data.reason,
+                    correction_scope=data.correction_scope,
+                ),
+                request.state.agent_id,
+                request.state.agent_name,
+            )
+            annotate_corrections(db, user, [replacement, previous])
+            return {"record": replacement, "relation": relation, "previous": previous}
+
+        result, _created = db.run_idempotent(
+            user,
+            request.state.agent_id,
+            "memory_correct",
+            data.client_request_id,
+            request_hash(data),
+            execute,
+        )
+        return result
 
     @app.delete("/v1/records/{id}", status_code=204, tags=["memories"])
     def delete_record(id: str, user=Depends(owner), db=Depends(store)):

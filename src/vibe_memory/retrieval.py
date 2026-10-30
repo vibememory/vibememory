@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from .corrections import annotate_corrections
 from .embeddings import cosine
 from .security import record_is_retrievable
 
@@ -32,7 +33,13 @@ def retrieve(store, embedder, owner, request):
         [] if request.match_mode == "exact" else embedder.keywords(request.keywords)
     )
     if hasattr(store, "vector_search"):
-        return store.vector_search(owner, request, query_vectors, embedder.model_name)
+        result = store.vector_search(owner, request, query_vectors, embedder.model_name)
+        annotate_corrections(store, owner, result["hits"])
+        if request.exclude_resolved_superseded:
+            result["hits"] = [
+                hit for hit in result["hits"] if hit["correction_status"] != "superseded"
+            ]
+        return result
     candidates = store.candidates(owner, request.scope, request.tags)
     records = {}
     for keyword, parent in candidates:
@@ -83,6 +90,9 @@ def retrieve(store, embedder, owner, request):
             }
         )
     hits.sort(key=lambda hit: (-hit["score"], hit["id"]))
+    annotate_corrections(store, owner, hits)
+    if request.exclude_resolved_superseded:
+        hits = [hit for hit in hits if hit["correction_status"] != "superseded"]
     # Fetching source records, graph expansion, evidence selection and RAG belong to the agent.
     return {
         "mode": "keyword_vector",

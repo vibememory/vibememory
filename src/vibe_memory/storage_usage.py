@@ -20,6 +20,9 @@ RECORD_FIELDS = (
     "provenance",
     "security_warnings",
     "security_history",
+    "creator_agent_id",
+    "creator_agent_name",
+    "writer_history",
 )
 
 RELATION_FIELDS = (
@@ -38,6 +41,7 @@ RELATION_FIELDS = (
     "input_manifest_id",
     "extraction_method",
     "extraction_version",
+    "correction_scope",
 )
 
 JSON_FIELDS = {"metadata", "provenance", "security_history", "history", "evidence"}

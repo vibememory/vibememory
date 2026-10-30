@@ -119,6 +119,12 @@ class Store:
             self.query("ALTER TABLE Item ADD security_warnings STRING[] DEFAULT []")
         if "security_history" not in columns:
             self.query("ALTER TABLE Item ADD security_history STRING DEFAULT '[]'")
+        if "creator_agent_id" not in columns:
+            self.query("ALTER TABLE Item ADD creator_agent_id STRING DEFAULT 'unknown'")
+        if "creator_agent_name" not in columns:
+            self.query("ALTER TABLE Item ADD creator_agent_name STRING DEFAULT 'Unknown agent'")
+        if "writer_history" not in columns:
+            self.query("ALTER TABLE Item ADD writer_history STRING DEFAULT '[]'")
         feature_columns = {
             row["name"] for row in self.query("CALL table_info('FeatureRequest') RETURN *")
         }
@@ -136,6 +142,7 @@ class Store:
             "input_manifest_id": ("STRING", "''"),
             "extraction_method": ("STRING", "''"),
             "extraction_version": ("STRING", "''"),
+            "correction_scope": ("STRING", "'unknown'"),
         }
         for name, (kind, default) in relation_defaults.items():
             if name not in relation_columns:
@@ -488,6 +495,9 @@ class Store:
         )
         result["security_warnings"] = result.get("security_warnings") or []
         result["security_history"] = json.loads(result.get("security_history") or "[]")
+        result["creator_agent_id"] = result.get("creator_agent_id") or "unknown"
+        result["creator_agent_name"] = result.get("creator_agent_name") or "Unknown agent"
+        result["writer_history"] = json.loads(result.get("writer_history") or "[]")
         return result
 
     def _node(self, item):
@@ -500,6 +510,9 @@ class Store:
         item.setdefault("content_hash", "")
         item.setdefault("security_warnings", [])
         item.setdefault("security_history", "[]")
+        item.setdefault("creator_agent_id", "unknown")
+        item.setdefault("creator_agent_name", "Unknown agent")
+        item.setdefault("writer_history", "[]")
         self.query(
             """CREATE (:Item {id: $id, owner: $owner, kind: $kind, subtype: $subtype,
             title: $title, content: $content, source: $source, tags: $tags, created_at: $created_at,
@@ -508,7 +521,8 @@ class Store:
             version: $version, archived_at: $archived_at, trust_level: $trust_level,
             security_state: $security_state, provenance: $provenance,
             content_hash: $content_hash, security_warnings: $security_warnings,
-            security_history: $security_history})""",
+            security_history: $security_history, creator_agent_id: $creator_agent_id,
+            creator_agent_name: $creator_agent_name, writer_history: $writer_history})""",
             item,
         )
 
@@ -527,6 +541,8 @@ class Store:
         file_id="",
         record_id=None,
         security=None,
+        creator_agent_id="unknown",
+        creator_agent_name="Unknown agent",
     ):
         id, created = record_id or uid(), now()
         security = security or prepare_record_security(title, content, None)
@@ -557,6 +573,13 @@ class Store:
                     content_hash=security["content_hash"],
                     security_warnings=security["security_warnings"],
                     security_history=json.dumps(security["security_history"], ensure_ascii=False),
+                    creator_agent_id=creator_agent_id,
+                    creator_agent_name=creator_agent_name,
+                    writer_history=json.dumps([{
+                        "at": created, "version": 1, "operation": "created",
+                        "writer_agent_id": creator_agent_id,
+                        "writer_agent_name": creator_agent_name,
+                    }], ensure_ascii=False),
                 )
             )
             self._index(owner, id, keywords, vectors)
@@ -602,7 +625,9 @@ class Store:
             )
             self._link(owner, id, parent_id, "KEYWORD_OF", "agent-supplied keyword")
 
-    def update_keywords(self, owner, id, keywords, vectors):
+    def update_keywords(
+        self, owner, id, keywords, vectors, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+    ):
         with self.transaction():
             record = self.get(owner, id)
             self.query(
@@ -611,8 +636,14 @@ class Store:
             )
             self.query(
                 """MATCH (n:Item {owner: $owner, id: $id})
-                SET n.keywords = $keywords, n.version = n.version + 1""",
-                {"owner": owner, "id": id, "keywords": keywords},
+                SET n.keywords = $keywords, n.writer_history = $writer_history,
+                n.version = n.version + 1""",
+                {"owner": owner, "id": id, "keywords": keywords,
+                 "writer_history": json.dumps([*record.get("writer_history", []), {
+                    "at": now(), "version": record["version"] + 1,
+                    "operation": "keywords_updated", "writer_agent_id": writer_agent_id,
+                    "writer_agent_name": writer_agent_name,
+                 }], ensure_ascii=False)},
             )
             self._index(owner, id, keywords, vectors)
             self._event(
@@ -627,7 +658,9 @@ class Store:
             )
             return self.get(owner, id)
 
-    def update_record(self, owner, id, data, vectors=None):
+    def update_record(
+        self, owner, id, data, vectors=None, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+    ):
         with self.transaction():
             record = self.get(owner, id)
             if record["version"] != data.expected_version:
@@ -659,6 +692,10 @@ class Store:
                     ),
                 }
             )
+            fields["writer_history"] = json.dumps([*record.get("writer_history", []), {
+                "at": now(), "version": record["version"] + 1, "operation": "record_updated",
+                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
+            }], ensure_ascii=False)
             assignments = [f"n.{key} = ${key}" for key in fields]
             assignments.append("n.version = n.version + 1")
             self.query(
@@ -698,7 +735,9 @@ class Store:
                 )
             return self.get(owner, id)
 
-    def update_security(self, owner, id, data):
+    def update_security(
+        self, owner, id, data, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+    ):
         with self.transaction():
             record = self.get(owner, id)
             if record["version"] != data.expected_version:
@@ -709,7 +748,8 @@ class Store:
                 n.trust_level = $trust_level, n.security_state = $security_state,
                 n.provenance = $provenance, n.content_hash = $content_hash,
                 n.security_warnings = $security_warnings,
-                n.security_history = $security_history, n.version = n.version + 1""",
+                n.security_history = $security_history, n.writer_history = $writer_history,
+                n.version = n.version + 1""",
                 {
                     "owner": owner,
                     "id": id,
@@ -721,6 +761,11 @@ class Store:
                     "security_history": json.dumps(
                         security["security_history"], ensure_ascii=False
                     ),
+                    "writer_history": json.dumps([*record.get("writer_history", []), {
+                        "at": now(), "version": record["version"] + 1,
+                        "operation": "security_updated", "writer_agent_id": writer_agent_id,
+                        "writer_agent_name": writer_agent_name,
+                    }], ensure_ascii=False),
                 },
             )
             self._event(
@@ -1007,6 +1052,7 @@ class Store:
         input_manifest_id="",
         extraction_method="",
         extraction_version="",
+        correction_scope="unknown",
     ):
         id, created = uid(), now()
         history = json.dumps(
@@ -1031,7 +1077,8 @@ class Store:
                 evidence: $evidence, evidence_coverage: $evidence_coverage,
                 input_manifest_id: $input_manifest_id,
                 extraction_method: $extraction_method,
-                extraction_version: $extraction_version}]->(b)""",
+                extraction_version: $extraction_version,
+                correction_scope: $correction_scope}]->(b)""",
             dict(
                 owner=owner,
                 source=source,
@@ -1050,6 +1097,7 @@ class Store:
                 input_manifest_id=input_manifest_id or "",
                 extraction_method=extraction_method,
                 extraction_version=extraction_version,
+                correction_scope=correction_scope,
             ),
         )
         return id
@@ -1096,6 +1144,7 @@ class Store:
                 data.input_manifest_id or "",
                 data.extraction_method,
                 data.extraction_version,
+                data.correction_scope,
             )
             self._event(
                 owner,
@@ -1196,6 +1245,7 @@ class Store:
                 r.input_manifest_id AS input_manifest_id,
                 r.extraction_method AS extraction_method,
                 r.extraction_version AS extraction_version
+                ,r.correction_scope AS correction_scope
             ORDER BY r.created_at,r.id""",
             {"owner": owner, "status": status},
         )
@@ -1210,6 +1260,7 @@ class Store:
             row["input_manifest_id"] = row.get("input_manifest_id") or ""
             row["extraction_method"] = row.get("extraction_method") or ""
             row["extraction_version"] = row.get("extraction_version") or ""
+            row["correction_scope"] = row.get("correction_scope") or "unknown"
             if creator_agent_id and row["creator_agent_id"] != creator_agent_id:
                 continue
             if min_confidence is not None and (
@@ -1236,6 +1287,46 @@ class Store:
         if limit is None:
             return self._attach_evidence_status(owner, result)
         return self._attach_evidence_status(owner, result[cursor : cursor + limit])
+
+    def correction_relations(self, owner, record_ids):
+        rows = self.query(
+            """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
+            WHERE r.relation IN ['SUPERSEDES','CORRECTS']
+            AND (a.id IN $ids OR b.id IN $ids)
+            RETURN a.id AS source_id,b.id AS target_id,a.archived_at AS source_archived_at,
+                b.archived_at AS target_archived_at,r.id AS id,r.relation AS relation,
+                r.reason AS reason,r.status AS status,r.version AS version,
+                r.created_at AS created_at,r.history AS history,
+                r.creator_agent_id AS creator_agent_id,r.creator_agent_name AS creator_agent_name,
+                r.confidence AS confidence,r.evidence_record_ids AS evidence_record_ids,
+                r.evidence AS evidence,r.evidence_coverage AS evidence_coverage,
+                r.input_manifest_id AS input_manifest_id,
+                r.extraction_method AS extraction_method,
+                r.extraction_version AS extraction_version,
+                r.correction_scope AS correction_scope
+            ORDER BY r.created_at,r.id""",
+            {"owner": owner, "ids": list(record_ids)},
+        )
+        result = []
+        for row in rows:
+            row["history"] = json.loads(row.get("history") or "[]")
+            row["creator_agent_id"] = row.get("creator_agent_id") or "unknown"
+            row["creator_agent_name"] = row.get("creator_agent_name") or "Unknown agent"
+            row["evidence_record_ids"] = row.get("evidence_record_ids") or []
+            row["evidence"] = json.loads(row.get("evidence") or "[]")
+            row["evidence_coverage"] = row.get("evidence_coverage") or "unknown"
+            row["input_manifest_id"] = row.get("input_manifest_id") or ""
+            row["extraction_method"] = row.get("extraction_method") or ""
+            row["extraction_version"] = row.get("extraction_version") or ""
+            row["correction_scope"] = row.get("correction_scope") or "unknown"
+            row["source_lifecycle"] = (
+                "archived" if row.pop("source_archived_at", "") else "active"
+            )
+            row["target_lifecycle"] = (
+                "archived" if row.pop("target_archived_at", "") else "active"
+            )
+            result.append(row)
+        return result
 
     def update_link(self, owner, id, data):
         with self.transaction():

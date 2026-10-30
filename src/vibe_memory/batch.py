@@ -22,6 +22,13 @@ RECORD_FIELDS = {
     "content_hash",
     "security_warnings",
     "security_history",
+    "creator_agent_id",
+    "creator_agent_name",
+    "writer_history",
+    "supersedes_ids",
+    "superseded_by_ids",
+    "correction_claims",
+    "correction_status",
 }
 
 RELATION_FIELDS = {
@@ -44,6 +51,7 @@ RELATION_FIELDS = {
     "input_manifest_id",
     "extraction_method",
     "extraction_version",
+    "correction_scope",
     "claim_group",
     "parallel_claim_ids",
 }
@@ -103,6 +111,7 @@ def project_record(
         result.pop("content", None)
     if not include_history:
         result.pop("security_history", None)
+        result.pop("writer_history", None)
     return result
 
 

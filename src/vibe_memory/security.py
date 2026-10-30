@@ -20,6 +20,7 @@ HIGH_RISK_WARNINGS = {
     "control_characters",
     "unicode_format_controls",
     "instruction_override_pattern",
+    "external_transmission_pattern",
     "hidden_markup",
     "scanner_reported_suspicious",
     "scanner_reported_malicious",
@@ -28,12 +29,17 @@ HIGH_RISK_WARNINGS = {
 _INSTRUCTION_OVERRIDE = re.compile(
     r"(?:ignore|disregard|override|forget)\s+(?:all\s+|any\s+|the\s+)?"
     r"(?:(?:previous|prior)\s+)?(?:(?:system|developer|user)\s+)?"
-    r"(?:instructions?|messages?|prompts?)",
+    r"(?:instructions?|messages?|prompts?|scope|rules?|polic(?:y|ies))",
     re.IGNORECASE,
 )
 _HIDDEN_MARKUP = re.compile(
     r"<!--|display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\D|$)",
     re.IGNORECASE,
+)
+_EXTERNAL_TRANSMISSION = re.compile(
+    r"(?:post|send|upload|exfiltrat(?:e|ion)|transmit)\b.{0,120}"
+    r"(?:https?://|webhook|remote|external|environment|credentials?|secrets?|tokens?)",
+    re.IGNORECASE | re.DOTALL,
 )
 
 
@@ -74,6 +80,8 @@ def deterministic_warnings(title: str, content: str, provenance: dict) -> list[s
         warnings.append("unicode_format_controls")
     if _INSTRUCTION_OVERRIDE.search(text):
         warnings.append("instruction_override_pattern")
+    if _EXTERNAL_TRANSMISSION.search(text):
+        warnings.append("external_transmission_pattern")
     if _HIDDEN_MARKUP.search(text):
         warnings.append("hidden_markup")
     if provenance["source_type"] in {"external", "imported"} and not (

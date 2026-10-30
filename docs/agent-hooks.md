@@ -28,6 +28,57 @@ Claude Code's standard `hooks/hooks.json` layout. A missing CLI, expired login,
 network failure, timeout, or malformed hook input is logged and exits successfully;
 it never blocks a response, tool call, or compaction.
 
+If marketplace plugins are unavailable, merge the following entries into the
+existing top-level `hooks` object in `~/.claude/settings.json` (user scope) or
+`.claude/settings.json` (project scope). Do not replace unrelated existing hook
+arrays; append the Vibe Memory groups for the same event instead.
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory",
+            "args": ["hook", "session-start"],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory",
+            "args": ["hook", "stop"],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory",
+            "args": ["hook", "pre-compact"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The plugin and manual configuration are alternatives. Do not enable both, or
+each lifecycle event will run twice.
+
 ### Hook behavior
 
 - `vibe-memory hook session-start` extracts only the repository directory name,

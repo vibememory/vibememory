@@ -157,7 +157,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.17.0",
+        version="0.18.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -252,6 +252,14 @@ def create_app(settings=None, embedder=None):
 
     def vault_user(request: Request, user=Depends(owner)):
         if not request.state.vault_access:
+            name = request.path_params.get("name")
+            if name and request.method == "GET":
+                vault.audit_access(
+                    user,
+                    request.state.agent_id,
+                    name,
+                    "denied_scope",
+                )
             raise HTTPException(403, "This agent connection does not have Vault access")
         return user
 
@@ -961,14 +969,53 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         limit: int = Query(default=100, ge=1, le=500),
         user=Depends(browser_user),
     ):
-        return {"items": vault.access_audit(user["id"], limit), "limit": limit}
+        keys = {
+            "key:" + item["id"]: (item["name"], "agent-key")
+            for item in accounts.list_keys(user["id"])
+        }
+        connections = {
+            item["client_id"]: (item["client_name"], "mcp")
+            for item in oauth.list_connections(user["id"])
+        }
+        browser_id = "browser:" + user["id"]
+        items = []
+        for item in vault.access_audit(user["id"], limit):
+            client_id = item["client_id"]
+            if client_id in connections:
+                client_name, client_type = connections[client_id]
+            elif client_id in keys:
+                client_name, client_type = keys[client_id]
+            elif client_id == browser_id:
+                client_name, client_type = user["name"], "browser"
+            elif client_id.startswith("legacy:"):
+                client_name, client_type = "Legacy API agent", "legacy-key"
+            else:
+                client_name, client_type = "연결 해제된 에이전트", "unknown"
+            items.append(
+                {
+                    **item,
+                    "client_name": client_name,
+                    "client_type": client_type,
+                }
+            )
+        return {"items": items, "limit": limit}
 
     @app.get("/v1/vault/{name}", tags=["vault"])
     def read_vault_entry(
+        request: Request,
         name: str = Path(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$"),
         user=Depends(vault_user),
     ):
-        return vault.get(user, name)
+        try:
+            result = vault.get(user, name)
+        except VaultNotFound:
+            vault.audit_access(user, request.state.agent_id, name, "not_found")
+            raise
+        except VaultIntegrityError:
+            vault.audit_access(user, request.state.agent_id, name, "integrity_error")
+            raise
+        vault.audit_access(user, request.state.agent_id, name, "success")
+        return result
 
     @app.put("/v1/vault/{name}", tags=["vault"])
     def set_vault_entry(

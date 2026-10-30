@@ -86,12 +86,12 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/i18n.js?v=20261030-v017-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261030-v017-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261030-v017-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v017-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261030-v017-1" defer="">' in console
-        assert '<script src="/assets/admin.js?v=20261030-v017-1" defer="">' in admin
+        assert '<script src="/assets/i18n.js?v=20261030-v018-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261030-v018-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261030-v018-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261030-v018-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261030-v018-1" defer="">' in console
+        assert '<script src="/assets/admin.js?v=20261030-v018-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -130,6 +130,10 @@ def test_console_and_api_share_one_origin(settings):
         assert "vm-language" in locale_script.text
         assert "_next/static" in landing
         assert "vault exec" in console_script.text
+        assert "/v1/vault-access-audit?limit=100" in console_script.text
+        assert "비밀키 조회 내역" in console_script.text
+        assert "비밀값 원문은 감사 기록에 저장되지 않습니다." in console_script.text
+        assert ".vault-audit-status.success" in console_styles.text
         assert "relationship-graph-stage" in console_script.text
         assert "window.cytoscape" in console_script.text
         assert "name:records.length > 1 ? 'cose' : 'grid'" in console_script.text

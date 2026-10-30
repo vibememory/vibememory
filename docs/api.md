@@ -64,7 +64,7 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET/PUT | `/auth/mcp-connections/{client_id}/vault` | Browser-only list/replace of per-entry Vault grants for one owned MCP connection |
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
-| GET | `/v1/vault-access-audit` | Browser-only Vault access audit for the current owner |
+| GET | `/v1/vault-access-audit` | Browser-only recent Vault access audit with item name, authenticated agent/client, UTC time, and outcome; secret values are never included |
 | POST | `/v1/vault/captures` | Create an owner-bound, one-time browser capture URL with a Vault-scoped agent key |
 | GET | `/v1/vault/captures/{token}` | Inspect an unexpired capture as the signed-in owner; never returns a value |
 | PUT | `/v1/vault/captures/{token}` | Store a value from the signed-in browser and consume the link |

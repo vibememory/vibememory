@@ -59,10 +59,12 @@ def test_encrypted_vault_scopes_rotation_and_isolation(settings):
         denied = {"Authorization": "Bearer " + unscoped["key"]}
         allowed = {"Authorization": "Bearer " + scoped["key"]}
         assert client.get("/v1/vault", headers=denied).status_code == 403
+        assert client.get("/v1/vault/GITHUB_TOKEN", headers=denied).status_code == 403
         assert client.get("/v1/me", headers=denied).json()["vault_access"] is False
         result = client.get("/v1/vault/GITHUB_TOKEN", headers=allowed)
         assert result.json() == {"name": "GITHUB_TOKEN", "value": "github-secret-value"}
         assert client.get("/v1/vault/WHITESPACE", headers=allowed).json()["value"] == "  exact value\n"
+        assert client.get("/v1/vault/MISSING_TOKEN", headers=allowed).status_code == 404
         assert client.get("/v1/me", headers=allowed).json()["vault_access"] is True
         assert (
             client.put(
@@ -72,6 +74,22 @@ def test_encrypted_vault_scopes_rotation_and_isolation(settings):
             ).status_code
             == 401
         )
+
+        login = client.post(
+            "/auth/login",
+            json={"email": "vault@example.invalid", "password": PASSWORD},
+        )
+        assert login.status_code == 200, login.text
+        audit = client.get("/v1/vault-access-audit").json()["items"]
+        assert {item["outcome"] for item in audit} >= {"success", "denied_scope", "not_found"}
+        successful = next(item for item in audit if item["outcome"] == "success")
+        denied_item = next(item for item in audit if item["outcome"] == "denied_scope")
+        assert successful["client_name"] == "trusted"
+        assert successful["client_type"] == "agent-key"
+        assert denied_item["client_name"] == "ordinary"
+        assert all("value" not in item for item in audit)
+        assert "github-secret-value" not in str(audit)
+        assert client.post("/auth/logout").status_code == 204
 
         client.headers.pop("Authorization", None)
         signup(client, "other@example.invalid")

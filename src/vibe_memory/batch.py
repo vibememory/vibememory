@@ -29,6 +29,7 @@ RECORD_FIELDS = {
     "superseded_by_ids",
     "correction_claims",
     "correction_status",
+    "correction_graph_complete",
 }
 
 RELATION_FIELDS = {

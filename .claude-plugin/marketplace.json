@@ -1,0 +1,16 @@
+{
+  "name": "vibe-memory",
+  "description": "Official Vibe Memory plugins for connected coding agents",
+  "owner": {
+    "name": "Vibe Memory",
+    "url": "https://vibememory.io"
+  },
+  "plugins": [
+    {
+      "name": "vibe-memory",
+      "source": "./claude-plugins/vibe-memory",
+      "description": "Durable project memory with automatic session recall and deduplicated checkpoint reminders",
+      "version": "0.20.0"
+    }
+  ]
+}

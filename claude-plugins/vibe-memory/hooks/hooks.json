@@ -1,0 +1,42 @@
+{
+  "description": "Recall Vibe Memory context and prompt deduplicated durable checkpoints without blocking Claude Code",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory",
+            "args": ["hook", "session-start"],
+            "timeout": 10,
+            "statusMessage": "Recalling Vibe Memory context"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory",
+            "args": ["hook", "stop"],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "vibe-memory",
+            "args": ["hook", "pre-compact"],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

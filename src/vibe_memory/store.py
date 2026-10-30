@@ -1288,7 +1288,8 @@ class Store:
             return self._attach_evidence_status(owner, result)
         return self._attach_evidence_status(owner, result[cursor : cursor + limit])
 
-    def correction_relations(self, owner, record_ids):
+    def correction_relations(self, owner, record_ids, limit=None):
+        page = "" if limit is None else " LIMIT $limit"
         rows = self.query(
             """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
             WHERE r.relation IN ['SUPERSEDES','CORRECTS']
@@ -1304,8 +1305,9 @@ class Store:
                 r.extraction_method AS extraction_method,
                 r.extraction_version AS extraction_version,
                 r.correction_scope AS correction_scope
-            ORDER BY r.created_at,r.id""",
-            {"owner": owner, "ids": list(record_ids)},
+            ORDER BY r.created_at,r.id"""
+            + page,
+            {"owner": owner, "ids": list(record_ids), "limit": limit},
         )
         result = []
         for row in rows:

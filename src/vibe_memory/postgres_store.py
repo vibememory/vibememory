@@ -1088,7 +1088,11 @@ class PostgresStore:
             ]
         return result
 
-    def correction_relations(self, owner, record_ids):
+    def correction_relations(self, owner, record_ids, limit=None):
+        page = "" if limit is None else " LIMIT %s"
+        parameters = [owner, list(record_ids), list(record_ids)]
+        if limit is not None:
+            parameters.append(limit)
         with self._connection() as connection:
             rows = connection.execute(
                 """SELECT e.*,a.archived_at AS source_archived_at,
@@ -1098,8 +1102,9 @@ class PostgresStore:
                 JOIN records b ON b.owner=e.owner AND b.id=e.target_id
                 WHERE e.owner=%s AND e.relation IN ('SUPERSEDES','CORRECTS')
                 AND (e.source_id=ANY(%s) OR e.target_id=ANY(%s))
-                ORDER BY e.created_at,e.id""",
-                (owner, list(record_ids), list(record_ids)),
+                ORDER BY e.created_at,e.id"""
+                + page,
+                parameters,
             ).fetchall()
         result = []
         for row in rows:

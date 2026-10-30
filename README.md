@@ -75,6 +75,18 @@ skills/vibe-memory/bin/vibe-memory vault exec \
 
 The native Rust CLI wraps browser authentication, persistent agent messages, storage, search, byte-stream files, secure Vault capture and execution, live events, and Skill updates so agents do not need to load API schemas into context. Browser login reports the permissions actually granted, supports 60–900 second approval links, and can elevate an existing connection to Vault access. Relationship claims can preserve version/hash/UTC-pinned evidence references, explicit coverage and an agent-authored input-manifest record without storing prompts or reasoning. `vault capture NAME` returns an expiring signed-in browser link that writes directly to Vault, `vault list` exposes names and metadata only, and `vault exec` injects selected values into one child process without printing them. Its standalone source and platform releases live at [`vibememory/cli`](https://github.com/vibememory/cli); this repository keeps the Skill instructions and verified compatibility bootstrap. All reasoning happens in the connected agent. Remote agent connections require HTTPS.
 
+Claude Code users can also install the repository's marketplace plugin after the
+native CLI is available on `PATH`:
+
+```text
+/plugin install vibe-memory --marketplace vibememory/vibememory
+```
+
+It adds non-blocking session recall and deduplicated checkpoint hooks. See
+[agent lifecycle hooks](docs/agent-hooks.md) for behavior, privacy boundaries,
+older Claude Code installation steps, and equivalent workflows for Codex,
+OpenClaw, Hermes, and other hosts.
+
 ## Connect ChatGPT or Claude with MCP
 
 Add your deployment's public MCP URL as a custom MCP server or custom connector:

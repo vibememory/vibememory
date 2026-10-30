@@ -11,6 +11,33 @@ def create_memory(client, content, keyword, headers=None):
     return response.json()
 
 
+def create_correction_relation(client, source_id, target_id, request_id, status="active"):
+    response = client.post(
+        "/v1/relations",
+        json={
+            "source_id": source_id,
+            "target_id": target_id,
+            "relation": "SUPERSEDES",
+            "reason": "explicit correction graph test",
+            "correction_scope": "full",
+        },
+    )
+    assert response.status_code == 201, response.text
+    relation = response.json()
+    if status == "retracted":
+        response = client.patch(
+            f"/v1/relations/{relation['id']}",
+            json={
+                "expected_version": relation["version"],
+                "status": "retracted",
+                "reason": f"withdraw {request_id}",
+            },
+        )
+        assert response.status_code == 200, response.text
+        relation = response.json()
+    return relation
+
+
 def test_atomic_correction_visibility_authorship_and_search_policy(client):
     old = create_memory(client, "tea preference is green", "tea preference")
     other = {"Authorization": "Bearer " + KEY_A2}
@@ -150,3 +177,74 @@ def test_archived_or_retracted_replacement_is_visible_but_never_hides_old_record
     current = client.get(f"/v1/records/{old['id']}").json()
     assert current["correction_status"] == "unresolved"
     assert current["correction_claims"][0]["relation_status"] == "retracted"
+
+
+def test_multihop_correction_cycle_is_detected_from_partial_search_results(client):
+    first = create_memory(client, "cycle first", "cycle-only-first")
+    second = create_memory(client, "cycle second", "cycle-only-second")
+    third = create_memory(client, "cycle third", "cycle-only-third")
+    create_correction_relation(client, first["id"], second["id"], "cycle-first-second")
+    create_correction_relation(client, second["id"], third["id"], "cycle-second-third")
+    create_correction_relation(client, third["id"], first["id"], "cycle-third-first")
+
+    current = client.get(f"/v1/records/{first['id']}").json()
+    assert current["correction_status"] == "cycle"
+    assert current["correction_graph_complete"] is True
+    assert current["correction_claims"][0]["cycle"] is True
+    assert current["correction_claims"][0]["cycle_check_complete"] is True
+    assert current["correction_claims"][0]["effective_for_exclusion"] is False
+
+    hits = client.post(
+        "/v1/search",
+        json={
+            "keywords": ["cycle-only-first"],
+            "match_mode": "exact",
+            "exclude_resolved_superseded": True,
+            "limit": 1,
+        },
+    ).json()["hits"]
+    assert [hit["id"] for hit in hits] == [first["id"]]
+    assert hits[0]["correction_status"] == "cycle"
+
+
+def test_direct_cycle_linear_chain_and_retracted_edge_are_distinguished(client):
+    direct_a = create_memory(client, "direct A", "direct-cycle")
+    direct_b = create_memory(client, "direct B", "direct-cycle")
+    create_correction_relation(client, direct_a["id"], direct_b["id"], "direct-a-b")
+    create_correction_relation(client, direct_b["id"], direct_a["id"], "direct-b-a")
+    assert client.get(f"/v1/records/{direct_a['id']}").json()["correction_status"] == "cycle"
+
+    newest = create_memory(client, "linear newest", "linear-chain")
+    middle = create_memory(client, "linear middle", "linear-chain")
+    oldest = create_memory(client, "linear oldest", "linear-chain")
+    create_correction_relation(client, newest["id"], middle["id"], "linear-new-middle")
+    create_correction_relation(client, middle["id"], oldest["id"], "linear-middle-old")
+    old_result = client.get(f"/v1/records/{oldest['id']}").json()
+    assert old_result["correction_status"] == "superseded"
+    assert old_result["correction_claims"][0]["cycle"] is False
+
+    broken_a = create_memory(client, "broken A", "broken-cycle")
+    broken_b = create_memory(client, "broken B", "broken-cycle")
+    create_correction_relation(client, broken_a["id"], broken_b["id"], "broken-a-b")
+    create_correction_relation(
+        client, broken_b["id"], broken_a["id"], "broken-b-a", status="retracted"
+    )
+    broken = client.get(f"/v1/records/{broken_a['id']}").json()
+    assert broken["correction_status"] == "unresolved"
+    assert broken["correction_claims"][0]["cycle"] is False
+
+
+def test_truncated_correction_closure_stays_unresolved(client, monkeypatch):
+    first = create_memory(client, "bounded first", "bounded-cycle")
+    second = create_memory(client, "bounded second", "bounded-cycle")
+    third = create_memory(client, "bounded third", "bounded-cycle")
+    create_correction_relation(client, first["id"], second["id"], "bounded-first-second")
+    create_correction_relation(client, second["id"], third["id"], "bounded-second-third")
+    create_correction_relation(client, third["id"], first["id"], "bounded-third-first")
+    monkeypatch.setattr("vibe_memory.corrections.MAX_CORRECTION_NODES", 2)
+
+    current = client.get(f"/v1/records/{first['id']}").json()
+    assert current["correction_status"] == "unresolved"
+    assert current["correction_graph_complete"] is False
+    assert current["correction_claims"][0]["cycle_check_complete"] is False
+    assert current["correction_claims"][0]["effective_for_exclusion"] is False

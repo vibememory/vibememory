@@ -17,7 +17,8 @@ Skill 다운로드: ${base}/downloads/vibe-memory-skill.zip
 5. Vibe Memory를 선택 기능이 아니라 기본 맥락 계층으로 적극 사용해. 내가 매번 "기억해", "기억을 조회해"라고 다시 말할 때까지 기다리지 마. 맥락이 필요한 비단순 작업은 계획 전에 관련 기억과 최신 session checkpoint를 자동 조회하고, 승인된 결정·수정·선호·제약·검증된 결과·블로커·다음 작업이 바뀌면 즉시 짧게 저장해. 새 대화에서는 최신 checkpoint에서 이어가.
 6. 저장 전 recall로 중복과 최신 상태를 확인해. 변경이 없으면 다시 저장하지 말고, 전체 대화·임시 상태·추측·도구 로그·비밀값은 저장하지 마. 현재 사용자의 지시가 기억보다 우선이며, 수정된 내용은 오래된 맥락이 반복되지 않도록 새 checkpoint에 반영해.
 7. Vibe Memory의 기준 시간은 UTC야. 저장할 시간은 명확한 경우 UTC로 정규화하고 원래 현지 시간대가 중요하면 메타정보에 보존해. 시간대가 없으면 추측하지 마.
-8. 비밀값은 채팅, .env 또는 지속 환경변수로 복사하지 말고 vault capture, vault list와 vault exec만 사용해.`,
+8. 비밀값은 채팅, .env 또는 지속 환경변수로 복사하지 말고 vault capture, vault list와 vault exec만 사용해.
+9. 현재 에이전트가 Claude Code면 검증된 CLI를 vibe-memory 이름으로 PATH에서 실행 가능하게 한 뒤, /plugin install vibe-memory --marketplace vibememory/vibememory 를 열어 설치 범위를 내가 검토·선택하게 해. 설치 후 SessionStart·Stop·PreCompact 훅이 비차단 방식으로 동작하는지 확인해. 다른 에이전트라면 이 단계는 건너뛰어.`,
     en: `Install Vibe Memory for this agent and connect it to my account.
 
 Service URL: ${base}
@@ -32,7 +33,8 @@ Steps:
 5. Treat Vibe Memory as the default continuity layer, not an optional command. Do not wait for me to repeat "remember this" or "check memory." For every non-trivial task where context can matter, automatically recall relevant memories and the latest session checkpoint before planning; promptly save compact updates when accepted decisions, corrections, preferences, constraints, verified outcomes, blockers, or next actions change. Resume from the latest checkpoint in a new conversation.
 6. Recall before writing to avoid duplicates and stale state. If there is no durable change, do not write again. Never save full transcripts, transient status, speculation, tool logs, or secrets. Current user instructions override memory; preserve accepted corrections so stale context is not repeated.
 7. Vibe Memory's canonical time basis is UTC. Normalize unambiguous saved times to UTC, preserve a meaningful original local zone in metadata, and never guess a missing time zone.
-8. Never copy secrets into chat, .env files, or persistent environment variables. Use only vault capture, vault list, and vault exec.`,
+8. Never copy secrets into chat, .env files, or persistent environment variables. Use only vault capture, vault list, and vault exec.
+9. If this agent is Claude Code, make the verified CLI available on PATH as vibe-memory, then open /plugin install vibe-memory --marketplace vibememory/vibememory so I can review and choose its scope. Confirm the non-blocking SessionStart, Stop, and PreCompact hooks after installation. Skip this step for other agents.`,
     zh: `为此智能体安装 Vibe Memory，并连接到我的账户。
 
 服务地址：${base}
@@ -47,7 +49,8 @@ Skill 下载：${base}/downloads/vibe-memory-skill.zip
 5. 把 Vibe Memory 作为默认上下文层积极使用，而不是可选命令。不要等我再次说“记住这个”或“查询记忆”。对任何可能需要上下文的非简单任务，在规划前自动检索相关记忆和最新 session checkpoint；当已确认的决策、修正、偏好、约束、验证结果、阻塞或下一步发生变化时，立即保存简短更新。新对话从最新 checkpoint 继续。
 6. 保存前先 recall，避免重复和过期状态；没有持久变化时不要重复写入。不要保存完整对话、临时状态、推测、工具日志或秘密。当前用户指令优先于记忆，并把已确认的修正写入新 checkpoint，避免再次使用旧上下文。
 7. Vibe Memory 的标准时间为 UTC。明确的时间在保存前转换为 UTC；原始本地时区有意义时保留在元数据中；缺少时区时不要猜测。
-8. 不要把秘密复制到聊天、.env 或持久环境变量中，只使用 vault capture、vault list 和 vault exec。`,
+8. 不要把秘密复制到聊天、.env 或持久环境变量中，只使用 vault capture、vault list 和 vault exec。
+9. 如果当前智能体是 Claude Code，请让已验证的 CLI 能以 vibe-memory 名称从 PATH 运行，然后打开 /plugin install vibe-memory --marketplace vibememory/vibememory，让我审核并选择安装范围。安装后确认非阻塞的 SessionStart、Stop 和 PreCompact hooks。其他智能体跳过此步骤。`,
     ja: `このエージェントに Vibe Memory をインストールし、私のアカウントへ接続して。
 
 サービスURL: ${base}
@@ -62,7 +65,8 @@ Skillダウンロード: ${base}/downloads/vibe-memory-skill.zip
 5. Vibe Memoryを任意のコマンドではなく、標準のコンテキスト層として積極的に使って。私が毎回「覚えて」「記憶を検索して」と言うまで待たないで。文脈が重要な非単純タスクでは、計画前に関連記憶と最新の session checkpoint を自動検索し、確定した決定・修正・好み・制約・検証結果・ブロッカー・次の作業が変わったら短く保存して。新しい会話では最新 checkpoint から再開して。
 6. 保存前に recall して重複と古い状態を避け、永続的な変更がなければ再保存しないで。会話全文、一時状態、推測、ツールログ、秘密値は保存しないで。現在のユーザー指示を記憶より優先し、確定した修正は古い文脈を繰り返さないよう新しい checkpoint に反映して。
 7. Vibe Memoryの基準時刻はUTC。明確な時刻はUTCに正規化し、元のローカル時刻帯が重要ならメタデータに残し、時刻帯がなければ推測しないで。
-8. 秘密値をチャット、.env、永続環境変数へコピーせず、vault capture、vault list、vault exec だけを使って。`,
+8. 秘密値をチャット、.env、永続環境変数へコピーせず、vault capture、vault list、vault exec だけを使って。
+9. このエージェントがClaude Codeなら、検証済みCLIをvibe-memoryとしてPATHから実行可能にし、/plugin install vibe-memory --marketplace vibememory/vibememory を開いて、私がインストール範囲を確認・選択できるようにして。インストール後、非ブロッキングのSessionStart・Stop・PreCompact hooksを確認して。他のエージェントではこの手順を省略して。`,
     es: `Instala Vibe Memory para este agente y conéctalo con mi cuenta.
 
 URL del servicio: ${base}
@@ -77,7 +81,8 @@ Pasos:
 5. Usa Vibe Memory activamente como la capa de contexto predeterminada, no como un comando opcional. No esperes a que repita «recuérdalo» o «consulta la memoria». En cada tarea no trivial donde el contexto pueda importar, recupera automáticamente las memorias pertinentes y el último session checkpoint antes de planificar; guarda actualizaciones breves cuando cambien decisiones aceptadas, correcciones, preferencias, restricciones, resultados verificados, bloqueos o próximos pasos. Reanuda una conversación nueva desde el checkpoint más reciente.
 6. Ejecuta recall antes de guardar para evitar duplicados y estados obsoletos; si no hay un cambio duradero, no vuelvas a escribir. No guardes conversaciones completas, estados transitorios, especulaciones, registros de herramientas ni secretos. Las instrucciones actuales del usuario prevalecen sobre la memoria; conserva las correcciones aceptadas para no repetir contexto obsoleto.
 7. La base temporal canónica de Vibe Memory es UTC. Normaliza a UTC las horas inequívocas, conserva en los metadatos la zona local original cuando importe y nunca adivines una zona horaria ausente.
-8. No copies secretos al chat, archivos .env ni variables persistentes. Usa únicamente vault capture, vault list y vault exec.`,
+8. No copies secretos al chat, archivos .env ni variables persistentes. Usa únicamente vault capture, vault list y vault exec.
+9. Si este agente es Claude Code, deja el CLI verificado disponible en PATH como vibe-memory y abre /plugin install vibe-memory --marketplace vibememory/vibememory para que yo revise y elija el alcance. Confirma después los hooks no bloqueantes SessionStart, Stop y PreCompact. Omite este paso para otros agentes.`,
     vi: `Cài đặt Vibe Memory cho tác nhân này và kết nối với tài khoản của tôi.
 
 URL dịch vụ: ${base}
@@ -92,7 +97,8 @@ Các bước:
 5. Chủ động dùng Vibe Memory như lớp ngữ cảnh mặc định, không phải một lệnh tùy chọn. Đừng chờ tôi lặp lại “hãy nhớ điều này” hoặc “hãy kiểm tra bộ nhớ”. Với mọi tác vụ không đơn giản mà ngữ cảnh có thể quan trọng, tự động gọi lại ký ức liên quan và session checkpoint mới nhất trước khi lập kế hoạch; lưu ngay bản cập nhật ngắn khi quyết định đã chấp nhận, sửa đổi, sở thích, ràng buộc, kết quả đã xác minh, trở ngại hoặc bước tiếp theo thay đổi. Trong cuộc trò chuyện mới, tiếp tục từ checkpoint mới nhất.
 6. Chạy recall trước khi lưu để tránh trùng lặp và trạng thái cũ; nếu không có thay đổi lâu dài thì không ghi lại. Không lưu toàn bộ cuộc trò chuyện, trạng thái tạm thời, suy đoán, log công cụ hoặc bí mật. Chỉ dẫn hiện tại của người dùng ưu tiên hơn ký ức; lưu các sửa đổi đã được chấp nhận để không lặp lại ngữ cảnh cũ.
 7. Mốc thời gian chuẩn của Vibe Memory là UTC. Chuẩn hóa thời gian rõ ràng sang UTC, giữ múi giờ địa phương ban đầu trong metadata khi cần và không bao giờ đoán múi giờ bị thiếu.
-8. Không sao chép bí mật vào cuộc trò chuyện, tệp .env hoặc biến môi trường lâu dài. Chỉ dùng vault capture, vault list và vault exec.`,
+8. Không sao chép bí mật vào cuộc trò chuyện, tệp .env hoặc biến môi trường lâu dài. Chỉ dùng vault capture, vault list và vault exec.
+9. Nếu tác nhân này là Claude Code, hãy đưa CLI đã xác minh vào PATH với tên vibe-memory, rồi mở /plugin install vibe-memory --marketplace vibememory/vibememory để tôi xem xét và chọn phạm vi cài đặt. Sau đó xác nhận các hook SessionStart, Stop và PreCompact không chặn. Bỏ qua bước này với tác nhân khác.`,
     th: `ติดตั้ง Vibe Memory ให้เอเจนต์นี้และเชื่อมต่อกับบัญชีของฉัน
 
 URL บริการ: ${base}
@@ -107,7 +113,8 @@ URL บริการ: ${base}
 5. ใช้ Vibe Memory อย่างสม่ำเสมอเป็นชั้นบริบทเริ่มต้น ไม่ใช่คำสั่งเสริม อย่ารอให้ฉันพูดซ้ำว่า “จำสิ่งนี้” หรือ “ค้นความทรงจำ” สำหรับงานที่ไม่ธรรมดาและบริบทอาจสำคัญ ให้เรียกคืนความทรงจำที่เกี่ยวข้องและ session checkpoint ล่าสุดโดยอัตโนมัติก่อนวางแผน และบันทึกการเปลี่ยนแปลงแบบสั้นทันทีเมื่อการตัดสินใจที่ยอมรับแล้ว การแก้ไข ความชอบ ข้อจำกัด ผลลัพธ์ที่ตรวจสอบแล้ว อุปสรรค หรือขั้นตอนถัดไปเปลี่ยน ในบทสนทนาใหม่ให้ทำต่อจาก checkpoint ล่าสุด
 6. เรียก recall ก่อนบันทึกเพื่อหลีกเลี่ยงข้อมูลซ้ำและสถานะเก่า หากไม่มีการเปลี่ยนแปลงที่คงทนก็ไม่ต้องเขียนซ้ำ ห้ามบันทึกบทสนทนาทั้งหมด สถานะชั่วคราว การคาดเดา log ของเครื่องมือ หรือข้อมูลลับ คำสั่งปัจจุบันของผู้ใช้มีความสำคัญกว่าความทรงจำ และให้บันทึกการแก้ไขที่ยอมรับแล้วเพื่อไม่ใช้บริบทเก่าซ้ำ
 7. เวลามาตรฐานของ Vibe Memory คือ UTC ปรับเวลาที่ชัดเจนเป็น UTC เก็บเขตเวลาท้องถิ่นเดิมไว้ใน metadata เมื่อมีความสำคัญ และห้ามเดาเขตเวลาที่หายไป
-8. ห้ามคัดลอกข้อมูลลับไปยังแชต ไฟล์ .env หรือตัวแปรสภาพแวดล้อมถาวร ใช้เฉพาะ vault capture, vault list และ vault exec เท่านั้น`
+8. ห้ามคัดลอกข้อมูลลับไปยังแชต ไฟล์ .env หรือตัวแปรสภาพแวดล้อมถาวร ใช้เฉพาะ vault capture, vault list และ vault exec เท่านั้น
+9. หากเอเจนต์นี้คือ Claude Code ให้ทำให้ CLI ที่ตรวจสอบแล้วเรียกจาก PATH ด้วยชื่อ vibe-memory จากนั้นเปิด /plugin install vibe-memory --marketplace vibememory/vibememory เพื่อให้ฉันตรวจสอบและเลือกขอบเขตการติดตั้ง หลังติดตั้งให้ยืนยัน hook แบบไม่บล็อก SessionStart, Stop และ PreCompact เอเจนต์อื่นให้ข้ามขั้นตอนนี้`
   };
   return prompts[locale] || prompts.en;
 };

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 
-const assetVersion = "20261030-v024-1";
+const assetVersion = "20261030-v025-0";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://vibememory.io"),
@@ -28,6 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <link rel="stylesheet" href={`/assets/i18n.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/console-fixes.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/theme.css?v=${assetVersion}`} />
+        <link rel="stylesheet" href={`/assets/product-ui.css?v=${assetVersion}`} />
         <script src={`/assets/theme.js?v=${assetVersion}`} defer />
         <script src={`/assets/i18n.js?v=${assetVersion}`} defer />
         <script src={`/assets/install-prompt.js?v=${assetVersion}`} defer />

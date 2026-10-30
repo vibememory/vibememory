@@ -111,13 +111,13 @@ function relationshipGraphStyles() {
     node:'#ffffff',text:'#3d4a62',border:'#aebce0',memory:'#7892ec',memoryBg:'#f9fbff',entity:'#a991d8',entityBg:'#fcfaff',document:'#72b9a5',documentBg:'#f8fdfa',file:'#d9a36d',fileBg:'#fffaf5',selected:'#315bfb',selectedBg:'#f0f4ff',edge:'#aeb9d5',arrow:'#8fa0ca',edgeText:'#60719a',label:'#ffffff',labelBorder:'#dde4f2'
   };
   return [
-    {selector:'node',style:{'shape':'roundrectangle','width':168,'height':60,'background-color':palette.node,'border-width':1.4,'border-color':palette.border,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':10,'font-weight':500,'text-wrap':'wrap','text-max-width':145,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
+    {selector:'node',style:{'shape':'roundrectangle','width':192,'height':68,'background-color':palette.node,'border-width':1.5,'border-color':palette.border,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':12,'font-weight':500,'text-wrap':'wrap','text-max-width':166,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
     {selector:'node.kind-memory',style:{'border-color':palette.memory,'background-color':palette.memoryBg}},
     {selector:'node.kind-entity',style:{'border-color':palette.entity,'background-color':palette.entityBg}},
     {selector:'node.kind-document',style:{'border-color':palette.document,'background-color':palette.documentBg}},
     {selector:'node.kind-file',style:{'border-color':palette.file,'background-color':palette.fileBg}},
     {selector:'node:selected, node.highlighted',style:{'border-width':2.4,'border-color':palette.selected,'background-color':palette.selectedBg}},
-    {selector:'edge',style:{'width':1.45,'curve-style':'bezier','control-point-step-size':45,'line-color':palette.edge,'target-arrow-color':palette.arrow,'target-arrow-shape':'triangle','arrow-scale':.85,'label':'data(relation)','font-family':'ui-monospace, SFMono-Regular, Consolas, monospace','font-size':8,'color':palette.edgeText,'text-background-color':palette.label,'text-background-opacity':.94,'text-background-padding':4,'text-border-color':palette.labelBorder,'text-border-width':1,'text-border-opacity':1,'text-rotation':'autorotate','text-margin-y':-9,'overlay-opacity':0,'transition-property':'line-color, target-arrow-color, width, opacity','transition-duration':'160ms'}},
+    {selector:'edge',style:{'width':1.55,'curve-style':'bezier','control-point-step-size':42,'line-color':palette.edge,'target-arrow-color':palette.arrow,'target-arrow-shape':'triangle','arrow-scale':.95,'label':'data(relation)','font-family':'ui-monospace, SFMono-Regular, Consolas, monospace','font-size':9.5,'color':palette.edgeText,'text-background-color':palette.label,'text-background-opacity':.96,'text-background-padding':5,'text-border-color':palette.labelBorder,'text-border-width':1,'text-border-opacity':1,'text-rotation':'autorotate','text-margin-y':-10,'overlay-opacity':0,'transition-property':'line-color, target-arrow-color, width, opacity','transition-duration':'160ms'}},
     {selector:'edge:selected, edge.highlighted',style:{'width':2.4,'line-color':palette.selected,'target-arrow-color':palette.selected,'color':palette.selected,'z-index':10}},
     {selector:'.faded',style:{'opacity':.12,'text-opacity':.08}}
   ];
@@ -163,16 +163,16 @@ async function bindRelationshipGraph(records, relations) {
       animate:true,
       animationDuration:650,
       fit:true,
-      padding:75,
+      padding:56,
       randomize:true,
-      nodeRepulsion:650000,
-      idealEdgeLength:155,
+      nodeRepulsion:420000,
+      idealEdgeLength:135,
       edgeElasticity:100,
       nestingFactor:1.2,
       gravity:.16,
       numIter:1200,
       nodeOverlap:32,
-      componentSpacing:130
+      componentSpacing:110
     }
   });
   const clearFocus = () => relationshipCy?.elements().removeClass('faded highlighted');

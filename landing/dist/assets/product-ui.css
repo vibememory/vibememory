@@ -1,0 +1,274 @@
+/* Product UI polish: shared control rhythm, restrained surfaces, and responsive shells. */
+:root {
+  --tool-page: #f4f6fa;
+  --tool-surface: #ffffff;
+  --tool-surface-soft: #f8f9fc;
+  --tool-surface-strong: #172238;
+  --tool-border: #dfe4ed;
+  --tool-border-strong: #cfd7e6;
+  --tool-text: #202b42;
+  --tool-muted: #718097;
+  --tool-blue: #315bfb;
+  --tool-blue-soft: #edf2ff;
+  --tool-radius: 12px;
+  --tool-radius-sm: 9px;
+  --tool-shadow: 0 1px 2px rgba(24, 37, 61, .035), 0 8px 26px rgba(24, 37, 61, .035);
+}
+
+html[data-theme="dark"] {
+  --tool-page: #0c1320;
+  --tool-surface: #111a2a;
+  --tool-surface-soft: #151f31;
+  --tool-surface-strong: #18243a;
+  --tool-border: #2b374b;
+  --tool-border-strong: #3a4961;
+  --tool-text: #eaf0fb;
+  --tool-muted: #98a7bd;
+  --tool-blue: #7898ff;
+  --tool-blue-soft: #1b294b;
+  --tool-shadow: 0 1px 2px rgba(0, 0, 0, .14), 0 12px 30px rgba(0, 0, 0, .12);
+}
+
+body { text-rendering: optimizeLegibility; }
+button, input, select, textarea { accent-color: var(--tool-blue); }
+.button, .secondary-button, .danger-button { min-height: 40px; border-radius: var(--tool-radius-sm); }
+input:not([type="checkbox"]):not([type="radio"]), select { min-height: 40px; }
+
+/* Landing: application-like controls without wrapping cards in extra decoration. */
+.landing-page .header { height: 96px; position: relative; }
+.landing-page .header-actions { gap: 10px; }
+.landing-page .header-actions .vm-language-switcher { margin: 0; }
+.landing-page .header-actions .vm-language-icon,
+.landing-page .header-actions .vm-theme-toggle { width: 38px; height: 38px; border-radius: 9px; box-shadow: none; }
+.landing-page .header-actions .vm-language-switcher select { min-width: 104px; height: 38px; padding-block: 0; border-radius: 9px; }
+.landing-page .login-link { padding: 10px 7px; }
+.landing-page .nav-cta { min-height: 40px; padding-block: 0; border-radius: 9px; }
+.landing-page .hero-connect .connect-way-card { border-color: var(--tool-border); border-radius: var(--tool-radius); box-shadow: var(--tool-shadow); }
+.landing-page .hero-connect .connect-service-button,
+.landing-page .hero-connect .connect-skill-button { min-height: 44px; border-radius: 8px; }
+.landing-page .hero-connect .connect-service-button:focus-visible,
+.landing-page .hero-connect .connect-skill-button:focus-visible { outline-offset: 3px; }
+.landing-page .feature,
+.landing-page .playground,
+.landing-page .start-card,
+.landing-page .agent-support-card { border-color: var(--tool-border); box-shadow: var(--tool-shadow); }
+
+/* Console shell. */
+.console-page {
+  --sidebar-width: 260px;
+  --console-border: var(--tool-border);
+  --console-shadow: var(--tool-shadow);
+  background: var(--tool-page);
+}
+.sidebar { padding: 20px 14px 15px; border-color: var(--tool-border); background: var(--tool-surface); box-shadow: none; }
+.sidebar-brand-row { min-height: 38px; padding: 0 7px 18px; }
+.sidebar .brand { font-size: 20px; }
+.plan-badge { border-color: var(--tool-border); background: var(--tool-surface-soft); }
+.workspace { min-height: 58px; margin-bottom: 22px; border-color: var(--tool-border); border-radius: 10px; background: var(--tool-surface-soft); box-shadow: none; }
+.sidebar nav { gap: 3px; }
+.sidebar-label { margin-bottom: 7px; }
+.sidebar-label-spaced { margin-top: 19px; }
+.sidebar nav button { height: 42px; border-radius: 8px; }
+.sidebar nav button[aria-current="page"] { box-shadow: inset 3px 0 0 var(--tool-blue); }
+.sidebar-help-card { border-color: var(--tool-border); border-radius: 10px; background: var(--tool-surface-soft); }
+.account-popover { border-color: var(--tool-border); background: var(--tool-surface); box-shadow: 0 18px 48px rgba(24, 37, 61, .14); }
+
+.console-header { height: 64px; padding: 0 30px; border-color: var(--tool-border); background: color-mix(in srgb, var(--tool-surface) 92%, transparent); }
+.breadcrumb { min-width: 190px; }
+.topbar-search { height: 38px; border-color: var(--tool-border); border-radius: 9px; background: var(--tool-surface-soft); }
+.topbar-actions { min-width: 228px; gap: 13px; }
+.console-header .vm-language-switcher select { height: 36px; min-height: 36px; border-radius: 8px; }
+.console-header .vm-language-icon,
+.console-header .vm-theme-toggle,
+.topbar-avatar,
+.topbar-avatar span { width: 34px; height: 34px; }
+
+#console-main { max-width: 1560px; padding: 32px 36px 64px; }
+.console-page-heading { margin-bottom: 25px; }
+.console-page-heading h1 { font-size: 28px; }
+.console-page-heading .button { min-height: 40px; box-shadow: 0 5px 14px rgba(49, 91, 251, .12); }
+.console-panel,
+.stat-card,
+.security-card,
+.security-note { border-color: var(--tool-border); border-radius: var(--tool-radius); background: var(--tool-surface); box-shadow: var(--tool-shadow); }
+.stat-card { min-height: 132px; padding: 19px; }
+.stat-card:hover { transform: none; border-color: var(--tool-border-strong); box-shadow: var(--tool-shadow); }
+.stat-card-icon { border-radius: 9px; background: var(--tool-blue-soft); color: var(--tool-blue); }
+.stat-card strong { margin-top: 15px; font-size: 28px; }
+.dashboard-grid { gap: 16px; }
+.panel-heading { min-height: 68px; padding: 17px 20px; }
+.records-table th { padding: 12px 20px; }
+.records-table td { padding: 16px 20px; }
+.records-table tbody tr:hover { background: var(--tool-surface-soft); }
+.record-title { min-height: 32px; padding: 4px 0; }
+.row-actions button, .row-actions a { min-height: 34px; display: inline-flex; align-items: center; padding: 0 7px; }
+.tag { border-radius: 5px; }
+
+.dashboard-guide { min-height: 56px; margin-bottom: 16px; padding: 10px 14px; border-color: #2e3c54; border-radius: 10px; background: #172238; box-shadow: none; }
+.dashboard-guide-copy { gap: 11px; }
+.dashboard-guide-actions { flex-wrap: nowrap; }
+.dashboard-guide-actions button { min-height: 34px; border-radius: 7px; white-space: nowrap; }
+.storage-usage-card { min-height: 98px; margin-bottom: 16px; padding: 17px 20px; border-color: #2d3b54; border-radius: 11px; box-shadow: none; }
+.storage-usage-icon { width: 42px; height: 42px; border-radius: 10px; }
+.storage-usage-main strong { font-size: 25px; }
+
+.install-prompt-card,
+.mcp-connect-card { border-color: color-mix(in srgb, var(--tool-blue) 28%, var(--tool-border)); border-radius: var(--tool-radius); background: var(--tool-surface); box-shadow: var(--tool-shadow); }
+.install-prompt-card>.button,
+.mcp-connect-actions .button { min-height: 42px; border-radius: 8px; }
+.mcp-connect-actions .button.primary { color: #fff; }
+.agent-catalog > span { border-color: var(--tool-border); border-radius: 9px; background: var(--tool-surface); box-shadow: none; }
+.security-details > div,
+.request-detail-section,
+.request-detail-result { border-color: var(--tool-border); background: var(--tool-surface-soft); }
+
+.ui-modal { border-color: var(--tool-border); border-radius: 14px; background: var(--tool-surface); box-shadow: 0 30px 90px rgba(18, 29, 50, .26); }
+.ui-modal > form, .ui-modal > .ui-modal-shell { padding: 27px 28px; }
+.ui-icon-button { border-radius: 9px; }
+.dialog-actions .button,
+.dialog-actions .secondary-button { min-height: 38px; padding: 0 14px; }
+
+#console-main.is-graph-view { height: calc(100dvh - 64px); }
+.relationship-graph-meta { bottom: 14px; left: 14px; min-height: 38px; border-color: var(--tool-border); border-radius: 9px; background: color-mix(in srgb, var(--tool-surface) 90%, transparent); font-size: 10px; }
+.relationship-graph-controls { right: 14px; bottom: 14px; border-color: var(--tool-border); border-radius: 9px; background: color-mix(in srgb, var(--tool-surface) 94%, transparent); }
+.relationship-graph-controls button { width: 40px; height: 38px; color: var(--tool-muted); }
+
+/* Admin: the same shell and control system as the user console. */
+.admin-page { min-width: 0; background: var(--tool-page); color: var(--tool-text); }
+.admin-header { height: 64px; padding: 0 clamp(20px, 3vw, 48px); border-color: var(--tool-border); background: var(--tool-surface); }
+.admin-header nav { gap: 6px; }
+.admin-header nav a,
+.admin-header nav button { min-height: 36px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 8px; }
+.admin-header .vm-language-switcher select { height: 36px; min-height: 36px; border-radius: 8px; }
+.admin-main { max-width: 1520px; padding: 34px clamp(20px, 3vw, 48px) 70px; }
+.admin-heading { margin-bottom: 24px; }
+.admin-identity,
+.admin-panel,
+.admin-stats button { border-color: var(--tool-border); background: var(--tool-surface); box-shadow: var(--tool-shadow); }
+.admin-identity { border-radius: 10px; }
+.admin-stats { gap: 10px; }
+.admin-stats button { min-height: 104px; border-radius: 10px; }
+.admin-stats button:hover,
+.admin-stats button.selected { box-shadow: var(--tool-shadow); }
+.admin-panel { border-radius: var(--tool-radius); }
+.admin-toolbar { min-height: 78px; padding: 18px 20px; border-color: var(--tool-border); }
+.admin-filters select,
+.admin-filters input,
+.admin-filters > button,
+.admin-operators-panel > .admin-toolbar > button { height: 38px; min-height: 38px; border-color: var(--tool-border); border-radius: 8px; background: var(--tool-surface-soft); }
+.admin-table th { padding: 12px 15px; background: var(--tool-surface-soft); }
+.admin-table td { padding: 15px; }
+.admin-edit,
+.admin-pager button { min-height: 34px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 7px; }
+.admin-operator-list { gap: 10px; padding: 16px 20px 20px; }
+.admin-operator-card { border-color: var(--tool-border); border-radius: 10px; background: var(--tool-surface-soft); }
+.admin-operator-card > button { min-height: 36px; padding: 0 11px; }
+
+html[data-theme="dark"] .sidebar,
+html[data-theme="dark"] .console-header,
+html[data-theme="dark"] .console-panel,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .security-card,
+html[data-theme="dark"] .security-note,
+html[data-theme="dark"] .install-prompt-card,
+html[data-theme="dark"] .mcp-connect-card,
+html[data-theme="dark"] .agent-catalog > span,
+html[data-theme="dark"] .admin-header,
+html[data-theme="dark"] .admin-panel,
+html[data-theme="dark"] .admin-identity,
+html[data-theme="dark"] .admin-stats button { background: var(--tool-surface); border-color: var(--tool-border); }
+html[data-theme="dark"] .workspace,
+html[data-theme="dark"] .sidebar-help-card,
+html[data-theme="dark"] .topbar-search,
+html[data-theme="dark"] .admin-filters select,
+html[data-theme="dark"] .admin-filters input,
+html[data-theme="dark"] .admin-filters > button,
+html[data-theme="dark"] .admin-operator-card { background: var(--tool-surface-soft); border-color: var(--tool-border); }
+html[data-theme="dark"] .dashboard-guide { background: #151f31; border-color: #30405a; }
+html[data-theme="dark"] .storage-usage-card { background: #172238; }
+html[data-theme="dark"] .console-status-list > div,
+html[data-theme="dark"] .dashboard-status-agents { border-color: var(--tool-border); }
+html[data-theme="dark"] .console-status-list span { color: var(--tool-muted); }
+html[data-theme="dark"] .console-status-list strong { color: var(--tool-text); }
+
+@media (max-width: 900px) {
+  .landing-page .header nav { display: none; }
+  .landing-page .header-actions .vm-language-switcher,
+  .landing-page .header-actions .vm-theme-toggle { position: static; inset: auto; margin: 0; box-shadow: none; }
+  .landing-page .header-actions .vm-language-switcher { padding: 0; border: 0; background: transparent; backdrop-filter: none; }
+}
+
+@media (max-width: 820px) {
+  .console-page { --sidebar-width: 268px; }
+  .console-header { height: 60px; padding-inline: 16px; }
+  .breadcrumb { min-width: 0; flex: 1; }
+  .topbar-actions { min-width: 0; }
+  #console-main { padding: 27px 20px 54px; }
+  #console-main.is-graph-view { height: calc(100dvh - 60px); padding: 0; }
+  .dashboard-guide { align-items: center; flex-direction: row; }
+  .dashboard-guide-actions { justify-content: flex-end; overflow-x: auto; scrollbar-width: none; }
+  .dashboard-guide-actions::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 640px) {
+  .admin-header { height: auto; min-height: 108px; align-content: center; flex-wrap: wrap; gap: 8px; padding: 11px 15px; }
+  .admin-header .brand { min-height: 36px; }
+  .admin-header nav { width: 100%; display: flex; gap: 5px; }
+  .admin-header nav .vm-language-switcher { flex: 1; }
+  .admin-header nav .vm-language-icon { display: none; }
+  .admin-header nav .vm-language-switcher select { width: 100%; }
+  .admin-header nav a,
+  .admin-header nav button { justify-content: center; min-height: 36px; padding-inline: 9px; white-space: nowrap; }
+  .admin-header nav a:nth-of-type(2) { display: none; }
+  .admin-main { width: 100%; padding: 24px 15px 48px; overflow: hidden; }
+  .admin-heading { gap: 19px; }
+  .admin-heading h1 { font-size: 27px; }
+  .admin-stats { gap: 9px; }
+  .admin-toolbar { min-height: 0; padding: 17px; }
+  .admin-operator-list { padding: 13px; }
+}
+
+@media (max-width: 520px) {
+  .landing-page .header { gap: 8px; }
+  .landing-page .brand { gap: 7px; font-size: 18px; }
+  .landing-page .brand svg { width: 24px; }
+  .landing-page .header-actions { gap: 5px; margin-left: auto; }
+  .landing-page .header-actions .login-link { display: none; }
+  .landing-page .header-actions .vm-language-icon { display: none; }
+  .landing-page .header-actions .vm-language-switcher select { width: 70px; min-width: 70px; height: 36px; min-height: 36px; padding: 0 20px 0 7px; }
+  .landing-page .header-actions .vm-theme-toggle { width: 34px; height: 36px; }
+  .landing-page .header-actions .nav-cta { min-height: 36px; padding: 0 9px; }
+  .landing-page .hero { padding-top: 36px; }
+
+  .console-header { gap: 8px; padding-inline: 12px; }
+  .breadcrumb { flex: 1; }
+  .topbar-search { width: 40px; max-width: 40px; height: 38px; flex-basis: 40px; }
+  .topbar-actions { gap: 3px; }
+  .console-header .vm-language-switcher select { width: 82px; min-width: 82px; max-width: 82px; }
+  .console-header .vm-theme-toggle,
+  .topbar-avatar,
+  .topbar-avatar span { width: 32px; height: 32px; }
+  .console-page-heading { margin-bottom: 24px; }
+  .console-page-heading .button { width: auto; margin-top: 14px; }
+  .dashboard-guide { position: relative; display: block; padding: 13px; }
+  .dashboard-guide-copy { justify-content: flex-start; padding-right: 94px; }
+  .dashboard-guide-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 11px; overflow: visible; }
+  .dashboard-guide-actions button { width: 100%; min-width: 0; padding-inline: 7px; font-size: 10px; }
+  .dashboard-guide-actions .dashboard-guide-dismiss { position: absolute; top: 8px; right: 8px; width: auto; margin: 0; padding-inline: 7px; border-color: transparent; background: transparent; }
+  .stats-grid { gap: 10px; }
+  .stat-card { min-height: 124px; padding: 16px; }
+  .storage-usage-card { padding: 17px; }
+  .records-table th,
+  .records-table td { padding-inline: 14px; }
+  .ui-modal > form,
+  .ui-modal > .ui-modal-shell { padding: 22px 20px; }
+}
+
+@media (max-width: 380px) {
+  .landing-page .brand { font-size: 17px; }
+  .landing-page .brand svg { width: 22px; }
+  .landing-page .header-actions .vm-language-switcher select { width: 56px; min-width: 56px; }
+  .landing-page .header-actions .vm-theme-toggle { width: 32px; }
+  .landing-page .header-actions .nav-cta { padding-inline: 7px; font-size: 9px; }
+  .console-header .topbar-avatar { display: none; }
+}

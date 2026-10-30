@@ -1,8 +1,9 @@
-:HL["/assets/style.css?v=20261030-v024-1","style"]
-:HL["/assets/i18n.css?v=20261030-v024-1","style"]
-:HL["/assets/console-fixes.css?v=20261030-v024-1","style"]
-:HL["/assets/theme.css?v=20261030-v024-1","style"]
-:HL["/assets/console.css?v=20261030-v024-1","style"]
+:HL["/assets/style.css?v=20261030-v025-0","style"]
+:HL["/assets/i18n.css?v=20261030-v025-0","style"]
+:HL["/assets/console-fixes.css?v=20261030-v025-0","style"]
+:HL["/assets/theme.css?v=20261030-v025-0","style"]
+:HL["/assets/product-ui.css?v=20261030-v025-0","style"]
+:HL["/assets/console.css?v=20261030-v025-0","style"]
 2:[["children",{"s":"__PAGE__","h":160}]]
 1:[["children",{"s":"login","h":96,"c":"$Q2"}]]
-0:{"b":"vibe-memory-20261030-v024-1","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"vibe-memory-20261030-v025-0","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

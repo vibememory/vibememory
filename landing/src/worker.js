@@ -9,7 +9,8 @@ export default {
         const target = new URL('http://127.0.0.1:8080/auth/me');
         const headers = new Headers(request.headers);
         headers.delete('Host'); headers.delete('Forwarded');
-        headers.delete('X-Forwarded-Host'); headers.delete('X-Forwarded-Proto');
+        headers.set('X-Forwarded-Host', url.host);
+        headers.set('X-Forwarded-Proto', url.protocol.slice(0, -1));
         const session = await env.MEMORY_ORIGIN.fetch(new Request(target, {
           method: 'GET', headers, redirect: 'manual'
         }));
@@ -18,7 +19,8 @@ export default {
         if (signedIn) {
           return new Response(null, {
             status: 302,
-            headers: {'Location':'/console', 'Cache-Control':'no-store'}
+            headers: {'Location':'/console', 'Cache-Control':'no-store',
+              'Strict-Transport-Security':'max-age=31536000; includeSubDomains'}
           });
         }
       } catch { /* A session-check failure must not make the public landing unavailable. */ }
@@ -34,7 +36,8 @@ export default {
         target.pathname = url.pathname; target.search = url.search;
         const headers = new Headers(request.headers);
         headers.delete('Host'); headers.delete('Forwarded');
-        headers.delete('X-Forwarded-Host'); headers.delete('X-Forwarded-Proto');
+        headers.set('X-Forwarded-Host', url.host);
+        headers.set('X-Forwarded-Proto', url.protocol.slice(0, -1));
         const upstream = await env.MEMORY_ORIGIN.fetch(new Request(target, {
           method: request.method, headers,
           body: ['GET','HEAD'].includes(request.method) ? undefined : request.body,
@@ -43,9 +46,10 @@ export default {
         const response = new Response(upstream.body, upstream);
         response.headers.set('Cache-Control', 'no-store');
         response.headers.set('X-Content-Type-Options', 'nosniff');
+        response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
         return response;
       } catch {
-        return Response.json({detail:'기억 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.'}, {status:503, headers:{'Cache-Control':'no-store'}});
+        return Response.json({detail:'기억 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요.'}, {status:503, headers:{'Cache-Control':'no-store','Strict-Transport-Security':'max-age=31536000; includeSubDomains'}});
       }
     }
     return env.ASSETS.fetch(request);

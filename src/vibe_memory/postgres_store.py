@@ -69,6 +69,47 @@ class PostgresStore:
         # The shared database pool is closed by the application lifespan.
         return None
 
+    def run_idempotent(
+        self,
+        owner,
+        agent_id,
+        operation,
+        client_request_id,
+        request_hash,
+        callback,
+    ):
+        with self.transaction(), self._connection() as connection:
+            lock_key = "\0".join((owner, agent_id, operation, client_request_id))
+            connection.execute(
+                "SELECT pg_advisory_xact_lock(hashtextextended(%s,0))",
+                (lock_key,),
+            )
+            row = connection.execute(
+                """SELECT request_hash,result FROM batch_operations
+                WHERE owner=%s AND agent_id=%s AND operation=%s
+                AND client_request_id=%s FOR UPDATE""",
+                (owner, agent_id, operation, client_request_id),
+            ).fetchone()
+            if row:
+                if row["request_hash"] != request_hash:
+                    raise DuplicateRequestConflict()
+                return row["result"], False
+            result = callback()
+            connection.execute(
+                """INSERT INTO batch_operations(
+                    owner,agent_id,operation,client_request_id,request_hash,result
+                ) VALUES(%s,%s,%s,%s,%s,%s)""",
+                (
+                    owner,
+                    agent_id,
+                    operation,
+                    client_request_id,
+                    request_hash,
+                    Jsonb(result),
+                ),
+            )
+            return result, True
+
     @staticmethod
     def _record(row):
         if not row:
@@ -214,8 +255,7 @@ class PostgresStore:
                     (owner, data.reply_to, sender_agent_id, sender_agent_id),
                 ).fetchone()
                 participants = (
-                    {parent["sender_agent_id"], parent["recipient_agent_id"]}
-                    if parent else set()
+                    {parent["sender_agent_id"], parent["recipient_agent_id"]} if parent else set()
                 )
                 if (
                     data.recipient_agent_id not in participants
@@ -303,10 +343,14 @@ class PostgresStore:
                     WHERE owner=%s AND id=%s""",
                     (
                         status,
-                        ranks[status], stamp,
-                        ranks[status], stamp,
-                        ranks[status], stamp,
-                        owner, id,
+                        ranks[status],
+                        stamp,
+                        ranks[status],
+                        stamp,
+                        ranks[status],
+                        stamp,
+                        owner,
+                        id,
                     ),
                 )
         return self.get_message(owner, agent_id, id)
@@ -362,9 +406,7 @@ class PostgresStore:
                 ),
             )
             self._index(owner, record_id, keywords, vectors)
-            self._event(
-                owner, kind + ".created", {"record_id": record_id, "kind": kind}
-            )
+            self._event(owner, kind + ".created", {"record_id": record_id, "kind": kind})
             if security["security_state"] != "active" or security["security_warnings"]:
                 self._event(
                     owner,
@@ -426,9 +468,7 @@ class PostgresStore:
             previous = self._record(row)
             title = data.title if data.title is not None else row["title"]
             content = data.content if data.content is not None else row["content"]
-            security = reassess_record_security(
-                previous, title, content, row["version"] + 1
-            )
+            security = reassess_record_security(previous, title, content, row["version"] + 1)
             security_changed = (
                 security["security_state"] != previous["security_state"]
                 or security["trust_level"] != previous["trust_level"]
@@ -712,9 +752,7 @@ class PostgresStore:
             records = {row["id"]: row for row in rows}
             if set(records) != set(ids):
                 raise NotFound()
-            if any(
-                records[id]["version"] != data.expected_versions[id] for id in ids
-            ):
+            if any(records[id]["version"] != data.expected_versions[id] for id in ids):
                 raise Conflict()
             kinds = {records[id]["kind"] for id in ids}
             if len(kinds) != 1 or "file" in kinds:
@@ -848,7 +886,35 @@ class PostgresStore:
                     "version": 1,
                 },
             )
-        return next(row for row in self.relations(owner, "all") if row["id"] == id)
+        return self.relation_get(owner, id)
+
+    def relation_get(self, owner, id):
+        with self._connection() as connection:
+            row = connection.execute(
+                """SELECT e.source_id,e.target_id,e.id,e.relation,e.reason,e.status,
+                e.version,e.created_at,e.history,e.creator_agent_id,e.creator_agent_name,
+                e.confidence,e.evidence_record_ids,e.extraction_method,e.extraction_version
+                FROM relations e
+                JOIN records a ON a.owner=e.owner AND a.id=e.source_id
+                JOIN records b ON b.owner=e.owner AND b.id=e.target_id
+                WHERE e.owner=%s AND e.id=%s
+                AND a.archived_at IS NULL AND b.archived_at IS NULL""",
+                (owner, id),
+            ).fetchone()
+        if not row:
+            raise NotFound()
+        result = self._relation(row)
+        result["parallel_claim_ids"] = [
+            edge["id"]
+            for edge in self.relations(
+                owner,
+                "all",
+                source_id=result["source_id"],
+                target_id=result["target_id"],
+            )
+            if edge["id"] != id
+        ]
+        return result
 
     def relations(
         self,
@@ -858,7 +924,31 @@ class PostgresStore:
         min_confidence=None,
         extraction_method="",
         relation="",
+        source_id="",
+        target_id="",
+        limit=None,
+        cursor=0,
     ):
+        page = "" if limit is None else " LIMIT %s OFFSET %s"
+        parameters = [
+            owner,
+            status,
+            status,
+            creator_agent_id,
+            creator_agent_id,
+            min_confidence,
+            min_confidence,
+            extraction_method,
+            extraction_method,
+            relation,
+            relation,
+            source_id,
+            source_id,
+            target_id,
+            target_id,
+        ]
+        if limit is not None:
+            parameters.extend((limit, cursor))
         with self._connection() as connection:
             rows = connection.execute(
                 """SELECT e.source_id,e.target_id,e.id,e.relation,e.reason,e.status,
@@ -873,20 +963,11 @@ class PostgresStore:
                 AND (%s::double precision IS NULL OR e.confidence >= %s)
                 AND (%s='' OR e.extraction_method=%s)
                 AND (%s='' OR e.relation=%s)
-                ORDER BY e.created_at,e.id""",
-                (
-                    owner,
-                    status,
-                    status,
-                    creator_agent_id,
-                    creator_agent_id,
-                    min_confidence,
-                    min_confidence,
-                    extraction_method,
-                    extraction_method,
-                    relation,
-                    relation,
-                ),
+                AND (%s='' OR e.source_id=%s)
+                AND (%s='' OR e.target_id=%s)
+                ORDER BY e.created_at,e.id"""
+                + page,
+                parameters,
             ).fetchall()
         result = [self._relation(row) for row in rows]
         groups = {}
@@ -1113,7 +1194,9 @@ class PostgresStore:
         result.pop("owner", None)
         result["created_at"] = iso(result["created_at"])
         result["updated_at"] = iso(result.get("updated_at") or result["created_at"])
-        result["resolved_at"] = iso(result.get("resolved_at")) if result.get("resolved_at") else None
+        result["resolved_at"] = (
+            iso(result.get("resolved_at")) if result.get("resolved_at") else None
+        )
         result["result"] = result.get("result") or ""
         result["result_url"] = result.get("result_url") or ""
         return result

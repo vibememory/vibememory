@@ -218,7 +218,6 @@ def test_relation_claims_preserve_authenticated_origin_evidence_and_filters(clie
         f"/v1/graph/{source['id']}?depth=1&relation=PREFERS&min_confidence=0.8"
     ).json()
     assert [item["id"] for item in graph["relations"]] == [edge["id"]]
-
     forged = client.post(
         "/v1/relations",
         json={**payload, "creator_agent_id": "forged-agent"},
@@ -229,6 +228,168 @@ def test_relation_claims_preserve_authenticated_origin_evidence_and_filters(clie
         json={**payload, "evidence_record_ids": ["missing-record"]},
     )
     assert missing_evidence.status_code == 404
+
+
+def test_batch_writes_are_idempotent_partial_and_compact(client):
+    entities_payload = {
+        "items": [
+            {
+                "client_request_id": "entity-1",
+                "name": "Batch Alpha",
+                "entity_type": "Project",
+                "description": "first",
+                "keywords": ["alpha"],
+            },
+            {
+                "client_request_id": "entity-2",
+                "name": "Batch Beta",
+                "entity_type": "Project",
+                "description": "second",
+                "keywords": ["beta"],
+            },
+        ]
+    }
+    created = client.post("/v1/entities/batch", json=entities_payload)
+    assert created.status_code == 200, created.text
+    assert created.json()["counts"] == {"created": 2}
+    assert created.json()["atomic"] is False
+    assert all("resource" not in item for item in created.json()["items"])
+    ids = [item["id"] for item in created.json()["items"]]
+
+    retried = client.post("/v1/entities/batch", json=entities_payload).json()
+    assert retried["counts"] == {"existing": 2}
+    assert [item["id"] for item in retried["items"]] == ids
+    assert len(client.get("/v1/records?kind=entity").json()["items"]) == 2
+
+    conflict_payload = {
+        "items": [
+            {
+                **entities_payload["items"][0],
+                "name": "Different payload",
+            }
+        ]
+    }
+    conflict = client.post("/v1/entities/batch", json=conflict_payload).json()["items"][0]
+    assert conflict["status"] == "conflict"
+    assert conflict["error"]["code"] == "idempotency_conflict"
+
+    relation_payload = {
+        "items": [
+            {
+                "client_request_id": "relation-1",
+                "source_id": ids[0],
+                "target_id": ids[1],
+                "relation": "DEPENDS_ON",
+                "reason": "agent supplied",
+                "confidence": 0.8,
+                "evidence_record_ids": [ids[0]],
+            },
+            {
+                "client_request_id": "relation-missing",
+                "source_id": ids[0],
+                "target_id": "missing",
+                "relation": "DEPENDS_ON",
+                "reason": "bad endpoint",
+            },
+            {
+                "client_request_id": "relation-2",
+                "source_id": ids[0],
+                "target_id": ids[1],
+                "relation": "USES",
+                "reason": "second page",
+            },
+        ]
+    }
+    relations = client.post("/v1/relations/batch", json=relation_payload)
+    assert relations.status_code == 200, relations.text
+    assert relations.json()["counts"] == {"created": 2, "failed": 1}
+    assert relations.json()["items"][1]["error"] == {
+        "code": "not_found",
+        "message": "An owner-scoped record was not found",
+        "retryable": False,
+    }
+
+    listed = client.get(
+        f"/v1/relations?source_id={ids[0]}&limit=1&fields=source_id,target_id,relation"
+        "&include_history=false"
+    ).json()
+    assert listed["next_cursor"] == 1
+    assert listed["items"] == [
+        {
+            "id": relations.json()["items"][0]["id"],
+            "source_id": ids[0],
+            "target_id": ids[1],
+            "relation": "DEPENDS_ON",
+        }
+    ]
+    second_page = client.get(
+        f"/v1/relations?source_id={ids[0]}&limit=1&cursor={listed['next_cursor']}"
+        "&fields=relation&include_history=false"
+    ).json()
+    assert second_page["next_cursor"] is None
+    assert second_page["items"] == [{"id": relations.json()["items"][2]["id"], "relation": "USES"}]
+
+    updates = client.patch(
+        "/v1/records/batch",
+        json={
+            "return": "full",
+            "items": [
+                {
+                    "id": ids[0],
+                    "client_request_id": "update-1",
+                    "expected_version": 1,
+                    "description": "ignored",
+                    "title": "Updated Alpha",
+                },
+                {
+                    "id": ids[1],
+                    "client_request_id": "update-stale",
+                    "expected_version": 9,
+                    "title": "Never saved",
+                },
+            ],
+        },
+    )
+    assert updates.status_code == 422
+
+    updates = client.patch(
+        "/v1/records/batch",
+        json={
+            "return": "full",
+            "items": [
+                {
+                    "id": ids[0],
+                    "client_request_id": "update-1",
+                    "expected_version": 1,
+                    "title": "Updated Alpha",
+                },
+                {
+                    "id": ids[1],
+                    "client_request_id": "update-stale",
+                    "expected_version": 9,
+                    "title": "Never saved",
+                },
+            ],
+        },
+    )
+    assert updates.status_code == 200, updates.text
+    assert updates.json()["counts"] == {"updated": 1, "failed": 1}
+    assert updates.json()["items"][0]["resource"]["title"] == "Updated Alpha"
+    assert updates.json()["items"][1]["error"]["code"] == "version_conflict"
+    assert updates.json()["items"][1]["error"]["retryable"] is True
+
+    summary = client.get(
+        "/v1/records?summary=true&include_content=false&include_history=false"
+    ).json()["items"]
+    assert summary and all("content" not in item for item in summary)
+    assert all("security_history" not in item for item in summary)
+    assert (
+        client.post(
+            "/v1/entities/batch",
+            json={"atomic": True, "items": [entities_payload["items"][0]]},
+        ).status_code
+        == 422
+    )
 
 
 def test_restart(settings):

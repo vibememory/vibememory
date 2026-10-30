@@ -125,6 +125,19 @@ def main():
             key,
             expected=201,
         )
+        batch_entity_payload = {
+            "items": [
+                {
+                    "client_request_id": "selfhost-batch-entity-v1",
+                    "name": "Self-host batch entity",
+                    "entity_type": "Test",
+                    "description": "PostgreSQL idempotency verification",
+                    "keywords": ["self-host", "batch"],
+                }
+            ]
+        }
+        batch_entity = call("/v1/entities/batch", "POST", batch_entity_payload, key)["items"][0]
+        assert batch_entity["status"] == "created"
         assert (
             call("/v1/search", "POST", {"keywords": ["tea"], "limit": 1}, key)["hits"][0]["id"]
             == memory["id"]
@@ -142,9 +155,9 @@ def main():
             expected=201,
         )
         setup = call("/auth/totp/setup", "POST", {"password": password})
-        recovery_codes = call(
-            "/auth/totp/enable", "POST", {"code": totp_code(setup["secret"])}
-        )["recovery_codes"]
+        recovery_codes = call("/auth/totp/enable", "POST", {"code": totp_code(setup["secret"])})[
+            "recovery_codes"
+        ]
         assert len(recovery_codes) == 10
         state = dict(
             user_id=user["id"],
@@ -157,6 +170,7 @@ def main():
             file_id=file["id"],
             relation_id=relation["id"],
             feature_id=feature["id"],
+            batch_entity_id=batch_entity["id"],
             file_sha256=hashlib.sha256(raw).hexdigest(),
         )
         args.state_file.parent.mkdir(parents=True, exist_ok=True)
@@ -176,14 +190,17 @@ def main():
             {"email": state["email"], "password": state["password"]},
         )
         assert login["mfa_required"] is True
-        assert call(
-            "/auth/login/otp",
-            "POST",
-            {
-                "challenge_token": login["challenge_token"],
-                "code": totp_code(state["totp_secret"]),
-            },
-        )["user"]["id"] == state["user_id"]
+        assert (
+            call(
+                "/auth/login/otp",
+                "POST",
+                {
+                    "challenge_token": login["challenge_token"],
+                    "code": totp_code(state["totp_secret"]),
+                },
+            )["user"]["id"]
+            == state["user_id"]
+        )
         assert call("/auth/security")["totp_enabled"] is True
         assert call("/v1/me", key=key)["user_id"] == state["user_id"]
         assert call("/v1/records/" + state["memory_id"], key=key)["content"] == "I prefer tea"
@@ -193,12 +210,35 @@ def main():
         graph = call("/v1/graph/" + state["memory_id"], key=key)
         assert graph["relations"][0]["id"] == state["relation_id"]
         assert call("/v1/feature-requests/" + state["feature_id"], key=key)["status"] == "received"
+        batch_retry = call(
+            "/v1/entities/batch",
+            "POST",
+            {
+                "items": [
+                    {
+                        "client_request_id": "selfhost-batch-entity-v1",
+                        "name": "Self-host batch entity",
+                        "entity_type": "Test",
+                        "description": "PostgreSQL idempotency verification",
+                        "keywords": ["self-host", "batch"],
+                    }
+                ]
+            },
+            key,
+        )["items"][0]
+        assert batch_retry["status"] == "existing"
+        assert batch_retry["id"] == state["batch_entity_id"]
         assert call("/v1/vault/SELFHOST_SMOKE", key=key)["value"] == "selfhost-vault-secret"
         assert (
             call("/v1/search", "POST", {"keywords": ["tea"], "limit": 1}, key)["hits"][0]["id"]
             == state["memory_id"]
         )
-        for id in [state["document_id"], state["file_id"], state["memory_id"]]:
+        for id in [
+            state["batch_entity_id"],
+            state["document_id"],
+            state["file_id"],
+            state["memory_id"],
+        ]:
             call("/v1/records/" + id, "DELETE", key=key, expected=204)
         args.state_file.unlink()
         print(

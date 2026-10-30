@@ -1,3 +1,4 @@
+import hashlib
 import json
 import threading
 from contextlib import contextmanager
@@ -47,6 +48,7 @@ class Store:
     def __init__(self, path, model):
         path.parent.mkdir(parents=True, exist_ok=True)
         self.lock = threading.RLock()
+        self._local = threading.local()
         self.db = kuzu.Database(str(path), buffer_pool_size=128 * 1024 * 1024, max_num_threads=2)
         self.conn = kuzu.Connection(self.db)
         self.query("""CREATE NODE TABLE IF NOT EXISTS Item(
@@ -76,12 +78,16 @@ class Store:
             client_request_id STRING, request_payload STRING, status STRING,
             created_at STRING, expires_at STRING, delivered_at STRING, read_at STRING,
             acked_at STRING)""")
-        self.event_sequence = self.query(
-            "MATCH (e:ChangeEvent) RETURN max(e.id) AS latest"
-        )[0]["latest"] or 0
-        self.message_sequence = self.query(
-            "MATCH (m:AgentMessage) RETURN max(m.sequence) AS latest"
-        )[0]["latest"] or 0
+        self.query("""CREATE NODE TABLE IF NOT EXISTS BatchOperation(
+            id STRING PRIMARY KEY, owner STRING, agent_id STRING, operation STRING,
+            client_request_id STRING, request_hash STRING, result STRING,
+            created_at STRING)""")
+        self.event_sequence = (
+            self.query("MATCH (e:ChangeEvent) RETURN max(e.id) AS latest")[0]["latest"] or 0
+        )
+        self.message_sequence = (
+            self.query("MATCH (m:AgentMessage) RETURN max(m.sequence) AS latest")[0]["latest"] or 0
+        )
         rows = self.query("MATCH (m:Meta {key: 'embedding_model'}) RETURN m.value AS value")
         if rows and rows[0]["value"] != model:
             self.close()
@@ -118,9 +124,7 @@ class Store:
         for name in ("result", "result_url", "updated_at", "resolved_at"):
             if name not in feature_columns:
                 self.query(f"ALTER TABLE FeatureRequest ADD {name} STRING DEFAULT ''")
-        relation_columns = {
-            row["name"] for row in self.query("CALL table_info('Link') RETURN *")
-        }
+        relation_columns = {row["name"] for row in self.query("CALL table_info('Link') RETURN *")}
         relation_defaults = {
             "creator_agent_id": ("STRING", "'unknown'"),
             "creator_agent_name": ("STRING", "'Unknown agent'"),
@@ -143,8 +147,12 @@ class Store:
         self.event_sequence += 1
         self.query(
             "CREATE (:ChangeEvent {id: $id, owner: $owner, event: $event, payload: $payload})",
-            dict(id=self.event_sequence, owner=owner, event=event,
-                 payload=json.dumps(payload, ensure_ascii=False)),
+            dict(
+                id=self.event_sequence,
+                owner=owner,
+                event=event,
+                payload=json.dumps(payload, ensure_ascii=False),
+            ),
         )
 
     def events(self, owner, after=0, limit=100):
@@ -154,8 +162,9 @@ class Store:
             ORDER BY e.id LIMIT $limit""",
             dict(owner=owner, after=after, limit=limit),
         )
-        return [dict(id=row["id"], event=row["event"], data=json.loads(row["payload"]))
-                for row in rows]
+        return [
+            dict(id=row["id"], event=row["event"], data=json.loads(row["payload"])) for row in rows
+        ]
 
     @staticmethod
     def agent_record(node):
@@ -173,16 +182,26 @@ class Store:
                     """MATCH (a:Agent {id: $id, owner: $owner})
                     SET a.name=$name,a.transport=$transport,a.active=true,
                     a.last_seen_at=$seen""",
-                    {"id": agent_id, "owner": owner, "name": name,
-                     "transport": transport, "seen": seen},
+                    {
+                        "id": agent_id,
+                        "owner": owner,
+                        "name": name,
+                        "transport": transport,
+                        "seen": seen,
+                    },
                 )
             else:
                 self.query(
                     """CREATE (:Agent {id: $id, owner: $owner, name: $name,
                     transport: $transport, active: true, created_at: $seen,
                     last_seen_at: $seen})""",
-                    {"id": agent_id, "owner": owner, "name": name,
-                     "transport": transport, "seen": seen},
+                    {
+                        "id": agent_id,
+                        "owner": owner,
+                        "name": name,
+                        "transport": transport,
+                        "seen": seen,
+                    },
                 )
         rows = self.query(
             "MATCH (a:Agent {id: $id, owner: $owner}) RETURN a",
@@ -208,9 +227,7 @@ class Store:
     @staticmethod
     def message_record(node):
         result = {
-            key: value
-            for key, value in node.items()
-            if key not in {"owner", "request_payload"}
+            key: value for key, value in node.items() if key not in {"owner", "request_payload"}
         }
         result["metadata"] = json.loads(result.get("metadata") or "{}")
         for field in ("reply_to", "client_request_id", "delivered_at", "read_at", "acked_at"):
@@ -242,8 +259,11 @@ class Store:
                 rows = self.query(
                     """MATCH (m:AgentMessage {owner: $owner,
                     sender_agent_id: $sender, client_request_id: $request_id}) RETURN m""",
-                    {"owner": owner, "sender": sender_agent_id,
-                     "request_id": data.client_request_id},
+                    {
+                        "owner": owner,
+                        "sender": sender_agent_id,
+                        "request_id": data.client_request_id,
+                    },
                 )
                 if rows:
                     if rows[0]["m"]["request_payload"] != payload_json:
@@ -258,7 +278,8 @@ class Store:
                 )
                 participants = (
                     {rows[0]["m"]["sender_agent_id"], rows[0]["m"]["recipient_agent_id"]}
-                    if rows else set()
+                    if rows
+                    else set()
                 )
                 if (
                     data.recipient_agent_id not in participants
@@ -318,8 +339,9 @@ class Store:
             parameters["status"] = status
         rows = self.query(
             """MATCH (m:AgentMessage {owner: $owner, recipient_agent_id: $agent_id})
-            WHERE m.sequence>$after AND m.expires_at>$now""" + status_filter +
-            " RETURN m ORDER BY m.sequence LIMIT $limit",
+            WHERE m.sequence>$after AND m.expires_at>$now"""
+            + status_filter
+            + " RETURN m ORDER BY m.sequence LIMIT $limit",
             parameters,
         )
         return [self.message_record(row["m"]) for row in rows]
@@ -352,8 +374,14 @@ class Store:
                     """MATCH (m:AgentMessage {owner: $owner, id: $id})
                     SET m.status=$status,m.delivered_at=$delivered,m.read_at=$read,
                     m.acked_at=$acked""",
-                    {"owner": owner, "id": id, "status": status,
-                     "delivered": delivered, "read": read, "acked": acked},
+                    {
+                        "owner": owner,
+                        "id": id,
+                        "status": status,
+                        "delivered": delivered,
+                        "read": read,
+                        "acked": acked,
+                    },
                 )
         return self.get_message(owner, agent_id, id)
 
@@ -376,13 +404,69 @@ class Store:
     @contextmanager
     def transaction(self):
         with self.lock:
+            depth = getattr(self._local, "transaction_depth", 0)
+            if depth:
+                self._local.transaction_depth = depth + 1
+                try:
+                    yield
+                finally:
+                    self._local.transaction_depth -= 1
+                return
             self.query("BEGIN TRANSACTION")
+            self._local.transaction_depth = 1
             try:
                 yield
                 self.query("COMMIT")
             except BaseException:
                 self.query("ROLLBACK")
                 raise
+            finally:
+                self._local.transaction_depth = 0
+
+    @staticmethod
+    def _batch_operation_id(owner, agent_id, operation, client_request_id):
+        value = "\0".join((owner, agent_id, operation, client_request_id))
+        return hashlib.sha256(value.encode()).hexdigest()
+
+    def run_idempotent(
+        self,
+        owner,
+        agent_id,
+        operation,
+        client_request_id,
+        request_hash,
+        callback,
+    ):
+        id = self._batch_operation_id(owner, agent_id, operation, client_request_id)
+        with self.transaction():
+            rows = self.query(
+                "MATCH (b:BatchOperation {id: $id}) RETURN b",
+                {"id": id},
+            )
+            if rows:
+                stored = rows[0]["b"]
+                if stored["request_hash"] != request_hash:
+                    raise DuplicateRequestConflict()
+                return json.loads(stored["result"]), False
+            result = callback()
+            self.query(
+                """CREATE (:BatchOperation {id: $id, owner: $owner,
+                agent_id: $agent_id, operation: $operation,
+                client_request_id: $client_request_id,
+                request_hash: $request_hash, result: $result,
+                created_at: $created_at})""",
+                {
+                    "id": id,
+                    "owner": owner,
+                    "agent_id": agent_id,
+                    "operation": operation,
+                    "client_request_id": client_request_id,
+                    "request_hash": request_hash,
+                    "result": json.dumps(result, ensure_ascii=False),
+                    "created_at": now(),
+                },
+            )
+            return result, True
 
     @staticmethod
     def clean(node, internal=False):
@@ -468,9 +552,7 @@ class Store:
                     provenance=json.dumps(security["provenance"], ensure_ascii=False),
                     content_hash=security["content_hash"],
                     security_warnings=security["security_warnings"],
-                    security_history=json.dumps(
-                        security["security_history"], ensure_ascii=False
-                    ),
+                    security_history=json.dumps(security["security_history"], ensure_ascii=False),
                 )
             )
             self._index(owner, id, keywords, vectors)
@@ -529,9 +611,16 @@ class Store:
                 {"owner": owner, "id": id, "keywords": keywords},
             )
             self._index(owner, id, keywords, vectors)
-            self._event(owner, record["kind"] + ".updated",
-                        {"record_id": id, "kind": record["kind"], "change": "keywords",
-                         "version": record["version"] + 1})
+            self._event(
+                owner,
+                record["kind"] + ".updated",
+                {
+                    "record_id": id,
+                    "kind": record["kind"],
+                    "change": "keywords",
+                    "version": record["version"] + 1,
+                },
+            )
             return self.get(owner, id)
 
     def update_record(self, owner, id, data, vectors=None):
@@ -548,9 +637,7 @@ class Store:
                 fields["metadata"] = json.dumps(data.metadata, ensure_ascii=False)
             title = data.title if data.title is not None else record["title"]
             content = data.content if data.content is not None else record["content"]
-            security = reassess_record_security(
-                record, title, content, record["version"] + 1
-            )
+            security = reassess_record_security(record, title, content, record["version"] + 1)
             security_changed = (
                 security["security_state"] != record["security_state"]
                 or security["trust_level"] != record["trust_level"]
@@ -585,8 +672,12 @@ class Store:
             self._event(
                 owner,
                 record["kind"] + ".updated",
-                {"record_id": id, "kind": record["kind"], "change": "record",
-                 "version": record["version"] + 1},
+                {
+                    "record_id": id,
+                    "kind": record["kind"],
+                    "change": "record",
+                    "version": record["version"] + 1,
+                },
             )
             if security_changed:
                 self._event(
@@ -646,7 +737,8 @@ class Store:
     def get(self, owner, id, internal=False):
         rows = self.query(
             """MATCH (n:Item {owner: $owner, id: $id})
-            WHERE n.archived_at = '' RETURN n""", {"owner": owner, "id": id}
+            WHERE n.archived_at = '' RETURN n""",
+            {"owner": owner, "id": id},
         )
         if not rows or (not internal and rows[0]["n"]["kind"] in {"chunk", "keyword"}):
             raise NotFound()
@@ -716,9 +808,11 @@ class Store:
                 DETACH DELETE n""",
                 {"owner": owner, "id": id},
             )
-            self._event(owner, record["kind"] + ".deleted",
-                        {"record_id": id, "kind": record["kind"],
-                         "incident_relations_removed": True})
+            self._event(
+                owner,
+                record["kind"] + ".deleted",
+                {"record_id": id, "kind": record["kind"], "incident_relations_removed": True},
+            )
 
     def archive(self, owner, id, expected_version, reason):
         with self.transaction():
@@ -740,8 +834,13 @@ class Store:
             self._event(
                 owner,
                 record["kind"] + ".archived",
-                {"record_id": id, "kind": record["kind"], "reason": reason,
-                 "version": record["version"] + 1, "recoverable": True},
+                {
+                    "record_id": id,
+                    "kind": record["kind"],
+                    "reason": reason,
+                    "version": record["version"] + 1,
+                    "recoverable": True,
+                },
             )
             return {"id": id, "archived_at": archived_at, "version": record["version"] + 1}
 
@@ -768,8 +867,12 @@ class Store:
             self._event(
                 owner,
                 record["kind"] + ".restored",
-                {"record_id": id, "kind": record["kind"], "reason": reason,
-                 "version": record["version"] + 1},
+                {
+                    "record_id": id,
+                    "kind": record["kind"],
+                    "reason": reason,
+                    "version": record["version"] + 1,
+                },
             )
             return self.get(owner, id)
 
@@ -808,8 +911,13 @@ class Store:
                         """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
                         WHERE r.id = $id SET r.status = 'retracted', r.reason = $reason,
                         r.version = $version, r.history = $history""",
-                        {"owner": owner, "id": edge["id"], "reason": change_reason,
-                         "version": version, "history": json.dumps(history)},
+                        {
+                            "owner": owner,
+                            "id": edge["id"],
+                            "reason": change_reason,
+                            "version": version,
+                            "history": json.dumps(history),
+                        },
                     )
                     retracted += 1
                     continue
@@ -835,8 +943,13 @@ class Store:
                     """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
                     WHERE r.id = $id SET r.status = $status, r.version = $version,
                     r.history = $history""",
-                    {"owner": owner, "id": new_id, "status": edge["status"],
-                     "version": version, "history": json.dumps(history)},
+                    {
+                        "owner": owner,
+                        "id": new_id,
+                        "status": edge["status"],
+                        "version": version,
+                        "history": json.dumps(history),
+                    },
                 )
                 relation_id_map[edge["id"]] = new_id
                 rewired += 1
@@ -853,9 +966,13 @@ class Store:
             self._event(
                 owner,
                 "record.merged",
-                {"canonical_id": data.canonical_id, "archived_ids": data.duplicate_ids,
-                 "reason": data.reason, "relations_rewired": rewired,
-                 "relations_retracted": retracted},
+                {
+                    "canonical_id": data.canonical_id,
+                    "archived_ids": data.duplicate_ids,
+                    "reason": data.reason,
+                    "relations_rewired": rewired,
+                    "relations_retracted": retracted,
+                },
             )
             return {
                 "canonical": self.get(owner, data.canonical_id),
@@ -949,11 +1066,28 @@ class Store:
                 data.extraction_method,
                 data.extraction_version,
             )
-            self._event(owner, "relation.created", {"relation_id": id,
-                        "source_id": data.source_id, "target_id": data.target_id,
-                        "creator_agent_id": creator_agent_id,
-                        "confidence": data.confidence, "version": 1})
-            return next(r for r in self.relations(owner, "all") if r["id"] == id)
+            self._event(
+                owner,
+                "relation.created",
+                {
+                    "relation_id": id,
+                    "source_id": data.source_id,
+                    "target_id": data.target_id,
+                    "creator_agent_id": creator_agent_id,
+                    "confidence": data.confidence,
+                    "version": 1,
+                },
+            )
+            return self.relation_get(owner, id)
+
+    def relation_get(self, owner, id):
+        edge = next(
+            (edge for edge in self.relations(owner, "all") if edge["id"] == id),
+            None,
+        )
+        if not edge:
+            raise NotFound()
+        return edge
 
     def relations(
         self,
@@ -963,6 +1097,10 @@ class Store:
         min_confidence=None,
         extraction_method="",
         relation="",
+        source_id="",
+        target_id="",
+        limit=None,
+        cursor=0,
     ):
         rows = self.query(
             """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
@@ -976,7 +1114,8 @@ class Store:
                 r.confidence AS confidence,
                 r.evidence_record_ids AS evidence_record_ids,
                 r.extraction_method AS extraction_method,
-                r.extraction_version AS extraction_version""",
+                r.extraction_version AS extraction_version
+            ORDER BY r.created_at,r.id""",
             {"owner": owner, "status": status},
         )
         result = []
@@ -997,6 +1136,10 @@ class Store:
                 continue
             if relation and row["relation"] != relation:
                 continue
+            if source_id and row["source_id"] != source_id:
+                continue
+            if target_id and row["target_id"] != target_id:
+                continue
             row["claim_group"] = f"{row['source_id']}:{row['target_id']}"
             result.append(row)
         groups = {}
@@ -1006,7 +1149,9 @@ class Store:
             edge["parallel_claim_ids"] = [
                 claim_id for claim_id in groups[edge["claim_group"]] if claim_id != edge["id"]
             ]
-        return result
+        if limit is None:
+            return result
+        return result[cursor : cursor + limit]
 
     def update_link(self, owner, id, data):
         with self.transaction():
@@ -1034,9 +1179,16 @@ class Store:
                     history=json.dumps(history),
                 ),
             )
-            self._event(owner, "relation.updated", {"relation_id": id,
-                        "source_id": edge["source_id"], "target_id": edge["target_id"],
-                        "version": version})
+            self._event(
+                owner,
+                "relation.updated",
+                {
+                    "relation_id": id,
+                    "source_id": edge["source_id"],
+                    "target_id": edge["target_id"],
+                    "version": version,
+                },
+            )
             return {
                 **edge,
                 "status": data.status,
@@ -1153,9 +1305,7 @@ class Store:
         return items
 
     def feature_request_status_counts(self):
-        rows = self.query(
-            "MATCH (r:FeatureRequest) RETURN r.status AS status, count(*) AS count"
-        )
+        rows = self.query("MATCH (r:FeatureRequest) RETURN r.status AS status, count(*) AS count")
         return {row["status"]: row["count"] for row in rows}
 
     def add_feature_request(self, owner, data):
@@ -1257,9 +1407,7 @@ class Store:
                 {"owner": owner},
             )
             memory_bytes = sum(payload_bytes(row["n"], RECORD_FIELDS) for row in records)
-            memory_bytes += sum(
-                payload_bytes(row, RELATION_FIELDS) for row in relation_payloads
-            )
+            memory_bytes += sum(payload_bytes(row, RELATION_FIELDS) for row in relation_payloads)
             file_bytes = sum(
                 file_payload_bytes(row["n"].get("metadata"))
                 for row in records

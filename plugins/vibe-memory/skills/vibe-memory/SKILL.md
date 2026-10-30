@@ -31,6 +31,14 @@ Supply concise keywords. Use exact matching for identifiers and known phrases, s
 
 Infer entities and relationships yourself. Search first to avoid duplicates, then use `entity_create` or `relation_create` only with evidence. Use uppercase relationship identifiers such as `WORKS_ON`, `PREFERS`, `MENTIONED_IN`, or `SUPERSEDES`, with a short reason. When known, include calibrated confidence, same-owner evidence record IDs, and extraction method/version; preserve parallel claims instead of silently collapsing disagreement. Prefer recoverable `record_archive` over deletion-like behavior.
 
+For 2–100 agent-prepared graph mutations, prefer `entity_create_many`,
+`relation_create_many`, or `record_update_many`. Give every item a stable
+`client_request_id`, retain it across retries, keep the minimal response unless
+full stored data is needed, and retry only failures marked retryable. Items commit
+independently: create entities first, then use their returned IDs in a relationship
+batch. Use `records_list` and `relations_list` field projection and omit content or
+history when they are not needed so retrieval does not consume unnecessary context.
+
 All Vibe Memory server timestamps and the canonical memory time basis are UTC. Preserve the user's original local expression and named time zone when it matters; never guess a missing offset.
 
 ## Files and external content

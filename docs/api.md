@@ -29,10 +29,12 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/stats` | Owner-scoped console counts and logical storage usage (`memory_bytes`, `file_bytes`, `storage_bytes`; usage includes archived records) |
 | POST | `/v1/memories` | content, kind, keywords; optional source/tags/metadata/provenance |
 | POST | `/v1/entities` | name, entity_type, keywords; optional description/source/tags/metadata/provenance |
+| POST | `/v1/entities/batch` | Create up to 100 entities with per-item idempotency and partial-success results |
 | POST | `/v1/documents` | title, keywords; optional content/file_id/source/tags/metadata/provenance |
-| GET | `/v1/records` | Owner-scoped records; untrusted and quarantined records are excluded by default |
+| GET | `/v1/records` | Owner-scoped records with summary/fields/content/history projection; untrusted and quarantined records are excluded by default |
 | GET/DELETE | `/v1/records/{id}` | Read / permanently delete a record and incident edges |
 | PATCH | `/v1/records/{id}` | Version-checked update of agent-selected record fields |
+| PATCH | `/v1/records/batch` | Version-check and update up to 100 records with per-item idempotency |
 | PATCH | `/v1/records/{id}/security` | Version-checked trust, quarantine, and scan-evidence review |
 | PUT | `/v1/records/{id}/keywords` | Replace the explicitly supplied keyword index |
 | POST | `/v1/records/{id}/archive` | Move a record to recoverable trash with expected_version/reason |
@@ -43,6 +45,7 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | POST | `/v1/files` | Raw application/octet-stream body; optional filename query |
 | GET/DELETE | `/v1/files/{id}` | Original bytes / delete unreferenced original |
 | POST/GET | `/v1/relations` | Store agent-inferred relationship claims / filter by status, creator, confidence, extraction method, or relation |
+| POST | `/v1/relations/batch` | Create up to 100 relation claims with per-item ownership/evidence validation and idempotency |
 | PATCH | `/v1/relations/{id}` | Retract/restore using reason and expected_version |
 | GET | `/v1/graph/{id}` | Explicit 0–2 hop active-edge traversal |
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
@@ -161,6 +164,36 @@ Every record includes an integer `version`. `PATCH /v1/records/{id}` accepts `ex
 Archive is the recoverable-delete path used by agents. Archived records disappear from ordinary get/list/search/graph results but remain in `/v1/trash`; restoring increments the version again. Permanent `DELETE` remains available to explicitly authorized REST/console clients and removes incident relationships. Archiving a file referenced by an active document returns 409 and never removes its bytes.
 
 `POST /v1/records/merge` takes `canonical_id`, unique `duplicate_ids`, an `expected_versions` map containing every ID, and a reason. The server does not infer or combine content. The agent first updates the canonical record with the unique information and keywords it intends to retain; merge then rewires non-self relationships, retracts relationships that would become self-loops, archives duplicates, and reports counts plus the affected IDs.
+
+## Batch writes and compact reads
+
+`POST /v1/entities/batch`, `POST /v1/relations/batch`, and
+`PATCH /v1/records/batch` accept 1–100 `items`. Every item requires a stable
+`client_request_id`, scoped to the authenticated agent connection and operation.
+An identical retry returns `status: existing` with the original ID instead of
+writing a duplicate; reusing that ID with different content returns an item-level
+`idempotency_conflict`.
+
+Batches deliberately use partial-success semantics (`atomic` is always false).
+Each item commits independently, preserving the same owner, evidence, authenticated
+creator and expected-version checks as the corresponding single-item endpoint.
+The response reports `created`, `updated`, `existing`, `failed`, or `conflict` per
+item. Errors contain a stable code and `retryable` flag. `return` defaults to
+`minimal` (ID, version, kind/status); set `return: full` only when the complete
+stored resource is required. `atomic: true` is rejected rather than implying a
+transaction guarantee the service does not provide.
+
+MCP exposes the equivalent `entity_create_many`, `relation_create_many`, and
+`record_update_many` tools. For graph refreshes, create entities first, use their
+returned IDs in a relationship batch, and retain the client request IDs across
+retries.
+
+`GET /v1/records` supports `summary`, comma-separated `fields`,
+`include_content`, and `include_history`. `GET /v1/relations` supports
+`source_id`, `target_id`, `limit`, integer `cursor`, comma-separated `fields`, and
+`include_history`; follow `next_cursor` until it is null. MCP `records_list` and
+`relations_list` expose the same projection and pagination controls. Projection
+only reduces response size—the server never summarizes or infers stored content.
 
 ## Agent messages
 

@@ -4,10 +4,21 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
 
+from .batch import (
+    RECORD_FIELDS,
+    RELATION_FIELDS,
+    batch_response,
+    minimal_resource,
+    parse_fields,
+    project_record,
+    project_relation,
+    request_hash,
+)
 from .models import (
     AgentMessageAck,
     AgentMessageInput,
     DocumentInput,
+    EntityCreateMany,
     EntityInput,
     FeatureRequestInput,
     Input,
@@ -16,6 +27,8 @@ from .models import (
     RecordMerge,
     RecordSecurityUpdate,
     RecordUpdate,
+    RecordUpdateMany,
+    RelationCreateMany,
     RelationInput,
     RelationUpdate,
     SearchInput,
@@ -25,7 +38,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.14.0"
+SERVER_VERSION = "0.15.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -62,6 +75,10 @@ class RecordListInput(Input):
     kind: Literal["memory", "document", "entity", "file"] | None = None
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
+    summary: bool = False
+    fields: list[str] | None = Field(default=None, max_length=30)
+    include_content: bool = True
+    include_history: bool = True
     include_untrusted: bool = False
     include_quarantined: bool = False
 
@@ -94,6 +111,12 @@ class RelationListInput(Input):
     min_confidence: float | None = Field(default=None, ge=0, le=1)
     extraction_method: str = Field(default="", max_length=100)
     relation: str = Field(default="", max_length=80, pattern=r"^$|^[A-Z][A-Z0-9_]*$")
+    source_id: str = Field(default="", max_length=100)
+    target_id: str = Field(default="", max_length=100)
+    limit: int = Field(default=100, ge=1, le=100)
+    cursor: int = Field(default=0, ge=0)
+    fields: list[str] | None = Field(default=None, max_length=30)
+    include_history: bool = True
 
 
 class VaultNameInput(Input):
@@ -334,6 +357,15 @@ TOOLS = [
         read_only=False,
     ),
     _tool(
+        "entity_create_many",
+        "Store up to 100 inferred entities",
+        "Create agent-inferred entities with per-item client_request_id idempotency. Items "
+        "commit independently and return item-level status; the server does not infer or merge.",
+        EntityCreateMany,
+        "memory:write",
+        read_only=False,
+    ),
+    _tool(
         "document_create",
         "Store agent-prepared document metadata",
         "Use this after the agent analyzes a document. Send only agent-prepared title, content, "
@@ -354,11 +386,29 @@ TOOLS = [
         read_only=False,
     ),
     _tool(
+        "relation_create_many",
+        "Store up to 100 inferred relationships",
+        "Create relationships in one round trip with per-item idempotency, ownership and "
+        "evidence validation, authenticated creator provenance, and partial-success results.",
+        RelationCreateMany,
+        "memory:write",
+        read_only=False,
+    ),
+    _tool(
         "record_update",
         "Update a memory record",
         "Update agent-selected fields using expected_version. The server does not merge or infer "
         "content; send the complete intended values and agent-extracted keywords.",
         RecordUpdateInput,
+        "memory:write",
+        read_only=False,
+    ),
+    _tool(
+        "record_update_many",
+        "Update up to 100 records",
+        "Version-check and update multiple owner-scoped records with per-item "
+        "client_request_id idempotency and partial-success results.",
+        RecordUpdateMany,
         "memory:write",
         read_only=False,
     ),
@@ -450,9 +500,12 @@ MODEL_MAP = {
     "message_get": MessageIdInput,
     "memory_create": MemoryInput,
     "entity_create": EntityInput,
+    "entity_create_many": EntityCreateMany,
     "document_create": DocumentInput,
     "relation_create": RelationInput,
+    "relation_create_many": RelationCreateMany,
     "record_update": RecordUpdateInput,
+    "record_update_many": RecordUpdateMany,
     "record_security_update": RecordSecurityUpdateInput,
     "record_archive": RecordArchiveInput,
     "record_restore": RecordArchiveInput,
@@ -521,10 +574,107 @@ class MCPHandler:
             security=security,
         )
 
+    def _batch_item(
+        self,
+        db,
+        owner,
+        principal,
+        operation,
+        index,
+        item,
+        callback,
+        success_status,
+        return_mode,
+    ):
+        base = {"index": index, "client_request_id": item.client_request_id}
+        try:
+            created_resource = {}
+
+            def execute():
+                resource = callback()
+                created_resource["value"] = resource
+                return minimal_resource(resource)
+
+            stored, created = db.run_idempotent(
+                owner,
+                principal["agent_id"],
+                operation,
+                item.client_request_id,
+                request_hash(item),
+                execute,
+            )
+            result = {
+                **base,
+                **stored,
+                "status": success_status if created else "existing",
+            }
+            if return_mode == "full":
+                resource = created_resource.get("value")
+                if resource is None:
+                    try:
+                        resource = (
+                            db.relation_get(owner, stored["id"])
+                            if operation == "relation_create"
+                            else db.get(owner, stored["id"])
+                        )
+                    except NotFound:
+                        resource = None
+                if resource is not None:
+                    result["resource"] = resource
+            return result
+        except DuplicateRequestConflict:
+            return {
+                **base,
+                "status": "conflict",
+                "error": {
+                    "code": "idempotency_conflict",
+                    "message": "client_request_id was already used with different content",
+                    "retryable": False,
+                },
+            }
+        except NotFound:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "not_found",
+                    "message": "An owner-scoped record was not found",
+                    "retryable": False,
+                },
+            }
+        except Conflict:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "version_conflict",
+                    "message": "The record version changed; fetch it before retrying",
+                    "retryable": True,
+                },
+            }
+        except ValueError as error:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "invalid",
+                    "message": str(error),
+                    "retryable": False,
+                },
+            }
+        except Exception:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "internal_error",
+                    "message": "The item could not be saved",
+                    "retryable": True,
+                },
+            }
+
     def available_tools(self, principal):
-        return [
-            tool for tool in TOOLS if tool["_meta"]["vibememory/scope"] in principal["scopes"]
-        ]
+        return [tool for tool in TOOLS if tool["_meta"]["vibememory/scope"] in principal["scopes"]]
 
     def call_tool(self, name, arguments, principal, db):
         tool = TOOL_MAP.get(name)
@@ -607,6 +757,17 @@ class MCPHandler:
                     data.include_untrusted,
                     data.include_quarantined,
                 )
+                selected_fields = parse_fields(data.fields, RECORD_FIELDS)
+                records = [
+                    project_record(
+                        record,
+                        summary=data.summary,
+                        fields=selected_fields,
+                        include_content=data.include_content,
+                        include_history=data.include_history,
+                    )
+                    for record in records
+                ]
                 return _text_result(
                     f"Listed {len(records)} records.",
                     {"items": records, "limit": data.limit, "offset": data.offset},
@@ -638,9 +799,29 @@ class MCPHandler:
                     data.min_confidence,
                     data.extraction_method,
                     data.relation,
+                    data.source_id,
+                    data.target_id,
+                    data.limit + 1,
+                    data.cursor,
                 )
+                has_more = len(relations) > data.limit
+                selected_fields = parse_fields(data.fields, RELATION_FIELDS)
+                relations = [
+                    project_relation(
+                        relation,
+                        fields=selected_fields,
+                        include_history=data.include_history,
+                    )
+                    for relation in relations[: data.limit]
+                ]
                 return _text_result(
-                    f"Listed {len(relations)} relationships.", {"items": relations}
+                    f"Listed {len(relations)} relationships.",
+                    {
+                        "items": relations,
+                        "limit": data.limit,
+                        "cursor": data.cursor,
+                        "next_cursor": (data.cursor + data.limit if has_more else None),
+                    },
                 )
             if name == "events_poll":
                 events = db.events(owner, data.after, data.limit)
@@ -683,9 +864,7 @@ class MCPHandler:
                     {"items": messages, "cursor": cursor, "limit": data.limit},
                 )
             if name == "message_sent":
-                messages = db.sent_messages(
-                    owner, principal["agent_id"], data.limit, data.offset
-                )
+                messages = db.sent_messages(owner, principal["agent_id"], data.limit, data.offset)
                 return _text_result(
                     f"Listed {len(messages)} sent messages.",
                     {"items": messages, "limit": data.limit, "offset": data.offset},
@@ -699,6 +878,27 @@ class MCPHandler:
             if name == "entity_create":
                 record = self._ingest(db, owner, "entity", data)
                 return _text_result(f"Stored entity {record['id']}.", {"record": record})
+            if name == "entity_create_many":
+                results = []
+                for index, item in enumerate(data.items):
+                    entity = EntityInput.model_validate(
+                        item.model_dump(exclude={"client_request_id"})
+                    )
+                    results.append(
+                        self._batch_item(
+                            db,
+                            owner,
+                            principal,
+                            "entity_create",
+                            index,
+                            item,
+                            lambda entity=entity: self._ingest(db, owner, "entity", entity),
+                            "created",
+                            data.return_mode,
+                        )
+                    )
+                response = batch_response(results)
+                return _text_result(f"Processed {len(results)} entity items.", response)
             if name == "document_create":
                 record = self._ingest(db, owner, "document", data)
                 return _text_result(f"Stored document {record['id']}.", {"record": record})
@@ -712,10 +912,64 @@ class MCPHandler:
                 return _text_result(
                     f"Stored relationship {relation['id']}.", {"relation": relation}
                 )
+            if name == "relation_create_many":
+                results = []
+                for index, item in enumerate(data.items):
+                    relation_data = RelationInput.model_validate(
+                        item.model_dump(exclude={"client_request_id"})
+                    )
+                    results.append(
+                        self._batch_item(
+                            db,
+                            owner,
+                            principal,
+                            "relation_create",
+                            index,
+                            item,
+                            lambda relation_data=relation_data: db.link(
+                                owner,
+                                relation_data,
+                                principal["agent_id"],
+                                principal["agent_name"],
+                            ),
+                            "created",
+                            data.return_mode,
+                        )
+                    )
+                response = batch_response(results)
+                return _text_result(f"Processed {len(results)} relationship items.", response)
             if name == "record_update":
                 vectors = self._vectors(data.keywords) if data.keywords is not None else None
                 record = db.update_record(owner, data.id, data, vectors)
                 return _text_result(f"Updated record {record['id']}.", {"record": record})
+            if name == "record_update_many":
+                results = []
+                for index, item in enumerate(data.items):
+                    update = RecordUpdate.model_validate(
+                        item.model_dump(exclude={"id", "client_request_id"})
+                    )
+
+                    def apply_update(item=item, update=update):
+                        vectors = (
+                            self._vectors(update.keywords) if update.keywords is not None else None
+                        )
+                        return db.update_record(owner, item.id, update, vectors)
+
+                    results.append(
+                        self._batch_item(
+                            db,
+                            owner,
+                            principal,
+                            "record_update",
+                            index,
+                            item,
+                            apply_update,
+                            "updated",
+                            data.return_mode,
+                        )
+                    )
+                response = batch_response(results)
+                return _text_result(f"Processed {len(results)} record update items.", response)
             if name == "record_security_update":
                 record = db.update_security(owner, data.id, data)
                 return _text_result(
@@ -747,9 +1001,7 @@ class MCPHandler:
                 verb = "Queued" if created else "Found existing"
                 return _text_result(f"{verb} message {message['id']}.", {"message": message})
             if name == "message_ack":
-                message = db.ack_message(
-                    owner, principal["agent_id"], data.id, data.status
-                )
+                message = db.ack_message(owner, principal["agent_id"], data.id, data.status)
                 return _text_result(
                     f"Message {message['id']} is {message['status']}.", {"message": message}
                 )
@@ -797,8 +1049,6 @@ class MCPHandler:
             params = message.get("params") or {}
             if not isinstance(params, dict) or not isinstance(params.get("name"), str):
                 return _jsonrpc_error(id_value, -32602, "Invalid tool call parameters")
-            result = self.call_tool(
-                params["name"], params.get("arguments") or {}, principal, db
-            )
+            result = self.call_tool(params["name"], params.get("arguments") or {}, principal, db)
             return _jsonrpc_result(id_value, result)
         return _jsonrpc_error(id_value, -32601, "Method not found")

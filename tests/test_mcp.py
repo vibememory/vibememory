@@ -218,9 +218,12 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "memory_search",
             "memory_create",
             "entity_create",
+            "entity_create_many",
             "document_create",
             "relation_create",
+            "relation_create_many",
             "record_update",
+            "record_update_many",
             "record_security_update",
             "record_archive",
             "record_restore",
@@ -339,6 +342,97 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             },
         )["result"]["structuredContent"]["record"]
         assert released["security_state"] == "active"
+
+        batch_entities = mcp(
+            client,
+            credentials["access_token"],
+            54,
+            "tools/call",
+            {
+                "name": "entity_create_many",
+                "arguments": {
+                    "items": [
+                        {
+                            "client_request_id": "mcp-entity-a",
+                            "name": "MCP A",
+                            "entity_type": "Project",
+                            "keywords": ["mcp-a"],
+                        },
+                        {
+                            "client_request_id": "mcp-entity-b",
+                            "name": "MCP B",
+                            "entity_type": "Project",
+                            "keywords": ["mcp-b"],
+                        },
+                    ]
+                },
+            },
+        )["result"]["structuredContent"]
+        assert batch_entities["counts"] == {"created": 2}
+        entity_ids = [item["id"] for item in batch_entities["items"]]
+        repeated = mcp(
+            client,
+            credentials["access_token"],
+            55,
+            "tools/call",
+            {
+                "name": "entity_create_many",
+                "arguments": {
+                    "items": [
+                        {
+                            "client_request_id": "mcp-entity-a",
+                            "name": "MCP A",
+                            "entity_type": "Project",
+                            "keywords": ["mcp-a"],
+                        }
+                    ]
+                },
+            },
+        )["result"]["structuredContent"]
+        assert repeated["items"][0]["status"] == "existing"
+        relation_batch = mcp(
+            client,
+            credentials["access_token"],
+            56,
+            "tools/call",
+            {
+                "name": "relation_create_many",
+                "arguments": {
+                    "items": [
+                        {
+                            "client_request_id": "mcp-relation-a-b",
+                            "source_id": entity_ids[0],
+                            "target_id": entity_ids[1],
+                            "relation": "RELATED_TO",
+                            "reason": "batch test",
+                            "confidence": 0.75,
+                        }
+                    ]
+                },
+            },
+        )["result"]["structuredContent"]
+        assert relation_batch["items"][0]["status"] == "created"
+        compact_relations = mcp(
+            client,
+            credentials["access_token"],
+            57,
+            "tools/call",
+            {
+                "name": "relations_list",
+                "arguments": {
+                    "source_id": entity_ids[0],
+                    "limit": 1,
+                    "fields": ["source_id", "target_id", "relation"],
+                    "include_history": False,
+                },
+            },
+        )["result"]["structuredContent"]
+        assert compact_relations["items"][0] == {
+            "id": relation_batch["items"][0]["id"],
+            "source_id": entity_ids[0],
+            "target_id": entity_ids[1],
+            "relation": "RELATED_TO",
+        }
 
         agent_data = mcp(
             client,
@@ -464,14 +558,20 @@ def test_mcp_vault_requires_scope_and_per_entry_grant(settings):
     with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
         client.headers["Origin"] = ORIGIN
         signup(client, "vault-mcp@example.invalid")
-        assert client.put(
-            "/v1/vault/MOLTBOOK_API_KEY",
-            json={"value": "moltbook-secret", "description": "Moltbook posting"},
-        ).status_code == 200
-        assert client.put(
-            "/v1/vault/OTHER_TOKEN",
-            json={"value": "other-secret", "description": "Not granted"},
-        ).status_code == 200
+        assert (
+            client.put(
+                "/v1/vault/MOLTBOOK_API_KEY",
+                json={"value": "moltbook-secret", "description": "Moltbook posting"},
+            ).status_code
+            == 200
+        )
+        assert (
+            client.put(
+                "/v1/vault/OTHER_TOKEN",
+                json={"value": "other-secret", "description": "Not granted"},
+            ).status_code
+            == 200
+        )
 
         registration = register(client, "Vault client")
         code, verifier = authorize(client, registration, "memory:read vault:read")
@@ -557,9 +657,12 @@ def test_mcp_vault_grants_reject_connection_without_scope(settings):
     with TestClient(create_app(settings, SpyEmbedder()), base_url=ORIGIN) as client:
         client.headers["Origin"] = ORIGIN
         signup(client, "vault-scope@example.invalid")
-        assert client.put(
-            "/v1/vault/API_TOKEN", json={"value": "secret", "description": "API"}
-        ).status_code == 200
+        assert (
+            client.put(
+                "/v1/vault/API_TOKEN", json={"value": "secret", "description": "API"}
+            ).status_code
+            == 200
+        )
         registration = register(client, "Read only")
         code, verifier = authorize(client, registration, "memory:read")
         credentials = token(client, registration, code, verifier)

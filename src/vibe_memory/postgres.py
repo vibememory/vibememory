@@ -291,6 +291,19 @@ class PostgresDatabase:
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_method TEXT NOT NULL DEFAULT '';
         ALTER TABLE relations ADD COLUMN IF NOT EXISTS extraction_version TEXT NOT NULL DEFAULT '';
 
+        CREATE TABLE IF NOT EXISTS batch_operations (
+            owner TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            client_request_id TEXT NOT NULL,
+            request_hash TEXT NOT NULL,
+            result JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(owner, agent_id, operation, client_request_id)
+        );
+        CREATE INDEX IF NOT EXISTS batch_operations_owner_created_idx
+            ON batch_operations(owner, created_at DESC);
+
         CREATE TABLE IF NOT EXISTS change_events (
             id BIGSERIAL PRIMARY KEY,
             owner TEXT NOT NULL,

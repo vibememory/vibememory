@@ -118,9 +118,9 @@ class RelationInput(Input):
     relation: str = Field(min_length=1, max_length=80, pattern=r"^[A-Z][A-Z0-9_]*$")
     reason: str = Field(min_length=1, max_length=1000)
     confidence: float | None = Field(default=None, ge=0, le=1)
-    evidence_record_ids: list[
-        Annotated[str, Field(min_length=1, max_length=100)]
-    ] = Field(default_factory=list, max_length=50)
+    evidence_record_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=50
+    )
     extraction_method: str = Field(default="", max_length=100)
     extraction_version: str = Field(default="", max_length=100)
 
@@ -139,10 +139,38 @@ class RelationInput(Input):
         return values
 
 
+class EntityCreateManyItem(EntityInput):
+    client_request_id: str = Field(min_length=1, max_length=100)
+
+
+class RelationCreateManyItem(RelationInput):
+    client_request_id: str = Field(min_length=1, max_length=100)
+
+
+class BatchInput(Input):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True, populate_by_name=True)
+    return_mode: Literal["minimal", "full"] = Field(default="minimal", alias="return")
+    atomic: bool = False
+
+    @model_validator(mode="after")
+    def partial_success_only(self):
+        if self.atomic:
+            raise ValueError("atomic=true is not supported; each batch item commits independently")
+        return self
+
+
+class EntityCreateMany(BatchInput):
+    items: list[EntityCreateManyItem] = Field(min_length=1, max_length=100)
+
+
+class RelationCreateMany(BatchInput):
+    items: list[RelationCreateManyItem] = Field(min_length=1, max_length=100)
+
+
 class VaultGrantUpdate(Input):
-    names: list[
-        Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")]
-    ] = Field(default_factory=list, max_length=100)
+    names: list[Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_.-]{0,99}$")]] = Field(
+        default_factory=list, max_length=100
+    )
 
     @field_validator("names")
     @classmethod
@@ -196,6 +224,15 @@ class RecordUpdate(Input):
         ):
             raise ValueError("at least one record field must be supplied")
         return self
+
+
+class RecordUpdateManyItem(RecordUpdate):
+    id: str = Field(min_length=1, max_length=100)
+    client_request_id: str = Field(min_length=1, max_length=100)
+
+
+class RecordUpdateMany(BatchInput):
+    items: list[RecordUpdateManyItem] = Field(min_length=1, max_length=100)
 
 
 class RecordSecurityUpdate(Input):
@@ -323,9 +360,9 @@ class FeatureRequestInput(Input):
 
 
 class FeatureRequestUpdate(Input):
-    status: Literal[
-        "received", "reviewing", "planned", "in_progress", "completed", "declined"
-    ] | None = None
+    status: (
+        Literal["received", "reviewing", "planned", "in_progress", "completed", "declined"] | None
+    ) = None
     result: str | None = Field(default=None, max_length=10000)
     result_url: str | None = Field(default=None, max_length=2048)
 

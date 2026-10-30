@@ -92,6 +92,7 @@ DESTINATION_TABLES = (
     "records",
     "keyword_embeddings",
     "relations",
+    "batch_operations",
     "change_events",
     "feature_requests",
     "agents",
@@ -127,8 +128,10 @@ def _kuzu_rows(connection, statement):
 
 
 def read_legacy(data_dir: Path):
-    payload = {table: _sqlite_rows(data_dir / "auth.sqlite", table, columns)
-               for table, columns in AUTH_TABLES.items()}
+    payload = {
+        table: _sqlite_rows(data_dir / "auth.sqlite", table, columns)
+        for table, columns in AUTH_TABLES.items()
+    }
     payload["vault_secrets"] = _sqlite_rows(
         data_dir / "vault.sqlite", "vault_secrets", VAULT_COLUMNS
     )
@@ -136,6 +139,7 @@ def read_legacy(data_dir: Path):
         records=[],
         keyword_embeddings=[],
         relations=[],
+        batch_operations=[],
         change_events=[],
         feature_requests=[],
         agents=[],
@@ -235,13 +239,9 @@ def read_legacy(data_dir: Path):
             for row in _kuzu_rows(
                 connection, "MATCH (m:AgentMessage) RETURN m ORDER BY m.sequence"
             ):
-                message = {
-                    key: value for key, value in row["m"].items() if not key.startswith("_")
-                }
+                message = {key: value for key, value in row["m"].items() if not key.startswith("_")}
                 message["metadata"] = json.loads(message.get("metadata") or "{}")
-                message["request_payload"] = json.loads(
-                    message.get("request_payload") or "{}"
-                )
+                message["request_payload"] = json.loads(message.get("request_payload") or "{}")
                 for field in (
                     "reply_to",
                     "client_request_id",
@@ -251,6 +251,15 @@ def read_legacy(data_dir: Path):
                 ):
                     message[field] = message.get(field) or None
                 payload["agent_messages"].append(message)
+        if "BatchOperation" in graph_tables:
+            for row in _kuzu_rows(connection, "MATCH (b:BatchOperation) RETURN b"):
+                operation = {
+                    key: value
+                    for key, value in row["b"].items()
+                    if not key.startswith("_") and key != "id"
+                }
+                operation["result"] = json.loads(operation.get("result") or "{}")
+                payload["batch_operations"].append(operation)
         payload["meta"] = {
             row["key"]: row["value"]
             for row in _kuzu_rows(connection, "MATCH (m:Meta) RETURN m.key AS key,m.value AS value")
@@ -368,6 +377,21 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                         Jsonb(relation["history"]),
                     ),
                 )
+            for operation in payload["batch_operations"]:
+                connection.execute(
+                    """INSERT INTO batch_operations(
+                        owner,agent_id,operation,client_request_id,request_hash,result,created_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        operation["owner"],
+                        operation["agent_id"],
+                        operation["operation"],
+                        operation["client_request_id"],
+                        operation["request_hash"],
+                        Jsonb(operation["result"]),
+                        operation["created_at"],
+                    ),
+                )
             for request in payload["feature_requests"]:
                 connection.execute(
                     """INSERT INTO feature_requests(
@@ -409,8 +433,13 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                     tuple(
                         agent[key]
                         for key in (
-                            "owner", "id", "name", "transport", "active",
-                            "created_at", "last_seen_at"
+                            "owner",
+                            "id",
+                            "name",
+                            "transport",
+                            "active",
+                            "created_at",
+                            "last_seen_at",
                         )
                     ),
                 )
@@ -469,7 +498,9 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                 for table in DESTINATION_TABLES
             }
             if actual != expected:
-                raise RuntimeError(f"Migration verification failed: expected {expected}, got {actual}")
+                raise RuntimeError(
+                    f"Migration verification failed: expected {expected}, got {actual}"
+                )
         return summary(payload)
     finally:
         database.close()

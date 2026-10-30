@@ -66,6 +66,15 @@ An unavailable service or failed checkpoint must not block the task. Report the 
 
 ## Commands
 
+When the connected MCP server exposes `entity_create_many`,
+`relation_create_many`, or `record_update_many`, prefer those tools for 2–100
+agent-prepared graph mutations. Give every item a stable `client_request_id`, keep
+the default minimal response, and retry only items marked retryable. Batch items
+commit independently; create entities first and use their returned IDs in the
+relationship batch. Use compact `records_list`/`relations_list` fields and omit
+content/history when they are not needed. If those MCP tools are unavailable,
+continue with the native CLI commands below; never construct ad-hoc REST calls.
+
 Use command help for flags. The ordinary workflow is:
 
 - `recall KEYWORD...`, with `--match-mode semantic|exact|hybrid`, `--min-score`,

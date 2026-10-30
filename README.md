@@ -18,6 +18,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 | Select evidence and build an answer | Provide source records and explicit graph traversal |
 
 - **Durable relationship graph:** memories, entities, documents, provenance, and relationship history in PostgreSQL.
+- **Efficient graph refreshes:** idempotent 100-item entity/relation/update batches and compact paginated reads.
 - **Agent mailboxes:** same-account persistent handoffs with recipient-scoped SSE and explicit acknowledgements.
 - **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
 - **Provenance quarantine:** external/imported text is untrusted and excluded from normal search and graph traversal until an agent explicitly reviews it.

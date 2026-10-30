@@ -36,6 +36,16 @@ from .auth import (
     SecondFactorInput,
     Signup,
 )
+from .batch import (
+    RECORD_FIELDS,
+    RELATION_FIELDS,
+    batch_response,
+    minimal_resource,
+    parse_fields,
+    project_record,
+    project_relation,
+    request_hash,
+)
 from .config import Settings
 from .embeddings import Embedder
 from .files import FileStorage
@@ -44,6 +54,7 @@ from .models import (
     AgentMessageAck,
     AgentMessageInput,
     DocumentInput,
+    EntityCreateMany,
     EntityInput,
     FeatureRequestInput,
     FeatureRequestUpdate,
@@ -53,6 +64,8 @@ from .models import (
     RecordMerge,
     RecordSecurityUpdate,
     RecordUpdate,
+    RecordUpdateMany,
+    RelationCreateMany,
     RelationInput,
     RelationUpdate,
     SearchInput,
@@ -96,9 +109,7 @@ class OAuthRegistration(BaseModel):
     redirect_uris: list[str] = Field(min_length=1, max_length=10)
     client_name: str = Field(default="MCP client", min_length=1, max_length=100)
     token_endpoint_auth_method: str = "none"
-    grant_types: list[str] = Field(
-        default_factory=lambda: ["authorization_code", "refresh_token"]
-    )
+    grant_types: list[str] = Field(default_factory=lambda: ["authorization_code", "refresh_token"])
     response_types: list[str] = Field(default_factory=lambda: ["code"])
 
 
@@ -142,7 +153,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.14.0",
+        version="0.15.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -199,8 +210,11 @@ def create_app(settings=None, embedder=None):
                 if hmac.compare_digest(expected, supplied):
                     request.state.auth_kind = "legacy-key"
                     return bind_agent(
-                        request, user, "legacy:" + expected.hex()[:24],
-                        "Legacy API agent", "legacy-key"
+                        request,
+                        user,
+                        "legacy:" + expected.hex()[:24],
+                        "Legacy API agent",
+                        "legacy-key",
                     )
             principal = accounts.principal_for_key(credentials.credentials)
             if principal:
@@ -208,8 +222,11 @@ def create_app(settings=None, embedder=None):
                 request.state.auth_kind = "agent-key"
                 request.state.key_id = principal["key_id"]
                 return bind_agent(
-                    request, principal["user_id"], "key:" + principal["key_id"],
-                    principal["name"], "api-key"
+                    request,
+                    principal["user_id"],
+                    "key:" + principal["key_id"],
+                    principal["name"],
+                    "api-key",
                 )
         elif not request.headers.get("Authorization"):
             session_user = accounts.user_for_session(request.cookies.get(COOKIE))
@@ -219,8 +236,11 @@ def create_app(settings=None, embedder=None):
                 request.state.vault_access = True
                 request.state.auth_kind = "browser-session"
                 return bind_agent(
-                    request, session_user["id"], "browser:" + session_user["id"],
-                    session_user["name"], "browser"
+                    request,
+                    session_user["id"],
+                    "browser:" + session_user["id"],
+                    session_user["name"],
+                    "browser",
                 )
         raise HTTPException(
             401, "Invalid or missing API key", headers={"WWW-Authenticate": "Bearer"}
@@ -244,11 +264,21 @@ def create_app(settings=None, embedder=None):
             port = parsed.port
         except ValueError:
             return False
-        if not parsed.scheme or not parsed.netloc or parsed.fragment or parsed.username or parsed.password:
+        if (
+            not parsed.scheme
+            or not parsed.netloc
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
             return False
         if parsed.scheme == "https":
             return True
-        return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "::1", "localhost"} and port is not None
+        return (
+            parsed.scheme == "http"
+            and parsed.hostname in {"127.0.0.1", "::1", "localhost"}
+            and port is not None
+        )
 
     def oauth_error_response(error, description, status=400):
         return JSONResponse(
@@ -333,9 +363,7 @@ def create_app(settings=None, embedder=None):
                 "response_type",
             )
         )
-        return hmac.new(
-            session_token.encode(), message.encode(), hashlib.sha256
-        ).hexdigest()
+        return hmac.new(session_token.encode(), message.encode(), hashlib.sha256).hexdigest()
 
     def mcp_challenge():
         metadata = public_origin + "/.well-known/oauth-protected-resource/mcp"
@@ -421,9 +449,7 @@ def create_app(settings=None, embedder=None):
     @app.post("/auth/login/otp", tags=["account"])
     def login_otp(data: LoginSecondFactor, request: Request):
         check_origin(request)
-        return signed_in(
-            accounts.complete_login_challenge(data.challenge_token, data.code)
-        )
+        return signed_in(accounts.complete_login_challenge(data.challenge_token, data.code))
 
     @app.get("/auth/me", tags=["account"])
     def account(user=Depends(browser_user)):
@@ -439,25 +465,15 @@ def create_app(settings=None, embedder=None):
 
     @app.post("/auth/totp/enable", tags=["account"])
     def enable_totp(data: SecondFactorInput, request: Request, user=Depends(browser_user)):
-        return accounts.enable_totp(
-            user["id"], data.code, request.cookies.get(COOKIE)
-        )
+        return accounts.enable_totp(user["id"], data.code, request.cookies.get(COOKIE))
 
     @app.post("/auth/totp/recovery-codes", tags=["account"])
-    def regenerate_recovery_codes(
-        data: ProtectedSecondFactor, user=Depends(browser_user)
-    ):
-        return accounts.regenerate_recovery_codes(
-            user["id"], data.password, data.code
-        )
+    def regenerate_recovery_codes(data: ProtectedSecondFactor, user=Depends(browser_user)):
+        return accounts.regenerate_recovery_codes(user["id"], data.password, data.code)
 
     @app.delete("/auth/totp", status_code=204, tags=["account"])
-    def disable_totp(
-        data: ProtectedSecondFactor, request: Request, user=Depends(browser_user)
-    ):
-        accounts.disable_totp(
-            user["id"], data.password, data.code, request.cookies.get(COOKIE)
-        )
+    def disable_totp(data: ProtectedSecondFactor, request: Request, user=Depends(browser_user)):
+        accounts.disable_totp(user["id"], data.password, data.code, request.cookies.get(COOKIE))
 
     @app.post("/auth/logout", status_code=204, tags=["account"])
     def logout(request: Request):
@@ -537,9 +553,7 @@ def create_app(settings=None, embedder=None):
         if "authorization_code" not in data.grant_types or any(
             grant not in {"authorization_code", "refresh_token"} for grant in data.grant_types
         ):
-            return oauth_error_response(
-                "invalid_client_metadata", "Unsupported OAuth grant type"
-            )
+            return oauth_error_response("invalid_client_metadata", "Unsupported OAuth grant type")
         if data.response_types != ["code"]:
             return oauth_error_response(
                 "invalid_client_metadata", "Only the code response type is supported"
@@ -699,9 +713,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 raise OAuthError("unsupported_grant_type", "Unsupported OAuth grant type")
         except OAuthError as error:
             return oauth_error_response(error.code, error.description)
-        return JSONResponse(
-            result, headers={"Cache-Control": "no-store", "Pragma": "no-cache"}
-        )
+        return JSONResponse(result, headers={"Cache-Control": "no-store", "Pragma": "no-cache"})
 
     @app.post("/oauth/revoke", status_code=200, tags=["MCP OAuth"])
     async def oauth_revoke(request: Request):
@@ -722,8 +734,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return {
             "client_id": client_id,
             "items": [
-                {**item, "granted": item["name"] in granted}
-                for item in vault.list(user["id"])
+                {**item, "granted": item["name"] in granted} for item in vault.list(user["id"])
             ],
         }
 
@@ -744,9 +755,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         return {"client_id": client_id, "names": names}
 
     @app.delete("/auth/mcp-connections/{client_id}", status_code=204, tags=["account"])
-    def revoke_mcp_connection(
-        client_id: str, user=Depends(browser_user), db=Depends(store)
-    ):
+    def revoke_mcp_connection(client_id: str, user=Depends(browser_user), db=Depends(store)):
         try:
             oauth.revoke_connection(user["id"], client_id)
             db.deactivate_agent(user["id"], "oauth:" + client_id)
@@ -776,7 +785,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         body = await request.body()
         if len(body) > 1024 * 1024:
             return JSONResponse(
-                {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Request too large"}},
+                {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32600, "message": "Request too large"},
+                },
                 status_code=413,
             )
         try:
@@ -790,7 +803,11 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         if isinstance(payload, list):
             if not payload:
                 return JSONResponse(
-                    {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "Invalid Request"}},
+                    {
+                        "jsonrpc": "2.0",
+                        "id": None,
+                        "error": {"code": -32600, "message": "Invalid Request"},
+                    },
                     status_code=400,
                 )
             results = [mcp_handler.dispatch(item, principal, db) for item in payload]
@@ -986,7 +1003,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         request: Request,
         after: int = Query(default=0, ge=0, le=9223372036854775807),
         seconds: int = Query(default=25, ge=1, le=60),
-        user=Depends(owner), db=Depends(store),
+        user=Depends(owner),
+        db=Depends(store),
     ):
         last_id = request.headers.get("Last-Event-ID")
         if last_id is not None:
@@ -1024,9 +1042,14 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 if not batch:
                     await asyncio.sleep(0.5)
 
-        return StreamingResponse(stream(), media_type="text/event-stream", headers={
-            "Cache-Control": "no-store", "X-Accel-Buffering": "no",
-        })
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     @app.get("/v1/me", tags=["service"])
     def me(request: Request, user=Depends(owner)):
@@ -1208,6 +1231,115 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             security=security,
         )
 
+    def batch_item(
+        db,
+        user,
+        request,
+        operation,
+        index,
+        item,
+        callback,
+        success_status,
+        return_mode,
+    ):
+        base = {"index": index, "client_request_id": item.client_request_id}
+        try:
+            created_resource = {}
+
+            def execute():
+                resource = callback()
+                created_resource["value"] = resource
+                return minimal_resource(resource)
+
+            stored, created = db.run_idempotent(
+                user,
+                request.state.agent_id,
+                operation,
+                item.client_request_id,
+                request_hash(item),
+                execute,
+            )
+            resource = created_resource.get("value")
+            result = {
+                **base,
+                **stored,
+                "status": success_status if created else "existing",
+            }
+            if return_mode == "full":
+                if resource is None:
+                    try:
+                        resource = (
+                            db.relation_get(user, stored["id"])
+                            if operation == "relation_create"
+                            else db.get(user, stored["id"])
+                        )
+                    except NotFound:
+                        resource = None
+                if resource is not None:
+                    result["resource"] = resource
+            return result
+        except DuplicateRequestConflict:
+            return {
+                **base,
+                "status": "conflict",
+                "error": {
+                    "code": "idempotency_conflict",
+                    "message": "client_request_id was already used with different content",
+                    "retryable": False,
+                },
+            }
+        except NotFound:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "not_found",
+                    "message": "An owner-scoped record was not found",
+                    "retryable": False,
+                },
+            }
+        except Conflict:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "version_conflict",
+                    "message": "The record version changed; fetch it before retrying",
+                    "retryable": True,
+                },
+            }
+        except HTTPException as error:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "service_unavailable" if error.status_code >= 500 else "invalid",
+                    "message": str(error.detail),
+                    "retryable": error.status_code >= 500,
+                },
+            }
+        except ValueError as error:
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "invalid",
+                    "message": str(error),
+                    "retryable": False,
+                },
+            }
+        except Exception:
+            log.exception("Batch item failed")
+            return {
+                **base,
+                "status": "failed",
+                "error": {
+                    "code": "internal_error",
+                    "message": "The item could not be saved",
+                    "retryable": True,
+                },
+            }
+
     @app.post(
         "/v1/feature-requests",
         status_code=201,
@@ -1294,9 +1426,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
 
     @app.get("/v1/admin/feature-requests", tags=["admin"])
     def admin_feature_requests(
-        status: Literal[
-            "received", "reviewing", "planned", "in_progress", "completed", "declined"
-        ]
+        status: Literal["received", "reviewing", "planned", "in_progress", "completed", "declined"]
         | None = None,
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
@@ -1349,10 +1479,67 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     def add_entity(data: EntityInput, user=Depends(owner), db=Depends(store)):
         return ingest(db, user, "entity", data)
 
+    @app.post("/v1/entities/batch", tags=["entities"])
+    def add_entities_batch(
+        data: EntityCreateMany,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        results = []
+        for index, item in enumerate(data.items):
+            entity = EntityInput.model_validate(item.model_dump(exclude={"client_request_id"}))
+            results.append(
+                batch_item(
+                    db,
+                    user,
+                    request,
+                    "entity_create",
+                    index,
+                    item,
+                    lambda entity=entity: ingest(db, user, "entity", entity),
+                    "created",
+                    data.return_mode,
+                )
+            )
+        return batch_response(results)
+
     @app.put("/v1/records/{id}/keywords", tags=["memories"])
     def update_keywords(id: str, data: KeywordUpdate, user=Depends(owner), db=Depends(store)):
         db.get(user, id)
         return db.update_keywords(user, id, data.keywords, vectors_for(data.keywords))
+
+    @app.patch("/v1/records/batch", tags=["memories"])
+    def update_records_batch(
+        data: RecordUpdateMany,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        results = []
+        for index, item in enumerate(data.items):
+            update = RecordUpdate.model_validate(
+                item.model_dump(exclude={"id", "client_request_id"})
+            )
+
+            def apply_update(item=item, update=update):
+                vectors = vectors_for(update.keywords) if update.keywords is not None else None
+                return db.update_record(user, item.id, update, vectors)
+
+            results.append(
+                batch_item(
+                    db,
+                    user,
+                    request,
+                    "record_update",
+                    index,
+                    item,
+                    apply_update,
+                    "updated",
+                    data.return_mode,
+                )
+            )
+        return batch_response(results)
 
     @app.patch("/v1/records/{id}", tags=["memories"])
     def update_record(id: str, data: RecordUpdate, user=Depends(owner), db=Depends(store)):
@@ -1404,6 +1591,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         kind: Literal["memory", "document", "entity", "file"] | None = None,
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
+        summary: bool = False,
+        fields: str | None = Query(default=None, max_length=1000),
+        include_content: bool = True,
+        include_history: bool = True,
         include_untrusted: bool = False,
         include_quarantined: bool = False,
         user=Depends(owner),
@@ -1411,15 +1602,29 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     ):
         if include_quarantined and not include_untrusted:
             raise HTTPException(422, "include_quarantined requires include_untrusted")
+        try:
+            selected_fields = parse_fields(fields, RECORD_FIELDS)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        items = db.list(
+            user,
+            kind,
+            limit,
+            offset,
+            include_untrusted,
+            include_quarantined,
+        )
         return {
-            "items": db.list(
-                user,
-                kind,
-                limit,
-                offset,
-                include_untrusted,
-                include_quarantined,
-            ),
+            "items": [
+                project_record(
+                    item,
+                    summary=summary,
+                    fields=selected_fields,
+                    include_content=include_content,
+                    include_history=include_history,
+                )
+                for item in items
+            ],
             "limit": limit,
             "offset": offset,
         }
@@ -1449,6 +1654,38 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         except ValueError as error:
             raise HTTPException(422, str(error)) from None
 
+    @app.post("/v1/relations/batch", tags=["graph"])
+    def add_relations_batch(
+        data: RelationCreateMany,
+        request: Request,
+        user=Depends(owner),
+        db=Depends(store),
+    ):
+        results = []
+        for index, item in enumerate(data.items):
+            relation_data = RelationInput.model_validate(
+                item.model_dump(exclude={"client_request_id"})
+            )
+            results.append(
+                batch_item(
+                    db,
+                    user,
+                    request,
+                    "relation_create",
+                    index,
+                    item,
+                    lambda relation_data=relation_data: db.link(
+                        user,
+                        relation_data,
+                        request.state.agent_id,
+                        request.state.agent_name,
+                    ),
+                    "created",
+                    data.return_mode,
+                )
+            )
+        return batch_response(results)
+
     @app.get("/v1/relations", tags=["graph"])
     def relations(
         status: Literal["active", "retracted", "all"] = "active",
@@ -1456,18 +1693,45 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         min_confidence: float | None = Query(default=None, ge=0, le=1),
         extraction_method: str = Query(default="", max_length=100),
         relation: str = Query(default="", max_length=80, pattern=r"^$|^[A-Z][A-Z0-9_]*$"),
+        source_id: str = Query(default="", max_length=100),
+        target_id: str = Query(default="", max_length=100),
+        limit: int = Query(default=100, ge=1, le=100),
+        cursor: int = Query(default=0, ge=0),
+        fields: str | None = Query(default=None, max_length=1000),
+        include_history: bool = True,
         user=Depends(owner),
         db=Depends(store),
     ):
+        try:
+            selected_fields = parse_fields(fields, RELATION_FIELDS)
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        raw = db.relations(
+            user,
+            status,
+            creator_agent_id,
+            min_confidence,
+            extraction_method,
+            relation,
+            source_id,
+            target_id,
+            limit + 1,
+            cursor,
+        )
+        has_more = len(raw) > limit
+        raw = raw[:limit]
         return {
-            "items": db.relations(
-                user,
-                status,
-                creator_agent_id,
-                min_confidence,
-                extraction_method,
-                relation,
-            )
+            "items": [
+                project_relation(
+                    item,
+                    fields=selected_fields,
+                    include_history=include_history,
+                )
+                for item in raw
+            ],
+            "limit": limit,
+            "cursor": cursor,
+            "next_cursor": cursor + limit if has_more else None,
         }
 
     @app.patch("/v1/relations/{id}", tags=["graph"])

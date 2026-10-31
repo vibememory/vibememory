@@ -85,7 +85,10 @@ async function copyInstallPrompt() {
 function empty(title, description, action = '') {
   return `<div class="empty-state"><span class="empty-icon">${icon('sparkles')}</span><h3>${h(title)}</h3><p>${h(description)}</p>${action}</div>`;
 }
-function tags(keywords) { return (keywords || []).slice(0, 5).map(tag => `<span class="tag">${h(tag)}</span>`).join('') || '<span class="record-subtitle">키워드 없음</span>'; }
+function tags(keywords) {
+  const items = (keywords || []).slice(0, 5).map(tag => `<span class="tag">${h(tag)}</span>`).join('');
+  return items ? `<span class="tag-list">${items}</span>` : '<span class="record-subtitle">키워드 없음</span>';
+}
 const featureStatus = status => ({
   received:['접수됨','received'], reviewing:['검토 중','reviewing'], planned:['계획됨','planned'],
   in_progress:['처리 중','in-progress'], completed:['완료','completed'], declined:['보류','declined']

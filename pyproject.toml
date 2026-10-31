@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vibe-memory"
-version = "0.30.2"
+version = "0.30.3"
 description = "Agent-authored data graph and keyword-only embedding endpoints"
 readme = "README.md"
 license = "MIT"

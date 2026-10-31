@@ -158,3 +158,7 @@ dialog{width:min(540px,calc(100% - 32px));max-height:86vh;overflow:auto;padding:
 
 /* SVG icon sizing: controls never depend on emoji or platform font glyphs. */
 .sidebar-help-icon .svg-icon{width:16px;height:16px}.account-line>button .svg-icon{width:18px;height:18px}.account-popover a,.account-popover button,.pager button,.row-actions a,.panel-heading button,.dashboard-guide-actions button,.secondary-button,.mcp-connect-actions a,.mcp-connect-actions button{display:inline-flex;align-items:center;gap:7px}.account-popover .svg-icon,.pager .svg-icon,.row-actions .svg-icon,.panel-heading .svg-icon,.dashboard-guide-actions .svg-icon,.secondary-button .svg-icon,.mcp-connect-actions .svg-icon{width:15px;height:15px}.empty-icon .svg-icon{width:22px;height:22px}.relationship-graph-controls .svg-icon{width:17px;height:17px}.dashboard-guide-dismiss .svg-icon{width:14px;height:14px}.install-prompt-card .svg-icon,#primary-action .svg-icon{width:16px;height:16px}
+
+/* Keyword chips share one wrapping region so long values never escape table cards. */
+.tag-list{display:flex;max-width:100%;min-width:0;flex-wrap:wrap;align-items:center;gap:4px}
+.tag-list .tag{max-width:100%;min-width:0;margin:0;line-height:1.35;white-space:normal;overflow-wrap:anywhere;word-break:break-word}

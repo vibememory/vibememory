@@ -1,7 +1,7 @@
 {
   "name": "vibe-memory",
   "displayName": "Vibe Memory",
-  "version": "0.30.2",
+  "version": "0.30.3",
   "description": "Shared durable memory for Claude Code with lifecycle checkpoint hooks",
   "author": {
     "name": "Vibe Memory",

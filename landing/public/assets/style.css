@@ -49,4 +49,15 @@
 
 /* Consistent SVG icon system; do not render interface symbols as font glyphs or emoji. */
 .svg-icon{display:inline-block;flex:0 0 auto;width:1.1em;height:1.1em;overflow:visible;vertical-align:-.18em;color:inherit}.button .svg-icon,.nav-cta .svg-icon,.connect-service-button .svg-icon,.connect-skill-button .svg-icon{width:16px;height:16px}.mini-icon .svg-icon{width:17px;height:17px}.principles i .svg-icon{width:16px;height:16px}.step-symbol .svg-icon{width:25px;height:25px}.flow-arrow .svg-icon{width:22px;height:22px}.message-icon .svg-icon{width:17px;height:17px}.life-node>i .svg-icon{width:15px;height:15px}.life-link>span .svg-icon{width:21px;height:21px}.keyword-arrow .svg-icon,.active-chip .svg-icon{width:14px;height:14px}.faq summary .svg-icon{width:18px;height:18px;transition:transform .2s}.faq details[open] summary .svg-icon{transform:rotate(45deg)}
+
+/* Tablet graph cards need the same edge clearance as the mobile layout. */
+@media (min-width:481px) and (max-width:800px){
+  .landing-page .memory-showcase .agent-claude,
+  .landing-page .memory-showcase .agent-openclaw{left:4%}
+  .landing-page .memory-showcase .agent-codex,
+  .landing-page .memory-showcase .agent-hermes{right:4%}
+}
+@media (max-width:480px){
+  .landing-page .setup-code pre{white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
+}
 .route-line{display:flex;align-items:center;justify-content:flex-end}.route-line:after{content:none}.route-line .svg-icon{width:12px;height:12px;margin-right:-1px;background:#fff;color:#aebbd4}.header nav a,.hero-selfhost,.start-docs,.footer a{display:inline-flex;align-items:center;gap:6px}

@@ -321,3 +321,46 @@ html[data-theme="dark"] .console-status-list strong { color: var(--tool-text); }
   .landing-page .header-actions .nav-cta { padding-inline: 7px; font-size: 9px; }
   .console-header .topbar-avatar { display: none; }
 }
+
+/* Tablet and mobile admin tables become readable cards instead of clipped canvases. */
+.admin-page { font-family: var(--sans); }
+@media (max-width: 820px) {
+  .admin-table-scroll { overflow: visible; }
+  .admin-table,
+  .admin-table tbody,
+  .admin-table tr,
+  .admin-table td { display: block; width: 100%; min-width: 0; }
+  .admin-table thead { display: none; }
+  .admin-table tbody { padding: 10px; }
+  .admin-table tr { margin-bottom: 10px; padding: 4px 13px; border: 1px solid var(--tool-border); border-radius: 11px; background: var(--tool-surface); box-shadow: var(--tool-shadow); }
+  .admin-table tr:last-child { margin-bottom: 0; }
+  .admin-table td,
+  .admin-table td:first-child,
+  .admin-table td:nth-child(5) { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: start; gap: 10px; width: auto; padding: 10px 0; border-bottom: 1px solid var(--tool-border); overflow-wrap: anywhere; }
+  .admin-table td:last-child { border-bottom: 0; }
+  .admin-table td::before { grid-column: 1; grid-row: 1 / span 4; color: var(--tool-muted); font: 8px var(--admin-mono); letter-spacing: .35px; }
+  .admin-table td > * { grid-column: 2; min-width: 0; }
+  .admin-table td:first-child > span,
+  .admin-table td:nth-child(2) small { max-width: none; white-space: normal; }
+  .admin-request-title,
+  .admin-result { max-width: none; }
+  .admin-table:not(.admin-users-table) td:nth-child(1)::before { content: "요청"; }
+  .admin-table:not(.admin-users-table) td:nth-child(2)::before { content: "요청자"; }
+  .admin-table:not(.admin-users-table) td:nth-child(3)::before { content: "우선순위"; }
+  .admin-table:not(.admin-users-table) td:nth-child(4)::before { content: "상태"; }
+  .admin-table:not(.admin-users-table) td:nth-child(5)::before { content: "처리 결과"; }
+  .admin-table:not(.admin-users-table) td:nth-child(6)::before { content: "최종 갱신"; }
+  .admin-table:not(.admin-users-table) td:nth-child(7)::before { content: "작업"; }
+  .admin-users-table td:nth-child(1)::before { content: "사용자"; }
+  .admin-users-table td:nth-child(2)::before { content: "권한"; }
+  .admin-users-table td:nth-child(3)::before { content: "보안"; }
+  .admin-users-table td:nth-child(4)::before { content: "가입 시각"; }
+  .admin-users-table td:nth-child(5)::before { content: "연결"; }
+  .admin-users-table td:nth-child(6)::before { content: "기록"; }
+  .admin-users-table td:nth-child(7)::before { content: "저장 용량"; }
+}
+
+@media (min-width: 641px) and (max-width: 820px) {
+  .admin-table tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .admin-table tr { margin-bottom: 0; }
+}

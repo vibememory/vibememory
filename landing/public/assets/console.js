@@ -130,13 +130,14 @@ function relationshipGraph(records, relations, totals) {
 }
 function relationshipGraphStyles() {
   const dark = document.documentElement.dataset.theme === 'dark';
+  const compact = window.matchMedia('(max-width: 520px)').matches;
   const palette = dark ? {
     node:'#151e2e',text:'#e6edf8',border:'#52627d',memory:'#6f8eff',memoryBg:'#17264a',entity:'#a98bdd',entityBg:'#281f3c',document:'#63bda2',documentBg:'#132d29',file:'#d5a064',fileBg:'#302315',selected:'#88a2ff',selectedBg:'#20305a',edge:'#5f708d',arrow:'#7185aa',edgeText:'#b9c7dd',label:'#111827',labelBorder:'#344158'
   } : {
     node:'#ffffff',text:'#3d4a62',border:'#aebce0',memory:'#7892ec',memoryBg:'#f9fbff',entity:'#a991d8',entityBg:'#fcfaff',document:'#72b9a5',documentBg:'#f8fdfa',file:'#d9a36d',fileBg:'#fffaf5',selected:'#315bfb',selectedBg:'#f0f4ff',edge:'#aeb9d5',arrow:'#8fa0ca',edgeText:'#60719a',label:'#ffffff',labelBorder:'#dde4f2'
   };
   return [
-    {selector:'node',style:{'shape':'roundrectangle','width':192,'height':68,'background-color':palette.node,'border-width':1.5,'border-color':palette.border,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':12,'font-weight':500,'text-wrap':'wrap','text-max-width':166,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
+    {selector:'node',style:{'shape':'roundrectangle','width':compact ? 158 : 192,'height':compact ? 62 : 68,'background-color':palette.node,'border-width':1.5,'border-color':palette.border,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':compact ? 11 : 12,'font-weight':500,'text-wrap':'wrap','text-max-width':compact ? 136 : 166,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
     {selector:'node.kind-memory',style:{'border-color':palette.memory,'background-color':palette.memoryBg}},
     {selector:'node.kind-entity',style:{'border-color':palette.entity,'background-color':palette.entityBg}},
     {selector:'node.kind-document',style:{'border-color':palette.document,'background-color':palette.documentBg}},
@@ -180,6 +181,8 @@ async function bindRelationshipGraph(records, relations) {
       targetName:graphTitle(recordMap.get(edge.target_id))
     }}))
   ];
+  const compact = window.matchMedia('(max-width: 520px)').matches;
+  const fitPadding = () => window.matchMedia('(max-width: 820px)').matches ? 56 : 72;
   relationshipCy = cytoscape({
     container:stage,
     elements,
@@ -193,16 +196,22 @@ async function bindRelationshipGraph(records, relations) {
       animate:true,
       animationDuration:650,
       fit:true,
-      padding:56,
+      padding:fitPadding(),
       randomize:true,
-      nodeRepulsion:420000,
-      idealEdgeLength:135,
+      nodeRepulsion:compact ? 240000 : 420000,
+      idealEdgeLength:compact ? 96 : 135,
       edgeElasticity:100,
       nestingFactor:1.2,
       gravity:.16,
       numIter:1200,
       nodeOverlap:32,
-      componentSpacing:110
+      componentSpacing:compact ? 72 : 110,
+      stop:() => {
+        requestAnimationFrame(() => {
+          if (!relationshipCy || !stage.isConnected) return;
+          relationshipCy.fit(relationshipCy.elements(':visible'), fitPadding());
+        });
+      }
     }
   });
   const clearFocus = () => relationshipCy?.elements().removeClass('faded highlighted');
@@ -229,8 +238,8 @@ async function bindRelationshipGraph(records, relations) {
   for (const button of document.querySelectorAll('[data-graph-command]')) {
     button.addEventListener('click', () => {
       if (!relationshipCy) return;
-      if (button.dataset.graphCommand === 'fit') return relationshipCy.fit(undefined, 75);
-      if (button.dataset.graphCommand === 'clear') { clearFocus(); relationshipCy.elements().style('display','element'); $('#graph-selection').textContent = '전체 그래프'; return relationshipCy.fit(undefined,75); }
+      if (button.dataset.graphCommand === 'fit') return relationshipCy.fit(undefined, fitPadding());
+      if (button.dataset.graphCommand === 'clear') { clearFocus(); relationshipCy.elements().style('display','element'); $('#graph-selection').textContent = '전체 그래프'; return relationshipCy.fit(undefined,fitPadding()); }
       const factor = button.dataset.graphCommand === 'zoom-in' ? 1.22 : .82;
       relationshipCy.zoom({level:Math.max(relationshipCy.minZoom(), Math.min(relationshipCy.maxZoom(), relationshipCy.zoom() * factor)),renderedPosition:{x:stage.clientWidth / 2,y:stage.clientHeight / 2}});
     });
@@ -242,10 +251,14 @@ async function bindRelationshipGraph(records, relations) {
       relationshipCy.edges().forEach(edge => edge.style('display', (!relation || edge.data('relation') === relation) && (!creator || edge.data('creatorId') === creator) ? 'element' : 'none'));
       relationshipCy.nodes().forEach(node => node.style('display', node.connectedEdges(':visible').length || (!relation && !creator) ? 'element' : 'none'));
       $('#graph-selection').textContent = [relation,creator && select.options[select.selectedIndex]?.text].filter(Boolean).join(' · ') || '전체 그래프';
-      relationshipCy.fit(relationshipCy.elements(':visible'),75);
+      relationshipCy.fit(relationshipCy.elements(':visible'),fitPadding());
     });
   }
-  relationshipResizeObserver = new ResizeObserver(() => relationshipCy?.resize());
+  relationshipResizeObserver = new ResizeObserver(() => {
+    if (!relationshipCy) return;
+    relationshipCy.resize();
+    relationshipCy.fit(relationshipCy.elements(':visible'), fitPadding());
+  });
   relationshipResizeObserver.observe(stage);
 }
 const viewInfo = {

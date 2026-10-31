@@ -42,6 +42,7 @@ def mount_web(app, configured=None):
         ("/console", "console.html"),
         ("/admin", "admin.html"),
         ("/guide", "guide.html"),
+        ("/support", "support.html"),
     ]:
         app.add_api_route(route, page(filename), methods=["GET"], include_in_schema=False)
     # Register last: /auth, /v1, /health and API docs keep their own handlers.

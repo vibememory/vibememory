@@ -1,0 +1,10 @@
+# Authorization, MCP, and namespaces
+
+Treat authentication and authorization as properties of the exact connection used for the call. Never combine grants from another API key, MCP client, browser session, agent, or remembered result. Read never implies write. MCP is transport, not permission; tool visibility is not execution authority. Host/client policy, Vibe Memory permission, resource grant, and third-party permission are separate. Report an unverified layer as unknown.
+
+For MCP use `auth_context` when principal/grant matters, `capabilities_get` to choose supported operations, and `permission_check` for a metadata-only resource/operation preflight. These inspect only the current OAuth connection. The real operation always reauthorizes, so handle revocation, expiry, version conflict, rate limits, and policy changes. Preserve safe `context_ref`, `request_id`, `reason_code`, `retryable`, and `required_action`; never tokens, cookies, Vault values, or resource bodies.
+
+For CLI, `status` reports only the locally selected connection's actual grant and stable connection ID. If disconnected, run `login --approval-timeout 600 --no-browser --name "AGENT NAME"`; add `--vault-access` only when needed. Show the approval URL, confirmation code, expiry, and requested Vault permission, keep the retained process waiting, then read actual granted permissions. Never request credentials in chat or approve on the user's behalf. Rerun with `--vault-access` to elevate an existing connection. `logout` removes local config but does not revoke the key; revoke in the console.
+
+Namespaces are server-enforced boundaries, not metadata labels. Use only the namespace granted to this exact principal and retain its returned identity. Never infer access from project names, record metadata, remembered grants, or resource existence; do not probe another workspace. Users manage namespace and token/MCP permissions in the web console.
+

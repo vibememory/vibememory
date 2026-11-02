@@ -8,7 +8,10 @@ from pathlib import Path
 root = Path(__file__).resolve().parents[2]
 source = root / "skills/vibe-memory"
 web = root / "landing/dist"
-tracked = ["SKILL.md", "scripts/memory.py"]  # Kept stable for v1 updater compatibility.
+tracked = ["SKILL.md", "scripts/memory.py"] + sorted(
+    path.relative_to(source).as_posix()
+    for path in (source / "references").glob("*.md")
+)
 contents = {name: (source / name).read_bytes() for name in tracked}
 files = {name: hashlib.sha256(contents[name]).hexdigest() for name in tracked}
 native_cli = json.loads((source / "native-cli.json").read_text())
@@ -38,14 +41,21 @@ with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
         info.external_attr = 0o100644 << 16
         archive.writestr(info, data)
 archive_sha256 = hashlib.sha256(output.read_bytes()).hexdigest()
+release_assets = {
+    name: (
+        "SKILL.md"
+        if name == "SKILL.md"
+        else "memory.py"
+        if name == "scripts/memory.py"
+        else "reference-" + Path(name).name
+    )
+    for name in tracked
+}
 manifest = {
-    "schema_version": 1,
+    "schema_version": 2,
     "revision": revision,
     "files": files,
-    "release_assets": {
-        "SKILL.md": "SKILL.md",
-        "scripts/memory.py": "memory.py",
-    },
+    "release_assets": release_assets,
     "cli": legacy_cli,
     "native_cli": native_cli,
     "archive": "/downloads/vibe-memory-skill.zip",

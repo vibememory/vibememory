@@ -64,11 +64,10 @@ with sync_playwright() as p:
     target = artifacts / "skill.zip"
     download.save_as(target)
     with zipfile.ZipFile(target) as archive:
-        assert set(archive.namelist()) == {
-            "vibe-memory/SKILL.md",
-            "vibe-memory/scripts/memory.py",
-        }
-        assert b"native Rust" in archive.read("vibe-memory/SKILL.md")
+        names = set(archive.namelist())
+        assert {"vibe-memory/SKILL.md", "vibe-memory/scripts/memory.py"}.issubset(names)
+        assert any(name.startswith("vibe-memory/references/") for name in names)
+        assert b"native binary" in archive.read("vibe-memory/SKILL.md")
         assert b"native_cli" in archive.read("vibe-memory/scripts/memory.py")
     page.locator('[data-demo="memory"]').click()
     page.evaluate(

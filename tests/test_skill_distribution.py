@@ -9,6 +9,22 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+SKILL_SOURCE = ROOT / "skills/vibe-memory"
+
+
+def distributed_skill_files():
+    return {"SKILL.md", "scripts/memory.py"} | {
+        path.relative_to(SKILL_SOURCE).as_posix()
+        for path in (SKILL_SOURCE / "references").glob("*.md")
+    }
+
+
+def skill_bundle(path):
+    text = path.read_text()
+    references = path.parent / "references"
+    if references.is_dir():
+        text += "\n" + "\n".join(item.read_text() for item in sorted(references.glob("*.md")))
+    return text
 
 
 def load_launcher(path, name):
@@ -24,9 +40,11 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     assert response.status_code == 200
     assert response.headers["cache-control"] == "no-store"
     manifest = response.json()
-    assert set(manifest["files"]) == {"SKILL.md", "scripts/memory.py"}
+    expected_files = distributed_skill_files()
+    assert manifest["schema_version"] == 2
+    assert set(manifest["files"]) == expected_files
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
-    assert manifest["native_cli"]["version"] == "3.10.0"
+    assert manifest["native_cli"]["version"] == "3.11.0"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",
@@ -48,29 +66,33 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
         "vibe-memory-skill.zip"
     )
     assert manifest["official_manifest_mirror"].endswith("/manifest.json")
-    assert manifest["release_assets"] == {
-        "SKILL.md": "SKILL.md",
-        "scripts/memory.py": "memory.py",
-    }
+    assert set(manifest["release_assets"]) == expected_files
+    assert manifest["release_assets"]["SKILL.md"] == "SKILL.md"
+    assert manifest["release_assets"]["scripts/memory.py"] == "memory.py"
+    assert all(
+        manifest["release_assets"][name] == "reference-" + Path(name).name
+        for name in expected_files
+        if name.startswith("references/")
+    )
     with zipfile.ZipFile(io.BytesIO(archive_response.content)) as archive:
-        assert set(archive.namelist()) == {
-            "vibe-memory/SKILL.md",
-            "vibe-memory/scripts/memory.py",
-        }
+        assert set(archive.namelist()) == {"vibe-memory/" + name for name in expected_files}
         skill = archive.read("vibe-memory/SKILL.md")
-        assert b"native Rust" in skill
-        assert b"## Product feedback" in skill
-        assert b"feedback-list" in skill
-        assert b"feedback-admin-list" in skill
-        assert b"feature_request_operator" in skill
-        assert b"context-bundle" in skill
-        assert b"graph-diff" in skill
+        bundle = b"\n".join(archive.read("vibe-memory/" + name) for name in expected_files)
+        assert b"native binary" in skill
+        assert b"Product feedback and operator workflow" in bundle
+        assert b"feedback-list" in bundle
+        assert b"feedback-admin-list" in bundle
+        assert b"feature_request_operator" in bundle
+        assert b"context-bundle" in bundle
+        assert b"graph-diff" in bundle
         assert b"check-update" in skill
-        assert b"Data commands never perform update egress" in skill
-        assert b"never creates a lexical/full-text index" in skill
+        assert b"Normal data, login, message, and Vault commands" in bundle
+        assert b"never creates lexical/full-text indexes" in bundle
         assert b"VM_SKILL_DIR" in skill
-        assert b"Never test or invoke a bare global" in skill
-        assert b"Do not use curl or direct API calls as a fallback" in skill
+        assert b"Never invoke a bare global" in skill
+        assert b"Do not use curl, direct API calls" in skill
+        assert len(skill) < 8_000
+        assert b"Do not preload every reference" in skill
         assert b"native_cli" in archive.read("vibe-memory/scripts/memory.py")
         for name, digest in manifest["files"].items():
             release = client.get(
@@ -130,7 +152,7 @@ def test_bootstrap_selects_and_verifies_native_binary(tmp_path, monkeypatch):
 
 
 def test_skill_commands_are_anchored_to_the_loaded_skill_directory():
-    skill = (ROOT / "skills/vibe-memory/SKILL.md").read_text()
+    skill = skill_bundle(ROOT / "skills/vibe-memory/SKILL.md")
     assert 'python3 "$VM_SKILL_DIR/scripts/memory.py" sync' in skill
     assert 'VM_CLI="$VM_SKILL_DIR/bin/vibe-memory"' in skill
     assert '$VmCli = Join-Path $VmSkillDir "bin\\vibe-memory.exe"' in skill
@@ -152,7 +174,7 @@ def test_all_skill_variants_offer_repeatable_memory_hygiene():
         ROOT / "plugins/vibe-memory/skills/vibe-memory/SKILL.md",
     ]
     for path in skill_paths:
-        skill = path.read_text()
+        skill = skill_bundle(path)
         assert "## Periodic memory hygiene prompt" in skill
         assert "관계 그래프를 최신화하고 기억을 한 번 최적화할까요?" in skill
         assert "Do not impose a once-per-session quota" in skill
@@ -170,7 +192,7 @@ def test_all_skill_variants_teach_retrievable_record_authoring():
         ROOT / "plugins/vibe-memory/skills/vibe-memory/SKILL.md",
     ]
     for path in skill_paths:
-        skill = path.read_text()
+        skill = skill_bundle(path)
         assert "## Authoring records that can be found again" in skill
         assert "Project context — good" in skill
         assert "Decision — good" in skill

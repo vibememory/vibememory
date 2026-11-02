@@ -170,13 +170,33 @@ def validate_native(manifest):
 
 def installed_skill_matches(manifest):
     files = manifest.get("files", {})
+    schema = manifest.get("schema_version", 1)
     expected = {"SKILL.md", "scripts/memory.py"}
-    if set(files) != expected:
+    names = set(files)
+    if schema == 1:
+        valid = names == expected
+    else:
+        valid = (
+            schema == 2
+            and expected.issubset(names)
+            and any(name.startswith("references/") for name in names)
+            and all(
+                name in expected
+                or (
+                    name.startswith("references/")
+                    and name.endswith(".md")
+                    and "/" not in name.removeprefix("references/")
+                    and name.removeprefix("references/") not in ("", ".", "..")
+                )
+                for name in names
+            )
+        )
+    if not valid or len(names) > 64:
         raise ValueError("Unsupported Skill file manifest")
     return all(
         (ROOT / name).is_file()
         and hashlib.sha256((ROOT / name).read_bytes()).hexdigest() == files[name]
-        for name in expected
+        for name in names
     )
 
 

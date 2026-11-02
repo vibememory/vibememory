@@ -43,6 +43,9 @@ def test_console_and_api_share_one_origin(settings):
         login_script = client.get("/assets/login.js")
         capture_script = client.get("/assets/capture.js")
         landing_styles = client.get("/assets/style.css")
+        japanese_font_styles = client.get("/assets/fonts/noto-sans-jp.css")
+        chinese_font_styles = client.get("/assets/fonts/noto-sans-sc.css")
+        thai_font = client.get("/assets/fonts/noto-sans-thai-thai-400-normal.woff2")
         product_styles = client.get("/assets/product-ui.css")
         responsive_styles = client.get("/assets/console-fixes.css")
         icon_sprite = client.get("/assets/icons.svg")
@@ -100,6 +103,12 @@ def test_console_and_api_share_one_origin(settings):
         assert login_script.status_code == 200
         assert capture_script.status_code == 200
         assert landing_styles.status_code == 200
+        assert japanese_font_styles.status_code == 200
+        assert chinese_font_styles.status_code == 200
+        assert thai_font.status_code == 200
+        assert "Noto Sans JP Variable" in japanese_font_styles.text
+        assert "Noto Sans SC Variable" in chinese_font_styles.text
+        assert thai_font.content.startswith(b"wOF2")
         assert product_styles.status_code == 200
         assert responsive_styles.status_code == 200
         assert icon_sprite.status_code == 200
@@ -120,6 +129,12 @@ def test_console_and_api_share_one_origin(settings):
         assert ".landing-page .hero{align-items:center}" in landing_styles.text
         assert ".landing-page .hero-copy{padding-top:0}" in landing_styles.text
         assert ".landing-page .hero-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))" in landing_styles.text
+        assert "Locale-resilient landing layout" in landing_styles.text
+        assert ".landing-page .hero h1{" in landing_styles.text
+        assert "white-space:normal" in landing_styles.text
+        assert 'html[lang="th"] .landing-page{font-family:VibeThai,var(--sans)}' in landing_styles.text
+        assert 'html[lang="ja"] .landing-page{font-family:"Noto Sans JP Variable",var(--sans)}' in landing_styles.text
+        assert 'html[lang="zh"] .landing-page{font-family:"Noto Sans SC Variable",var(--sans)}' in landing_styles.text
         assert "스킬 설치 프롬프트 복사" in landing
         assert "data-copy-install-prompt" in landing
         assert "ChatGPT Work에 바로 설치" in landing
@@ -154,18 +169,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261102-v030-4"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v030-4"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v030-4"' in landing
-        assert '<script src="/assets/theme.js?v=20261102-v030-4" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261102-v030-4" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261102-v030-4" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261102-v030-4" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v030-4" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v030-4" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261102-v030-4" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v030-4" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261102-v030-4" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261102-v030-5"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v030-5"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v030-5"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v030-5"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v030-5"' in landing
+        assert '<script src="/assets/theme.js?v=20261102-v030-5" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261102-v030-5" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261102-v030-5" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261102-v030-5" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v030-5" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v030-5" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261102-v030-5" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v030-5" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261102-v030-5" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -221,9 +238,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261102-v030-4' in connect
-        assert '/assets/theme.css?v=20261102-v030-4' in connect
-        assert '/assets/product-ui.css?v=20261102-v030-4' in connect
+        assert '/assets/ui-kit.css?v=20261102-v030-5' in connect
+        assert '/assets/theme.css?v=20261102-v030-5' in connect
+        assert '/assets/product-ui.css?v=20261102-v030-5' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

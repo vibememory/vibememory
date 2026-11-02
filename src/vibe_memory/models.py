@@ -279,9 +279,16 @@ class VaultGrantUpdate(Input):
 
 
 class RelationUpdate(Input):
-    status: Literal["active", "retracted"]
+    status: Literal["active", "retracted"] | None = None
+    correction_scope: Literal["unknown", "full", "partial"] | None = None
     reason: str = Field(min_length=1, max_length=1000)
     expected_version: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def has_relation_change(self):
+        if self.status is None and self.correction_scope is None:
+            raise ValueError("status or correction_scope is required")
+        return self
 
 
 class KeywordUpdate(KeywordsInput):

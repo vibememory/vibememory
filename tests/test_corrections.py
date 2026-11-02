@@ -92,6 +92,47 @@ def test_atomic_correction_visibility_authorship_and_search_policy(client):
     assert replacement["id"] in {hit["id"] for hit in excluded}
 
 
+def test_relation_scope_can_be_version_checked_after_legacy_creation(client):
+    old = create_memory(client, "legacy checkpoint", "scope-update")
+    new = create_memory(client, "current checkpoint", "scope-update")
+    relation = client.post(
+        "/v1/relations",
+        json={
+            "source_id": new["id"],
+            "target_id": old["id"],
+            "relation": "SUPERSEDES",
+            "reason": "legacy client omitted correction scope",
+        },
+    ).json()
+    assert relation["correction_scope"] == "unknown"
+    assert client.get(f"/v1/records/{old['id']}").json()["correction_status"] == "unresolved"
+
+    updated = client.patch(
+        f"/v1/relations/{relation['id']}",
+        json={
+            "expected_version": relation["version"],
+            "correction_scope": "full",
+            "reason": "reviewed as a complete checkpoint replacement",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["version"] == 2
+    assert updated.json()["status"] == "active"
+    assert updated.json()["correction_scope"] == "full"
+    assert updated.json()["history"][-1]["correction_scope"] == "full"
+    assert client.get(f"/v1/records/{old['id']}").json()["correction_status"] == "superseded"
+
+    stale = client.patch(
+        f"/v1/relations/{relation['id']}",
+        json={
+            "expected_version": 1,
+            "correction_scope": "partial",
+            "reason": "stale scope update",
+        },
+    )
+    assert stale.status_code == 409
+
+
 def test_competing_corrections_remain_visible_and_stale_operation_rolls_back(client):
     old = create_memory(client, "original decision", "decision")
     base = {

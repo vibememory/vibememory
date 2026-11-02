@@ -1,4 +1,5 @@
 import sqlite3
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from conftest import SpyEmbedder
@@ -9,6 +10,21 @@ from vibe_memory.auth import COOKIE, digest, totp_code
 
 ORIGIN = "https://vibememory.io"
 PASSWORD = "a-long-test-password-123"
+
+
+class FakeRecoveryMail:
+    available = True
+
+    def __init__(self):
+        self.messages = []
+
+    def send(self, recipient, subject, body):
+        self.messages.append({"recipient": recipient, "subject": subject, "body": body})
+
+
+def mail_token(message):
+    url = next(line for line in message["body"].splitlines() if line.startswith(ORIGIN))
+    return parse_qs(urlsplit(url).query)["token"][0]
 
 
 @pytest.fixture
@@ -282,11 +298,14 @@ def test_validation_and_disabled_signup(web, web_settings):
 
 def test_totp_login_recovery_rotation_and_disable(web, web_settings):
     signup(web)
-    assert web.get("/auth/security").json() == {
-        "totp_enabled": False,
-        "totp_enabled_at": None,
-        "recovery_codes_remaining": 0,
-    }
+    security = web.get("/auth/security").json()
+    assert security["totp_enabled"] is False
+    assert security["totp_enabled_at"] is None
+    assert security["recovery_codes_remaining"] == 0
+    assert security["recovery_email"] == "person@example.com"
+    assert security["recovery_email_verified"] is False
+    assert security["recovery_email_available"] is False
+    assert security["password_reset_policy"]["mfa"] == "preserved"
     assert web.post(
         "/auth/totp/setup", json={"password": "wrong-password-123"}
     ).status_code == 401
@@ -348,8 +367,81 @@ def test_totp_login_recovery_rotation_and_disable(web, web_settings):
     )
     assert disabled.status_code == 204, disabled.text
     assert web.get("/auth/security").json()["totp_enabled"] is False
-    web.post("/auth/logout")
-    ordinary = web.post(
-        "/auth/login", json={"email": "person@example.com", "password": PASSWORD}
+
+
+def test_verified_email_password_reset_preserves_mfa_and_agent_connections(web):
+    delivery = FakeRecoveryMail()
+    web.app.state.accounts.mail_delivery = delivery
+    signup(web)
+
+    wrong = web.post(
+        "/auth/recovery/email/start", json={"password": "wrong-password-123", "code": ""}
     )
-    assert ordinary.status_code == 200 and "mfa_required" not in ordinary.json()
+    assert wrong.status_code == 401
+    started = web.post(
+        "/auth/recovery/email/start", json={"password": PASSWORD, "code": ""}
+    )
+    assert started.status_code == 200
+    verification_token = mail_token(delivery.messages[-1])
+    assert web.get(f"/login?mode=verify-email&token={verification_token}").status_code == 200
+    assert web.get("/auth/security").json()["recovery_email_verified"] is False
+    verified = web.post(
+        "/auth/recovery/email/verify", json={"token": verification_token}
+    )
+    assert verified.json() == {"verified": True}
+    assert web.get("/auth/security").json()["recovery_email_verified"] is True
+    assert (
+        web.post("/auth/recovery/email/verify", json={"token": verification_token}).status_code
+        == 400
+    )
+
+    key = web.post("/auth/api-keys", json={"name": "persistent agent"}).json()["key"]
+    setup = web.post("/auth/totp/setup", json={"password": PASSWORD}).json()
+    secret = setup["secret"]
+    assert web.post("/auth/totp/enable", json={"code": totp_code(secret)}).status_code == 200
+
+    generic = web.post(
+        "/auth/password-reset/request", json={"email": "person@example.com"}
+    )
+    unknown = web.post(
+        "/auth/password-reset/request", json={"email": "unknown@example.com"}
+    )
+    assert generic.status_code == unknown.status_code == 200
+    assert generic.json() == unknown.json()
+    reset_token = mail_token(delivery.messages[-1])
+    new_password = "a-new-long-test-password-456"
+    completed = web.post(
+        "/auth/password-reset/complete",
+        json={"token": reset_token, "password": new_password},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["mfa_preserved"] is True
+    assert completed.json()["agent_credentials_preserved"] is True
+    assert web.get("/auth/me").status_code == 401
+    assert (
+        web.post(
+            "/auth/password-reset/complete",
+            json={"token": reset_token, "password": "another-long-password-789"},
+        ).status_code
+        == 400
+    )
+
+    agent = TestClient(web.app, base_url=ORIGIN)
+    agent.headers["Authorization"] = "Bearer " + key
+    assert agent.get("/v1/me").status_code == 200
+    assert web.post(
+        "/auth/login", json={"email": "person@example.com", "password": PASSWORD}
+    ).status_code == 401
+    challenge = web.post(
+        "/auth/login", json={"email": "person@example.com", "password": new_password}
+    ).json()
+    assert challenge["mfa_required"] is True
+    signed_in = web.post(
+        "/auth/login/otp",
+        json={"challenge_token": challenge["challenge_token"], "code": totp_code(secret)},
+    )
+    assert signed_in.status_code == 200
+    security = web.get("/auth/security").json()
+    assert security["totp_enabled"] is True
+    assert security["recovery_email_verified"] is True
+    assert security["recent_security_events"][0]["event"] == "password_reset_completed"

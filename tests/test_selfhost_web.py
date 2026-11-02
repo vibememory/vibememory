@@ -160,7 +160,11 @@ def test_console_and_api_share_one_origin(settings):
         assert "사이드 프로젝트" in landing
         assert "저녁 러닝" in landing
         assert 'class="hero-connect"' in landing
-        assert 'class="button button-outline" href="/guide"' in landing
+        assert 'class="button button-outline" href="/console"' in landing
+        assert 'href="/guide#skill"' in landing
+        assert "한 에이전트의 작업을," in landing
+        assert "서버 LLM 호출 없음" in landing
+        assert "실제 사용자 데이터가 아닙니다" in landing
         assert 'class="hero-support"' in landing
         assert 'class="memory-showcase wrap"' in landing
         assert 'class="connect-ways wrap section"' not in landing
@@ -169,20 +173,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261102-v030-8"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v030-8"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v030-8"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v030-8"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v030-8"' in landing
-        assert '<script src="/assets/theme.js?v=20261102-v030-8" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261102-v030-8" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261102-v030-8" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261102-v030-8" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v030-8" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v030-8" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261102-v030-8" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v030-8" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261102-v030-8" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261102-v031-0"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v031-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v031-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v031-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v031-0"' in landing
+        assert '<script src="/assets/theme.js?v=20261102-v031-0" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261102-v031-0" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261102-v031-0" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261102-v031-0" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v031-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v031-0" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261102-v031-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v031-0" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261102-v031-0" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -238,9 +242,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261102-v030-8' in connect
-        assert '/assets/theme.css?v=20261102-v030-8' in connect
-        assert '/assets/product-ui.css?v=20261102-v030-8' in connect
+        assert '/assets/ui-kit.css?v=20261102-v031-0' in connect
+        assert '/assets/theme.css?v=20261102-v031-0' in connect
+        assert '/assets/product-ui.css?v=20261102-v031-0' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -311,7 +315,8 @@ def test_console_and_api_share_one_origin(settings):
         assert "function viewFromLocation()" in console_script.text
         assert "location.hash.slice(1)" in console_script.text
         assert "history[mode === 'replace' ? 'replaceState' : 'pushState']" in console_script.text
-        assert "await navigate(viewFromLocation(), true, 'replace')" in console_script.text
+        assert "const initialView = viewFromLocation()" in console_script.text
+        assert "await navigate(initialView, false, 'replace')" in console_script.text
         assert "window.addEventListener('popstate'" in console_script.text
         assert "function dashboardGuideHidden()" in console_script.text
         assert "localStorage.setItem(dashboardGuideKey, '1')" in console_script.text

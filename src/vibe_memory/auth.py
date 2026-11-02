@@ -10,6 +10,7 @@ import secrets
 import sqlite3
 import struct
 import threading
+import time
 from contextlib import contextmanager
 from typing import Literal
 from urllib.parse import quote
@@ -30,6 +31,7 @@ TOTP_PERIOD = 30
 TOTP_SETUP_SECONDS = 10 * 60
 LOGIN_CHALLENGE_SECONDS = 5 * 60
 RECOVERY_CODE_COUNT = 10
+RECOVERY_PURPOSES = ("verify_email", "reset_password")
 
 AgentPermission = Literal[
     "memory:read",
@@ -81,6 +83,16 @@ class Credentials(BaseModel):
         if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", value):
             raise ValueError("올바른 이메일 주소를 입력해주세요.")
         return value
+
+
+class EmailInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    email: str = Field(min_length=3, max_length=254)
+
+    @field_validator("email")
+    @classmethod
+    def email_address(cls, value):
+        return Credentials.email_address(value)
 
 
 class Signup(Credentials):
@@ -172,6 +184,19 @@ class ProtectedSecondFactor(PasswordInput, SecondFactorInput):
     pass
 
 
+class EmailVerificationStart(PasswordInput):
+    code: str = Field(default="", max_length=32)
+
+
+class RecoveryTokenInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    token: str = Field(min_length=40, max_length=200)
+
+
+class PasswordResetComplete(RecoveryTokenInput):
+    password: str = Field(min_length=10, max_length=128)
+
+
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
@@ -222,8 +247,19 @@ def _recovery_codes():
 
 
 class AuthStore:
-    def __init__(self, path, otp_cipher: AESGCM):
+    def __init__(
+        self,
+        path,
+        otp_cipher: AESGCM,
+        *,
+        mail_delivery=None,
+        public_origin="",
+        recovery_token_seconds=30 * 60,
+    ):
         self.otp_cipher = otp_cipher
+        self.mail_delivery = mail_delivery
+        self.public_origin = public_origin.rstrip("/")
+        self.recovery_token_seconds = recovery_token_seconds
         self.postgres = path if isinstance(path, PostgresDatabase) else None
         if self.postgres:
             self.path, self.lock = None, threading.RLock()
@@ -296,7 +332,27 @@ class AuthStore:
                     hash TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                     expires_at INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS account_recovery_tokens (
+                    hash TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    purpose TEXT NOT NULL CHECK(purpose IN ('verify_email','reset_password')),
+                    created_at INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    consumed_at INTEGER);
+                CREATE INDEX IF NOT EXISTS account_recovery_tokens_user_idx
+                    ON account_recovery_tokens(user_id,purpose,expires_at);
+                CREATE TABLE IF NOT EXISTS account_security_events (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    event TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    metadata TEXT NOT NULL DEFAULT '{}');
+                CREATE INDEX IF NOT EXISTS account_security_events_user_idx
+                    ON account_security_events(user_id,created_at DESC,id DESC);
             """)
+            user_columns = {row[1] for row in db.execute("PRAGMA table_info(users)")}
+            if "email_verified_at" not in user_columns:
+                db.execute("ALTER TABLE users ADD COLUMN email_verified_at INTEGER")
             api_columns = {row[1] for row in db.execute("PRAGMA table_info(api_keys)")}
             if "vault_access" not in api_columns:
                 db.execute(
@@ -368,7 +424,8 @@ class AuthStore:
         try:
             with self.connection() as db:
                 db.execute(
-                    "INSERT INTO users VALUES(?,?,?,?,?,?)",
+                    """INSERT INTO users(id,email,name,salt,password_hash,created_at,email_verified_at)
+                    VALUES(?,?,?,?,?,?,NULL)""",
                     (user["id"], user["email"], user["name"], salt, hashed, user["created_at"]),
                 )
         except (sqlite3.IntegrityError, IntegrityError):
@@ -434,10 +491,237 @@ class AuthStore:
             remaining = db.execute(
                 "SELECT count(*) FROM recovery_codes WHERE user_id=?", (user_id,)
             ).fetchone()[0]
+            user = db.execute(
+                "SELECT email,email_verified_at FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+            events = db.execute(
+                """SELECT event,created_at,metadata FROM account_security_events
+                WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 10""",
+                (user_id,),
+            ).fetchall()
         return {
             "totp_enabled": bool(row),
             "totp_enabled_at": row["enabled_at"] if row else None,
             "recovery_codes_remaining": remaining,
+            "recovery_email": user["email"],
+            "recovery_email_verified": bool(user["email_verified_at"]),
+            "recovery_email_verified_at": user["email_verified_at"],
+            "recovery_email_available": bool(
+                self.mail_delivery and self.mail_delivery.available
+            ),
+            "password_reset_policy": {
+                "browser_sessions": "revoked",
+                "mfa": "preserved",
+                "agent_keys": "preserved",
+                "mcp_connections": "preserved",
+                "vault_access": "unchanged",
+            },
+            "recent_security_events": [
+                {
+                    "event": event["event"],
+                    "created_at": event["created_at"],
+                    "metadata": json.loads(event["metadata"] or "{}"),
+                }
+                for event in events
+            ],
+        }
+
+    def _security_event(self, db, user_id, event, metadata=None):
+        db.execute(
+            """INSERT INTO account_security_events(id,user_id,event,created_at,metadata)
+            VALUES(?,?,?,?,?)""",
+            (
+                f"{time.time_ns():020d}-{uuid4()}",
+                user_id,
+                event,
+                utc_epoch_seconds(),
+                json.dumps(metadata or {}, ensure_ascii=True, separators=(",", ":")),
+            ),
+        )
+
+    def _issue_recovery_token(self, db, user_id, purpose):
+        if purpose not in RECOVERY_PURPOSES:
+            raise ValueError("unsupported recovery purpose")
+        token = secrets.token_urlsafe(36)
+        now = utc_epoch_seconds()
+        db.execute(
+            "DELETE FROM account_recovery_tokens WHERE expires_at<=? OR consumed_at IS NOT NULL",
+            (now,),
+        )
+        db.execute(
+            "DELETE FROM account_recovery_tokens WHERE user_id=? AND purpose=?",
+            (user_id, purpose),
+        )
+        db.execute(
+            """INSERT INTO account_recovery_tokens(
+                hash,user_id,purpose,created_at,expires_at,consumed_at
+            ) VALUES(?,?,?,?,?,NULL)""",
+            (digest(token), user_id, purpose, now, now + self.recovery_token_seconds),
+        )
+        return token
+
+    def start_email_verification(self, user_id, password, code=""):
+        if not self.mail_delivery or not self.mail_delivery.available:
+            raise HTTPException(503, "이 서버에는 계정 복구 이메일이 설정되지 않았습니다.")
+        self.verify_password(user_id, password)
+        if self.totp_enabled(user_id):
+            if not code:
+                raise HTTPException(422, "활성화된 OTP 또는 복구 코드가 필요합니다.")
+            self._verify_second_factor(user_id, code)
+        with self.connection() as db:
+            user = db.execute(
+                "SELECT email,email_verified_at FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+            if not user:
+                raise HTTPException(404, "계정을 찾을 수 없습니다.")
+            if user["email_verified_at"]:
+                return {"verification_required": False, "already_verified": True}
+            token = self._issue_recovery_token(db, user_id, "verify_email")
+            self._security_event(db, user_id, "recovery_email_verification_requested")
+        url = self.public_origin + "/login?mode=verify-email&token=" + quote(token, safe="")
+        try:
+            self.mail_delivery.send(
+                user["email"],
+                "Verify your Vibe Memory recovery email",
+                "Confirm this address as your Vibe Memory account recovery method.\n\n"
+                + url
+                + "\n\nThe link expires soon and opening it does not change your account. "
+                "Use the confirmation button on the page. If you did not request this, ignore it.",
+            )
+        except Exception:
+            with self.connection() as db:
+                db.execute(
+                    "DELETE FROM account_recovery_tokens WHERE user_id=? AND purpose='verify_email'",
+                    (user_id,),
+                )
+            raise HTTPException(503, "복구 이메일을 보낼 수 없습니다. 잠시 후 다시 시도해주세요.") from None
+        return {"verification_required": True, "expires_in": self.recovery_token_seconds}
+
+    def verify_recovery_email(self, token):
+        token_hash = digest(token)
+        now = utc_epoch_seconds()
+        with self.connection() as db:
+            row = db.execute(
+                """SELECT user_id,expires_at,consumed_at FROM account_recovery_tokens
+                WHERE hash=? AND purpose='verify_email'""",
+                (token_hash,),
+            ).fetchone()
+            if not row or row["expires_at"] <= now or row["consumed_at"] is not None:
+                raise HTTPException(400, "확인 링크가 올바르지 않거나 만료되었습니다.")
+            consumed = db.execute(
+                """UPDATE account_recovery_tokens SET consumed_at=?
+                WHERE hash=? AND consumed_at IS NULL AND expires_at>?""",
+                (now, token_hash, now),
+            )
+            if not consumed.rowcount:
+                raise HTTPException(400, "확인 링크가 이미 사용되었습니다.")
+            db.execute(
+                "UPDATE users SET email_verified_at=? WHERE id=?",
+                (now, row["user_id"]),
+            )
+            self._security_event(db, row["user_id"], "recovery_email_verified")
+        return {"verified": True}
+
+    def check_password_reset_rate_limit(self, email, source="unknown"):
+        self.throttle("password-reset-origin:" + source, 30)
+        self.throttle("password-reset-account:" + email, 6)
+
+    def request_password_reset(self, email):
+        # The response and public endpoint remain identical for unknown, legacy-unverified, and
+        # verified accounts. Mail failures do not reveal account state.
+        with self.connection() as db:
+            row = db.execute(
+                "SELECT id,email,email_verified_at FROM users WHERE email=?", (email,)
+            ).fetchone()
+            if (
+                not row
+                or not row["email_verified_at"]
+                or not self.mail_delivery
+                or not self.mail_delivery.available
+            ):
+                return
+            token = self._issue_recovery_token(db, row["id"], "reset_password")
+            self._security_event(db, row["id"], "password_reset_requested")
+        url = self.public_origin + "/login?mode=reset-password&token=" + quote(token, safe="")
+        try:
+            self.mail_delivery.send(
+                row["email"],
+                "Reset your Vibe Memory password",
+                "A password reset was requested for your Vibe Memory account.\n\n"
+                + url
+                + "\n\nOpening this link does not change your password or consume the token. "
+                "Use the reset button on the page. Your MFA remains enabled. "
+                "If you did not request this, ignore it.",
+            )
+        except Exception:
+            with self.connection() as db:
+                db.execute(
+                    "DELETE FROM account_recovery_tokens WHERE user_id=? AND purpose='reset_password'",
+                    (row["id"],),
+                )
+
+    def complete_password_reset(self, token, password):
+        token_hash = digest(token)
+        now = utc_epoch_seconds()
+        salt = secrets.token_hex(16)
+        hashed = password_hash(password, salt)
+        with self.connection() as db:
+            row = db.execute(
+                """SELECT t.user_id,t.expires_at,t.consumed_at,u.email
+                FROM account_recovery_tokens t JOIN users u ON u.id=t.user_id
+                WHERE t.hash=? AND t.purpose='reset_password'""",
+                (token_hash,),
+            ).fetchone()
+            if not row or row["expires_at"] <= now or row["consumed_at"] is not None:
+                raise HTTPException(400, "재설정 링크가 올바르지 않거나 만료되었습니다.")
+            consumed = db.execute(
+                """UPDATE account_recovery_tokens SET consumed_at=?
+                WHERE hash=? AND consumed_at IS NULL AND expires_at>?""",
+                (now, token_hash, now),
+            )
+            if not consumed.rowcount:
+                raise HTTPException(400, "재설정 링크가 이미 사용되었습니다.")
+            db.execute(
+                "UPDATE users SET salt=?,password_hash=? WHERE id=?",
+                (salt, hashed, row["user_id"]),
+            )
+            db.execute("DELETE FROM sessions WHERE user_id=?", (row["user_id"],))
+            db.execute("DELETE FROM login_challenges WHERE user_id=?", (row["user_id"],))
+            db.execute("DELETE FROM totp_setups WHERE user_id=?", (row["user_id"],))
+            db.execute("DELETE FROM oauth_codes WHERE user_id=?", (row["user_id"],))
+            db.execute(
+                """DELETE FROM account_recovery_tokens
+                WHERE user_id=? AND hash<>?""",
+                (row["user_id"], token_hash),
+            )
+            self._security_event(
+                db,
+                row["user_id"],
+                "password_reset_completed",
+                {
+                    "browser_sessions": "revoked",
+                    "mfa": "preserved",
+                    "agent_keys": "preserved",
+                    "mcp_connections": "preserved",
+                },
+            )
+        if self.mail_delivery and self.mail_delivery.available:
+            try:
+                self.mail_delivery.send(
+                    row["email"],
+                    "Your Vibe Memory password was reset",
+                    "Your password was changed. Browser sessions and pending login or consent "
+                    "flows were revoked. MFA, agent keys, MCP connections, namespaces, and Vault "
+                    "grants were not expanded or removed. Sign in normally with the new password. "
+                    "If this was not you, contact the service operator immediately.",
+                )
+            except Exception:
+                pass
+        return {
+            "reset": True,
+            "sign_in_required": True,
+            "mfa_preserved": True,
+            "agent_credentials_preserved": True,
         }
 
     def start_totp_setup(self, user_id, email, password):

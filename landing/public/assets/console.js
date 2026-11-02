@@ -56,7 +56,7 @@ async function api(path, options = {}) {
   if (!response.ok) {
     if (response.status === 401) { location.replace('/login'); throw new Error('로그인이 필요합니다.'); }
     const message = typeof data?.detail === 'string' ? data.detail : '입력한 내용을 확인해주세요.';
-    throw new Error(message);
+    const error = new Error(message); error.status = response.status; error.data = data; throw error;
   }
   return data;
 }
@@ -89,6 +89,33 @@ function tags(keywords) {
   const items = (keywords || []).slice(0, 5).map(tag => `<span class="tag">${h(tag)}</span>`).join('');
   return items ? `<span class="tag-list">${items}</span>` : '<span class="record-subtitle">키워드 없음</span>';
 }
+const splitKeywords = value => String(value || '').split(',').map(word => word.trim()).filter(Boolean);
+function syncSearchKeywordChips(form) {
+  const input = form?.elements?.keywords;
+  const host = form?.querySelector('[data-search-keyword-chips]');
+  if (!input || !host) return;
+  const values = [...new Set(splitKeywords(input.value))];
+  host.innerHTML = values.map(value => `<button type="button" data-remove-search-keyword="${h(value)}" aria-label="${h(value)} 키워드 제거"><span>${h(value)}</span>${icon('close')}</button>`).join('');
+  host.hidden = !values.length;
+}
+function bindSearchKeywordChips(form) {
+  const input = form?.elements?.keywords;
+  if (!input) return;
+  const sync = () => syncSearchKeywordChips(form);
+  input.addEventListener('input', sync);
+  input.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && input.value.trim() && !input.value.includes(',')) {
+      event.preventDefault(); input.value = `${input.value.trim()}, `; sync();
+    }
+  });
+  form.querySelector('[data-search-keyword-chips]')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-remove-search-keyword]');
+    if (!button) return;
+    input.value = splitKeywords(input.value).filter(value => value !== button.dataset.removeSearchKeyword).join(', ');
+    sync(); input.focus();
+  });
+  sync();
+}
 const featureStatus = status => ({
   received:['접수됨','received'], reviewing:['검토 중','reviewing'], planned:['계획됨','planned'],
   in_progress:['처리 중','in-progress'], completed:['완료','completed'], declined:['보류','declined']
@@ -108,7 +135,7 @@ function recordRows(items, deletable = true) {
     return `<span class="correction-badge correction-${h(status)}">${h(labels[status] || status)}</span>`;
   };
   const searchReason = item => item.search ? `<div class="search-evidence"><span>유사도 ${Number(item.search.score || 0).toFixed(3)}</span>${(item.search.matched_keywords || []).map(match => `<span>${h(match.query_keyword)} ↔ ${h(match.stored_keyword)}</span>`).join('')}</div>` : '';
-  return `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 내용</th><th>키워드</th><th>등록일</th><th></th></tr></thead><tbody>${items.map(item => `<tr><td data-label="항목"><button class="record-title" data-action="detail" data-id="${h(item.id)}">${h(item.title || item.content?.slice(0, 70) || '이름 없는 기록')}</button><span class="record-subtitle">${h(item.kind === 'entity' ? item.subtype : item.source || ({memory:'기억', document:'문서', file:'원본 파일'}[item.kind] || item.kind))}</span>${correction(item)}${searchReason(item)}</td><td data-label="키워드">${tags(item.keywords)}</td><td data-label="등록일">${date(item.created_at)}</td><td data-label="작업"><div class="row-actions">${item.kind === 'file' ? `<a href="/v1/files/${h(item.id)}" download>다운로드 ${icon('download')}</a>` : ''}${deletable ? `<button class="danger" data-action="delete" data-id="${h(item.id)}">삭제</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="table-scroll"><table class="records-table"><thead><tr><th>이름 · 내용</th><th>키워드</th><th>등록일</th><th></th></tr></thead><tbody>${items.map(item => `<tr><td data-label="항목"><button class="record-title" data-action="detail" data-id="${h(item.id)}">${h(item.title || item.content?.slice(0, 70) || '이름 없는 기록')}</button><span class="record-subtitle">${h(item.kind === 'entity' ? item.subtype : item.source || ({memory:'기억', document:'문서', file:'원본 파일'}[item.kind] || item.kind))}${item.creator_agent_name ? ` · ${h(item.creator_agent_name)}` : ''}</span>${correction(item)}${searchReason(item)}</td><td data-label="키워드">${tags(item.keywords)}</td><td data-label="등록일">${date(item.created_at)}</td><td data-label="작업"><div class="row-actions">${item.kind === 'file' ? `<a href="/v1/files/${h(item.id)}" download>다운로드 ${icon('download')}</a>` : ''}${deletable ? `<button class="danger" data-action="delete" data-id="${h(item.id)}">삭제</button>` : ''}</div></td></tr>`).join('')}</tbody></table></div>`;
 }
 const graphKindLabel = kind => t(({memory:'기억',entity:'엔티티',document:'문서',file:'파일'}[kind] || kind || '기록'));
 const graphTitle = record => record?.title || record?.content?.slice(0, 46) || '이름 없는 기록';
@@ -129,7 +156,8 @@ function relationshipGraph(records, relations, totals) {
   const accessibleEdges = relations.map(edge => `<button type="button" data-action="relation-detail" data-source-name="${h(graphTitle(recordMap.get(edge.source_id)))}" data-target-name="${h(graphTitle(recordMap.get(edge.target_id)))}" data-relation="${h(edge.relation)}" data-reason="${h(edge.reason)}">${h(t(`${edge.relation} 관계`))}</button>`).join('');
   const relationTypes = [...new Set(relations.map(edge => edge.relation))].sort();
   const creators = [...new Map(relations.map(edge => [edge.creator_agent_id || '',edge.creator_agent_name || edge.creator_agent_id || '알 수 없음'])).entries()].filter(([id]) => id);
-  return `<section class="relationship-panel" aria-label="${h(t('관계 그래프.'))} ${h(summary)}"><div class="relationship-filterbar"><label>관계<select data-graph-filter="relation"><option value="">전체</option>${relationTypes.map(value => `<option>${h(value)}</option>`).join('')}</select></label><label>생성 에이전트<select data-graph-filter="creator"><option value="">전체</option>${creators.map(([id,name]) => `<option value="${h(id)}">${h(name)}</option>`).join('')}</select></label><button type="button" data-graph-command="clear">선택 해제</button><span id="graph-selection">전체 그래프</span></div><div class="relationship-graph-stage" role="application" aria-label="기억 관계 그래프. 드래그하여 이동하고 휠로 확대할 수 있습니다."></div><div class="relationship-graph-a11y"><p>${h(summary)}</p>${accessibleNodes}${accessibleEdges}</div><div class="relationship-graph-meta"><span><i></i>${h(summary)}</span><span>현재 화면 ${records.length}개 노드 · ${relations.length}개 관계</span></div><div class="relationship-graph-controls" aria-label="그래프 화면 조절"><button type="button" data-graph-command="zoom-in" aria-label="확대">${icon('plus')}</button><button type="button" data-graph-command="zoom-out" aria-label="축소">${icon('minus')}</button><button type="button" data-graph-command="fit" aria-label="그래프 전체 보기">${icon('maximize')}</button></div></section>`;
+  const projects = [...new Set(records.map(record => record.metadata?.project).filter(value => typeof value === 'string' && value.trim()))].sort();
+  return `<section class="relationship-panel" aria-label="${h(t('관계 그래프.'))} ${h(summary)}"><div class="relationship-filterbar"><label>관계<select data-graph-filter="relation"><option value="">전체</option>${relationTypes.map(value => `<option>${h(value)}</option>`).join('')}</select></label><label>프로젝트<select data-graph-filter="project"><option value="">전체</option>${projects.map(value => `<option>${h(value)}</option>`).join('')}</select></label><label>신뢰도<select data-graph-filter="trust"><option value="">전체</option><option value="high">높음 ≥ 0.8</option><option value="medium">중간 0.5–0.79</option><option value="low">낮음 &lt; 0.5</option><option value="unknown">미제공</option></select></label><label>생성 에이전트<select data-graph-filter="creator"><option value="">전체</option>${creators.map(([id,name]) => `<option value="${h(id)}">${h(name)}</option>`).join('')}</select></label><button type="button" data-graph-command="clear">필터 초기화</button><span id="graph-selection">전체 그래프</span></div><div class="relationship-graph-stage" role="application" aria-label="기억 관계 그래프. 드래그하여 이동하고 휠로 확대할 수 있습니다."></div><div class="relationship-graph-a11y"><p>${h(summary)}</p>${accessibleNodes}${accessibleEdges}</div><div class="relationship-graph-meta"><span><i></i>${h(summary)}</span><span>현재 화면 ${records.length}개 노드 · ${relations.length}개 관계 · 신뢰도는 에이전트 주장</span></div><div class="relationship-graph-controls" aria-label="그래프 화면 조절"><button type="button" data-graph-command="zoom-in" aria-label="확대">${icon('plus')}</button><button type="button" data-graph-command="zoom-out" aria-label="축소">${icon('minus')}</button><button type="button" data-graph-command="fit" aria-label="그래프 전체 보기">${icon('maximize')}</button></div></section>`;
 }
 function relationshipGraphStyles() {
   const dark = document.documentElement.dataset.theme === 'dark';
@@ -179,7 +207,10 @@ async function bindRelationshipGraph(records, relations) {
       status:edge.status || 'active',
       creatorId:edge.creator_agent_id || '',
       creatorName:edge.creator_agent_name || '알 수 없음',
-      evidence:JSON.stringify(edge.evidence_status || edge.evidence || edge.evidence_record_ids || []),
+      evidence:edge.evidence_status || edge.evidence || edge.evidence_record_ids || [],
+      projects:[recordMap.get(edge.source_id)?.metadata?.project,recordMap.get(edge.target_id)?.metadata?.project].filter(Boolean),
+      parallelClaims:edge.parallel_claim_ids || [],
+      correctionScope:edge.correction_scope || '',
       sourceName:graphTitle(recordMap.get(edge.source_id)),
       targetName:graphTitle(recordMap.get(edge.target_id))
     }}))
@@ -236,13 +267,15 @@ async function bindRelationshipGraph(records, relations) {
   });
   relationshipCy.on('tap','edge',event => {
     const edge = event.target.data();
-    detail('관계 근거',`<div class="relation-detail-route"><span>${h(edge.sourceName)}</span><strong>${h(edge.relation)}</strong><span>${h(edge.targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거 · 사실 검증 아님</span><p>${h(edge.reason)}</p></div><dl class="request-detail-meta"><div><dt>생성 에이전트</dt><dd>${h(edge.creatorName)}</dd></div><div><dt>신뢰도</dt><dd>${edge.confidence == null ? '미제공' : h(edge.confidence)}</dd></div><div><dt>상태</dt><dd>${h(edge.status)}</dd></div><div><dt>근거 상태</dt><dd>${h(edge.evidence)}</dd></div></dl>`);
+    const evidence = Array.isArray(edge.evidence) ? edge.evidence : [];
+    const evidenceList = evidence.length ? `<div class="relation-evidence-list">${evidence.map(item => `<article><strong>${h(item.record_id || item.id || item)}</strong><span>${h(item.comparison || item.status || '선택된 근거')}</span>${item.location ? `<small>${h(item.location)}</small>` : ''}</article>`).join('')}</div>` : '<p class="dialog-help">선택된 근거 레코드가 없습니다.</p>';
+    detail('관계 근거',`<div class="relation-detail-route"><span>${h(edge.sourceName)}</span><strong>${h(edge.relation)}</strong><span>${h(edge.targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거 · 사실 검증 아님</span><p>${h(edge.reason)}</p></div><dl class="request-detail-meta"><div><dt>생성 에이전트</dt><dd>${h(edge.creatorName)}</dd></div><div><dt>신뢰도</dt><dd>${edge.confidence == null ? '미제공' : h(edge.confidence)}</dd></div><div><dt>상태</dt><dd>${h(edge.status)}</dd></div><div><dt>정정 범위</dt><dd>${h(edge.correctionScope || '해당 없음')}</dd></div><div><dt>병렬 주장</dt><dd>${edge.parallelClaims?.length || 0}개</dd></div></dl><h3 class="detail-subtitle">근거 기록</h3>${evidenceList}`);
   });
   for (const button of document.querySelectorAll('[data-graph-command]')) {
     button.addEventListener('click', () => {
       if (!relationshipCy) return;
       if (button.dataset.graphCommand === 'fit') return relationshipCy.fit(undefined, fitPadding());
-      if (button.dataset.graphCommand === 'clear') { clearFocus(); relationshipCy.elements().style('display','element'); $('#graph-selection').textContent = '전체 그래프'; return relationshipCy.fit(undefined,fitPadding()); }
+      if (button.dataset.graphCommand === 'clear') { clearFocus(); document.querySelectorAll('[data-graph-filter]').forEach(filter => { filter.value = ''; }); relationshipCy.elements().style('display','element'); $('#graph-selection').textContent = '전체 그래프'; return relationshipCy.fit(undefined,fitPadding()); }
       const factor = button.dataset.graphCommand === 'zoom-in' ? 1.22 : .82;
       relationshipCy.zoom({level:Math.max(relationshipCy.minZoom(), Math.min(relationshipCy.maxZoom(), relationshipCy.zoom() * factor)),renderedPosition:{x:stage.clientWidth / 2,y:stage.clientHeight / 2}});
     });
@@ -251,9 +284,12 @@ async function bindRelationshipGraph(records, relations) {
     select.addEventListener('change', () => {
       const relation = document.querySelector('[data-graph-filter="relation"]')?.value || '';
       const creator = document.querySelector('[data-graph-filter="creator"]')?.value || '';
-      relationshipCy.edges().forEach(edge => edge.style('display', (!relation || edge.data('relation') === relation) && (!creator || edge.data('creatorId') === creator) ? 'element' : 'none'));
-      relationshipCy.nodes().forEach(node => node.style('display', node.connectedEdges(':visible').length || (!relation && !creator) ? 'element' : 'none'));
-      $('#graph-selection').textContent = [relation,creator && select.options[select.selectedIndex]?.text].filter(Boolean).join(' · ') || '전체 그래프';
+      const project = document.querySelector('[data-graph-filter="project"]')?.value || '';
+      const trust = document.querySelector('[data-graph-filter="trust"]')?.value || '';
+      const trustMatch = confidence => trust === '' || (trust === 'unknown' ? confidence == null : trust === 'high' ? confidence >= .8 : trust === 'medium' ? confidence >= .5 && confidence < .8 : confidence != null && confidence < .5);
+      relationshipCy.edges().forEach(edge => edge.style('display', (!relation || edge.data('relation') === relation) && (!creator || edge.data('creatorId') === creator) && (!project || (edge.data('projects') || []).includes(project)) && trustMatch(edge.data('confidence')) ? 'element' : 'none'));
+      relationshipCy.nodes().forEach(node => node.style('display', node.connectedEdges(':visible').length || (!relation && !creator && !project && !trust) ? 'element' : 'none'));
+      $('#graph-selection').textContent = [relation,project,trust && document.querySelector('[data-graph-filter="trust"]')?.selectedOptions[0]?.text,creator && document.querySelector('[data-graph-filter="creator"]')?.selectedOptions[0]?.text].filter(Boolean).join(' · ') || '전체 그래프';
       relationshipCy.fit(relationshipCy.elements(':visible'),fitPadding());
     });
   }
@@ -307,7 +343,7 @@ async function navigate(view, reset = true, historyMode = 'push') {
   try {
     let html, graphPayload = null;
     if (view === 'overview') {
-      const [stats, recent, keys] = await Promise.all([api('/v1/stats'), api('/v1/records?limit=6'), api('/auth/api-keys')]);
+      const [stats, recent, keys, activity] = await Promise.all([api('/v1/stats'), api('/v1/records?limit=6'), api('/auth/api-keys'), api('/v1/events/recent?limit=12')]);
       const totalRecords = stats.memory + stats.document + stats.file + stats.entity;
       const statIcons = [
         '<svg viewBox="0 0 24 24"><path d="M9 4.5A3.5 3.5 0 0 0 5.5 8v1A3.5 3.5 0 0 0 4 15.5 3.5 3.5 0 0 0 7.5 19H9m6-14.5A3.5 3.5 0 0 1 18.5 8v1a3.5 3.5 0 0 1 1.5 6.5 3.5 3.5 0 0 1-3.5 3.5H15M9 4v16m6-16v16"/></svg>',
@@ -326,12 +362,15 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const storageCard = `<section class="storage-usage-card" aria-labelledby="storage-usage-title"><div class="storage-usage-main"><span class="storage-usage-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span><div><span class="storage-usage-label" id="storage-usage-title">내 기억 용량</span><strong>${formatBytes(stats.storage_bytes)}</strong><small>현재 논리 사용량 · 휴지통 포함</small></div></div><div class="storage-usage-breakdown"><div><span>기억 데이터</span><strong>${formatBytes(stats.memory_bytes)}</strong></div><div><span>원본 파일</span><strong>${formatBytes(stats.file_bytes)}</strong></div><p>앱 저장 한도 미설정</p></div></section>`;
       const checkedAt = dateTime(new Date().toISOString());
       html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target],index) => `<article class="stat-card"><div class="stat-card-top"><span class="stat-card-label">${h(label)}</span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div>${storageCard}<div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 ${icon('arrow-right')}</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 확인</h2><p>실제 API 응답 기준</p></div><span class="console-live-badge"><i></i>CHECKED</span></div><div class="console-status-list"><div><span>확인 범위</span><strong class="status-ok">통계 · 기록 · 키</strong></div><div><span>확인 시각</span><strong>${h(checkedAt)}</strong></div><div><span>에이전트 키</span><strong>${keys.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
+      const activityLabel = event => ({'memory.created':'기억 생성','memory.updated':'기억 수정','memory.archived':'기억 보관','memory.restored':'기억 복원','memory.deleted':'기억 삭제','document.created':'문서 등록','entity.created':'엔티티 생성','file.created':'파일 등록','relation.created':'관계 생성','relation.updated':'관계 변경','feature_request.updated':'기능 요청 변경'}[event] || event.replaceAll('.',' · '));
+      html += `<section class="console-panel activity-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 활동</h2><p>원문과 키워드를 포함하지 않는 변경 이벤트 · 최신순</p></div><span class="request-count">${activity.items.length}건</span></div>${activity.items.length ? `<div class="activity-list">${activity.items.map(item => `<article><span class="activity-icon">${icon(item.event.startsWith('relation') ? 'network' : item.event.startsWith('file') || item.event.startsWith('document') ? 'file' : 'activity')}</span><div><strong>${h(activityLabel(item.event))}</strong><small>${h(item.data?.id || item.data?.record_id || item.data?.relation_id || item.data?.feature_request_id || 'workspace')}</small></div><code>#${h(item.id)}</code></article>`).join('')}</div>` : empty('아직 활동이 없습니다.','기억이나 관계가 변경되면 내용 없이 이벤트 메타데이터만 표시됩니다.')}</section>`;
     } else if (view === 'memories' || view === 'documents') {
       const result = await api(`/v1/records?kind=${recordKind}&limit=50&offset=${pageOffset}`);
       const options = view === 'memories' ? [['memory','기억'],['entity','엔티티']] : [['document','문서 메타정보'],['file','원본 파일']];
       const params = new URLSearchParams(location.search);
       const searchMode = ['exact','semantic','hybrid'].includes(params.get('mode')) ? params.get('mode') : 'hybrid';
-      html = `<section class="console-panel"><form id="search-records" class="list-toolbar search-toolbar"><select id="kind-filter" aria-label="기록 종류">${options.map(([value,label]) => `<option value="${value}" ${recordKind === value ? 'selected' : ''}>${label}</option>`).join('')}</select><input name="keywords" value="${h(params.get('q') || '')}" placeholder="검색 키워드를 쉼표로 구분" aria-label="검색 키워드"><select name="match_mode" aria-label="검색 방식"><option value="exact" ${searchMode === 'exact' ? 'selected' : ''}>정확</option><option value="semantic" ${searchMode === 'semantic' ? 'selected' : ''}>의미</option><option value="hybrid" ${searchMode === 'hybrid' ? 'selected' : ''}>혼합</option></select><button class="secondary-button" type="submit">검색</button><button class="secondary-button" type="button" data-action="toggle-search-advanced">고급 필터</button><button class="secondary-button" type="button" data-action="context-bundle">다른 에이전트에서 이어가기</button><div class="search-advanced" id="search-advanced" hidden><label>필수 키워드<input name="must_keywords" placeholder="쉼표로 구분"></label><label>제외 키워드<input name="exclude_keywords" placeholder="쉼표로 구분"></label><label>태그<input name="tags" placeholder="쉼표로 구분"></label><label>프로젝트 metadata<input name="project" value="${h(params.get('project') || '')}" placeholder="예: alpha"></label><label>최소 유사도<input name="min_score" type="number" min="-1" max="1" step="0.01" value="0"></label></div></form><p class="search-disclaimer">점수는 키워드 임베딩 유사도이며 사실성·신뢰도 점수가 아닙니다. 프로젝트 보기는 metadata 분류이며 접근 권한은 namespace에서 별도로 강제됩니다.</p><div id="record-results">${result.items.length ? recordRows(result.items) : empty('아직 기록이 없어요.',view === 'documents' ? '에이전트에서 파일을 등록하거나 원본을 업로드해보세요. 분석과 키워드 추출은 에이전트가 담당합니다.' : '기억을 직접 남기거나 에이전트에서 데이터를 보내보세요.')}</div><div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
+      const advancedOpen = ['must','exclude','tags','project','min'].some(name => params.get(name));
+      html = `<section class="console-panel"><form id="search-records" class="list-toolbar search-toolbar"><select id="kind-filter" aria-label="기록 종류">${options.map(([value,label]) => `<option value="${value}" ${recordKind === value ? 'selected' : ''}>${label}</option>`).join('')}</select><div class="search-keyword-field"><div class="search-keyword-chips" data-search-keyword-chips hidden></div><input name="keywords" value="${h(params.get('q') || '')}" placeholder="키워드 입력 · 쉼표로 구분" aria-label="검색 키워드"></div><select name="match_mode" aria-label="검색 방식"><option value="exact" ${searchMode === 'exact' ? 'selected' : ''}>정확</option><option value="semantic" ${searchMode === 'semantic' ? 'selected' : ''}>의미</option><option value="hybrid" ${searchMode === 'hybrid' ? 'selected' : ''}>혼합</option></select><button class="secondary-button" type="submit">검색</button><button class="secondary-button" type="button" data-action="toggle-search-advanced" aria-expanded="${advancedOpen}">고급 필터</button><button class="secondary-button" type="button" data-action="context-bundle">다른 에이전트에서 이어가기</button><div class="search-advanced" id="search-advanced" ${advancedOpen ? '' : 'hidden'}><label>필수 키워드<input name="must_keywords" value="${h(params.get('must') || '')}" placeholder="쉼표로 구분"></label><label>제외 키워드<input name="exclude_keywords" value="${h(params.get('exclude') || '')}" placeholder="쉼표로 구분"></label><label>태그<input name="tags" value="${h(params.get('tags') || '')}" placeholder="쉼표로 구분"></label><label>프로젝트 metadata<input name="project" value="${h(params.get('project') || '')}" placeholder="예: alpha"></label><label>최소 유사도<input name="min_score" type="number" min="-1" max="1" step="0.01" value="${h(params.get('min') || '0')}"></label></div></form><p class="search-disclaimer">정확 검색은 임베딩 호출 없이 저장 키워드를 비교합니다. 의미·혼합 검색도 입력한 키워드만 임베딩하며, 점수는 사실성·신뢰도 점수가 아닙니다. 프로젝트는 metadata 필터이고 접근 권한은 namespace에서 별도로 강제됩니다.</p><div id="record-results">${result.items.length ? recordRows(result.items) : empty('아직 기록이 없어요.',view === 'documents' ? '에이전트에서 파일을 등록하거나 원본을 업로드해보세요. 분석과 키워드 추출은 에이전트가 담당합니다.' : '기억을 직접 남기거나 에이전트에서 데이터를 보내보세요.')}</div><div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
     } else if (view === 'vault') {
       const [result, audit] = await Promise.all([api('/v1/vault'), api('/v1/vault-access-audit?limit=100')]);
       const auditRows = audit.items.map(item => { const [outcomeLabel,outcomeClass] = vaultAuditOutcome(item.outcome); return `<tr><td><strong>${h(item.name === '*' ? 'Vault 목록' : item.name)}</strong><span class="record-subtitle">비밀값 원문은 감사 기록에 저장되지 않습니다.</span></td><td><strong>${h(item.client_name)}</strong><span class="record-subtitle">${h(vaultClientType(item.client_type))}</span></td><td><span class="vault-audit-status ${h(outcomeClass)}"><i></i>${h(outcomeLabel)}</span></td><td><time datetime="${h(new Date(item.accessed_at * 1000).toISOString())}">${h(dateTime(item.accessed_at))}</time></td></tr>`; }).join('');
@@ -355,7 +394,18 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const details = security.totp_enabled
         ? `<dl class="security-details"><div><dt>인증 방식</dt><dd>표준 TOTP 인증 앱</dd></div><div><dt>활성화</dt><dd>${date(security.totp_enabled_at)} UTC</dd></div><div><dt>남은 복구 코드</dt><dd>${h(security.recovery_codes_remaining)}개</dd></div></dl>`
         : `<p class="security-description">Google Authenticator, Microsoft Authenticator, 1Password 등 표준 TOTP 앱을 연결할 수 있습니다. 활성화하면 이메일과 비밀번호 입력 후 일회용 코드가 있어야 로그인됩니다.</p>`;
-      html = `<section class="security-card"><div class="security-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m9 12 2 2 4-5"/></svg></div><div class="security-card-copy"><div class="security-title-row"><div><span>TWO-FACTOR AUTHENTICATION</span><h2>인증 앱 OTP</h2></div>${status}</div>${details}<div class="security-actions">${actions}</div></div></section><section class="security-note"><strong>에이전트 연결은 그대로 유지됩니다.</strong><p>OTP는 브라우저 로그인만 보호합니다. 기존 CLI·MCP 연결은 중단되지 않으며 에이전트 키와 연결 권한은 에이전트 연결 화면에서 별도로 철회할 수 있습니다.</p></section>`;
+      const emailStatus = security.recovery_email_verified
+        ? `<span class="security-state enabled"><i></i>검증 완료</span>`
+        : `<span class="security-state"><i></i>미검증</span>`;
+      const emailAction = security.recovery_email_verified
+        ? ''
+        : security.recovery_email_available
+          ? `<button class="button primary" type="button" data-action="verify-recovery-email">복구 이메일 확인</button>`
+          : `<a class="secondary-button" href="/guide#account-recovery" target="_blank">운영자 설정 안내 ${icon('external-link')}</a>`;
+      const securityEvents = (security.recent_security_events || []).length
+        ? `<div class="security-event-list">${security.recent_security_events.map(event => `<div><strong>${h(({recovery_email_verification_requested:'복구 이메일 확인 요청',recovery_email_verified:'복구 이메일 검증 완료',password_reset_requested:'비밀번호 재설정 요청',password_reset_completed:'비밀번호 재설정 완료'}[event.event] || event.event))}</strong><time>${h(dateTime(event.created_at))}</time></div>`).join('')}</div>`
+        : `<p class="security-description">아직 계정 복구 감사 기록이 없습니다.</p>`;
+      html = `<section class="security-card"><div class="security-card-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 20 6v5c0 5-3.4 8.5-8 10-4.6-1.5-8-5-8-10V6z"/><path d="m9 12 2 2 4-5"/></svg></div><div class="security-card-copy"><div class="security-title-row"><div><span>TWO-FACTOR AUTHENTICATION</span><h2>인증 앱 OTP</h2></div>${status}</div>${details}<div class="security-actions">${actions}</div></div></section><section class="security-card"><div class="security-card-icon" aria-hidden="true">${icon('mail')}</div><div class="security-card-copy"><div class="security-title-row"><div><span>VERIFIED ACCOUNT RECOVERY</span><h2>복구 이메일</h2></div>${emailStatus}</div><dl class="security-details"><div><dt>주소</dt><dd>${h(security.recovery_email)}</dd></div><div><dt>확인 시각</dt><dd>${security.recovery_email_verified_at ? h(dateTime(security.recovery_email_verified_at)) : '확인 필요'}</dd></div><div><dt>메일 전송</dt><dd>${security.recovery_email_available ? '사용 가능' : 'self-hosted 설정 필요'}</dd></div></dl><p class="security-description">기존 미인증 주소는 자동으로 복구 수단이 되지 않습니다. 현재 비밀번호${security.totp_enabled ? '와 활성화된 OTP' : ''}로 다시 확인한 뒤 이메일 링크를 승인해야 합니다.</p><div class="security-actions">${emailAction}</div></div></section><section class="console-panel security-audit-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>계정 복구 기록</h2><p>비밀값 없는 최근 보안 이벤트 · UTC</p></div></div>${securityEvents}</section><section class="security-note"><strong>복구 범위를 분리합니다.</strong><p>비밀번호 재설정은 브라우저 세션과 진행 중 로그인·동의 절차를 끝내지만 OTP, 복구 코드, API 키, MCP 연결, namespace와 Vault 권한은 확대하거나 자동 철회하지 않습니다. 분실한 Vault 암호화 키나 데이터 백업을 복원하는 기능은 아닙니다.</p></section>`;
     } else if (view === 'requests') {
       const result = await api(`/v1/feature-requests?limit=50&offset=${pageOffset}`);
       html = `<section class="console-panel request-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>접수된 기능 요청</h2><p>에이전트와 콘솔에서 남긴 요청의 진행 상태와 처리 결과입니다.</p></div><span class="request-count">${result.items.length}개 표시</span></div>${result.items.length ? `<div class="table-scroll"><table class="records-table request-table"><thead><tr><th>요청 내용</th><th>상태</th><th>처리 결과</th><th>에이전트</th><th>최종 갱신</th></tr></thead><tbody>${result.items.map(item => { const [statusLabel,statusClass] = featureStatus(item.status); return `<tr><td><button class="record-title" data-action="request-detail" data-id="${h(item.id)}">${h(item.title)}</button><span class="record-subtitle">${h(item.description.slice(0,100))}</span></td><td><span class="request-status ${statusClass}">${h(statusLabel)}</span></td><td><button class="request-result-preview ${item.result ? '' : 'is-empty'}" data-action="request-detail" data-id="${h(item.id)}">${h(item.result ? item.result.slice(0,120) : '결과 대기 중')}</button></td><td>${h(item.agent_name)}</td><td>${date(item.updated_at)}</td></tr>`; }).join('')}</tbody></table></div>` : empty('더 나은 기억을 위한 아이디어가 있나요?','에이전트에서 요청을 보내거나 콘솔에서 필요한 기능과 사용 사례를 남겨주세요.')}<div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
@@ -388,13 +438,17 @@ async function navigate(view, reset = true, historyMode = 'push') {
     const filter = $('#kind-filter');
     if (filter) filter.addEventListener('change', () => { recordKind = filter.value; pageOffset = 0; navigate(view, false); });
     const search = $('#search-records');
-    if (search) search.addEventListener('submit', searchRecords);
+    if (search) {
+      search.addEventListener('submit', searchRecords);
+      bindSearchKeywordChips(search);
+      if (new URLSearchParams(location.search).get('q')) search.requestSubmit();
+    }
   } catch (error) { if (ticket === generation) { $('#view-content').replaceChildren(); $('#console-error').textContent = error.message; $('#console-error').hidden = false; } }
 }
 async function searchRecords(event) {
   event.preventDefault();
   const form = new FormData(event.target);
-  const split = name => String(form.get(name) || '').split(',').map(word => word.trim()).filter(Boolean);
+  const split = name => splitKeywords(form.get(name));
   const keywords = split('keywords');
   if (!keywords.length) return toast('검색할 키워드를 입력해주세요.');
   const button = event.target.querySelector('[type=submit]'); button.disabled = true;
@@ -404,11 +458,15 @@ async function searchRecords(event) {
     const data = await api('/v1/search', {method:'POST',body:JSON.stringify(payload)});
     const records = await Promise.all(data.hits.map(async hit => ({...(await api('/v1/records/' + encodeURIComponent(hit.id))),search:hit})));
     $('#record-results').innerHTML = records.length ? recordRows(records) : empty('검색 결과가 없어요.','다른 키워드로 검색해보세요.');
-    const url = new URL(location.href); url.searchParams.set('q',keywords.join(', ')); url.searchParams.set('mode',payload.match_mode); if (project) url.searchParams.set('project',project); else url.searchParams.delete('project'); history.replaceState({view:currentView},'',url.pathname + url.search + url.hash);
+    const url = new URL(location.href);
+    const persisted = {q:keywords.join(', '),mode:payload.match_mode,must:payload.must_keywords.join(', '),exclude:payload.exclude_keywords.join(', '),tags:payload.tags.join(', '),project,min:String(payload.min_score)};
+    for (const [name,value] of Object.entries(persisted)) { if (value && value !== '0') url.searchParams.set(name,value); else url.searchParams.delete(name); }
+    history.replaceState({view:currentView},'',url.pathname + url.search + url.hash);
   } catch (error) { toast(error.message); } finally { button.disabled = false; }
 }
 
-async function contextHandoff() {
+let activeContextBundleRequest = null;
+async function contextHandoff(cursor = null, existingRequest = null) {
   const form = $('#search-records');
   let ids = [];
   if (form && String(new FormData(form).get('keywords') || '').trim()) {
@@ -419,10 +477,20 @@ async function contextHandoff() {
     const records = await api('/v1/records?limit=25&offset=0'); ids = records.items.map(item => item.id);
   }
   if (!ids.length) return toast('인계할 기억이 없습니다.');
-  const bundle = await api('/v1/context-bundle',{method:'POST',body:JSON.stringify({record_ids:ids,limit:25,byte_limit:131072,include_content:true})});
-  const reproducible = JSON.stringify({schema_version:bundle.schema_version || '1',request:{record_ids:ids,limit:25,byte_limit:131072,include_content:true},response:bundle},null,2);
-  detail('다른 에이전트에서 이어가기',`<p class="dialog-help">Vault 값은 포함되지 않습니다. ${bundle.items.length}개 기록 · ${formatBytes(new Blob([reproducible]).size)} · ${bundle.next_cursor ? '다음 cursor 있음' : '현재 묶음 완료'}</p><div class="handoff-summary">${bundle.items.map(item => `<article><strong>${h(item.title || item.id)}</strong><span>v${h(item.version)} · ${h((item.retrieval_reason || []).join(', ') || '명시 선택')} · ${h(item.correction_status || 'current')}</span></article>`).join('')}</div><button class="button primary" id="copy-context-bundle" type="button">재현 가능한 인계 묶음 복사 ${icon('copy')}</button><details><summary>JSON 미리보기</summary><pre class="detail-pre">${h(reproducible)}</pre></details>`,'CONTEXT BUNDLE');
-  $('#copy-context-bundle').addEventListener('click',async () => { await copyText(reproducible); toast('Context Bundle을 복사했습니다.'); });
+  const request = existingRequest || {record_ids:ids,limit:25,byte_limit:131072,include_content:true};
+  if (cursor) request.cursor = cursor; else delete request.cursor;
+  activeContextBundleRequest = {...request};
+  try {
+    const bundle = await api('/v1/context-bundle',{method:'POST',body:JSON.stringify(request)});
+    const reproducible = JSON.stringify({schema_version:bundle.schema_version || '1',request,response:bundle},null,2);
+    const omitted = bundle.items.filter(item => item.content_omitted_due_to_byte_limit).length;
+    const partial = Boolean(bundle.next_cursor || omitted || bundle.missing_record_ids?.length);
+    detail('다른 에이전트에서 이어가기',`<div class="bundle-state ${partial ? 'partial' : 'complete'}"><strong>${partial ? '부분 묶음' : '현재 묶음 완료'}</strong><span>${bundle.items.length}/${bundle.total}개 · ${formatBytes(bundle.page_bytes || new Blob([reproducible]).size)}</span></div><p class="dialog-help">Vault 값은 포함되지 않습니다. ${omitted ? `${omitted}개 본문은 byte 제한으로 생략됨 · ` : ''}${bundle.missing_record_ids?.length ? `${bundle.missing_record_ids.length}개 ID는 접근 불가 또는 없음 · ` : ''}snapshot ${h(String(bundle.snapshot || '').slice(0,12))}</p><div class="handoff-summary">${bundle.items.map(item => `<article><strong>${h(item.title || item.id)}</strong><span>v${h(item.version)} · ${h((item.retrieval_reason || []).join(', ') || '명시 선택')} · ${h(item.correction_status || 'current')}${item.content_omitted_due_to_byte_limit ? ' · 본문 생략' : ''}</span></article>`).join('')}</div><div class="bundle-actions"><button class="button primary" id="copy-context-bundle" type="button">이 페이지 JSON 복사 ${icon('copy')}</button>${bundle.next_cursor ? `<button class="secondary-button" type="button" data-action="context-bundle-next" data-cursor="${h(bundle.next_cursor)}">다음 페이지 미리보기 ${icon('arrow-right')}</button>` : ''}</div><details><summary>재현 가능한 JSON 미리보기</summary><pre class="detail-pre">${h(reproducible)}</pre></details>`,'CONTEXT BUNDLE');
+    $('#copy-context-bundle').addEventListener('click',async () => { await copyText(reproducible); toast('Context Bundle 페이지를 복사했습니다.'); });
+  } catch (error) {
+    if (error.status !== 409) throw error;
+    detail('인계 묶음이 변경되었습니다.',`<p class="dialog-help">첫 페이지 이후 기록이나 관계가 변경되어 snapshot cursor를 안전하게 계속 사용할 수 없습니다. 기존 페이지를 새 상태와 섞지 않고 처음부터 다시 만드세요.</p><button class="button primary" type="button" data-action="context-bundle-restart">현재 상태로 다시 시작</button>`,'SNAPSHOT CONFLICT');
+  }
 }
 function editor(title, fields, onSave, submitLabel = '저장') {
   $('#editor-title').textContent = title; $('#editor-fields').innerHTML = fields;
@@ -456,6 +524,16 @@ function beginTotpSetup() {
     const setup = await api('/auth/totp/setup',{method:'POST',body:JSON.stringify({password:data.get('password')})});
     return () => finishTotpSetup(setup);
   },'인증 앱 연결');
+}
+async function verifyRecoveryEmail() {
+  const security = await api('/auth/security');
+  const secondFactor = security.totp_enabled
+    ? '<label>OTP 또는 복구 코드<input name="code" autocomplete="one-time-code" minlength="6" maxlength="32" required></label>'
+    : '';
+  editor('복구 이메일 확인',`<p class="dialog-help">현재 계정의 이메일을 복구 수단으로 등록합니다. 비밀번호${security.totp_enabled ? '와 활성화된 OTP' : ''}로 본인을 다시 확인한 뒤, 메일로 받은 링크에서 명시적으로 승인하세요.</p><label>현재 비밀번호<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required></label>${secondFactor}`,async data => {
+    await api('/auth/recovery/email/start',{method:'POST',body:JSON.stringify({password:data.get('password'),code:data.get('code') || ''})});
+    toast('복구 이메일 확인 링크를 보냈습니다.');
+  },'확인 링크 보내기');
 }
 function regenerateRecoveryCodes() {
   editor('복구 코드 재발급',`<p class="dialog-help">기존 복구 코드는 모두 폐기됩니다. 현재 비밀번호와 인증 앱 코드 또는 남아 있는 복구 코드를 입력하세요.</p><label>현재 비밀번호<input name="password" type="password" autocomplete="current-password" minlength="10" maxlength="128" required></label><label>OTP 또는 복구 코드<input name="code" autocomplete="one-time-code" minlength="6" maxlength="32" required></label>`,async data => {
@@ -555,7 +633,7 @@ document.addEventListener('click', async event => {
   const nav = event.target.closest('[data-view]');
   if (nav) return navigate(nav.dataset.view);
   const button = event.target.closest('[data-action]'); if (!button) return;
-  const {action,id,name,description,sourceName,targetName,relation,reason,url,permissions,vaultAccess,type,grants} = button.dataset;
+  const {action,id,name,description,sourceName,targetName,relation,reason,url,permissions,vaultAccess,type,grants,cursor} = button.dataset;
   try {
     if (action === 'toggle-account') {
       if (window.innerWidth <= 820) {
@@ -587,19 +665,22 @@ document.addEventListener('click', async event => {
       catch { detail('Vibe Memory MCP 주소', `<pre class="detail-pre">${h(url)}</pre>`); }
       return;
     }
-    if (action === 'toggle-search-advanced') { $('#search-advanced').hidden = !$('#search-advanced').hidden; return; }
+    if (action === 'toggle-search-advanced') { const panel = $('#search-advanced'); panel.hidden = !panel.hidden; event.target.closest('button')?.setAttribute('aria-expanded',String(!panel.hidden)); return; }
     if (action === 'context-bundle') return contextHandoff();
+    if (action === 'context-bundle-next') return contextHandoff(cursor, activeContextBundleRequest);
+    if (action === 'context-bundle-restart') return contextHandoff();
     if (action === 'manage-namespaces') return editNamespaceGrants(type,id,name,grants);
     if (action === 'create-key') return createKey();
     if (action === 'manage-agent-permissions') return editAgentPermissions(id,name,permissions,vaultAccess === 'true');
     if (action === 'setup-totp') return beginTotpSetup();
+    if (action === 'verify-recovery-email') return verifyRecoveryEmail();
     if (action === 'regenerate-recovery') return regenerateRecoveryCodes();
     if (action === 'disable-totp') return disableTotp();
     if (action === 'rotate-vault') return editVault(name, description);
     if (action === 'reload') return navigate(currentView, false);
-    if (action === 'next') { pageOffset += 50; return navigate(currentView, false); }
-    if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); return navigate(currentView, false); }
-    if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); const correction = record.correction_status ? `<section class="correction-detail"><strong>정정 상태: ${h(record.correction_status)}</strong><p>‘current’는 알려진 대체 기록이 없다는 뜻이며 사실 검증 완료를 의미하지 않습니다.</p>${record.correction_targets?.length ? `<p>대체 대상: ${h(record.correction_targets.join(', '))}</p>` : ''}${record.corrected_by?.length ? `<p>후속 기록: ${h(record.corrected_by.join(', '))}</p>` : ''}</section>` : ''; return detail(record.title || '기록 상세', `${correction}<dl class="request-detail-meta"><div><dt>작성 연결</dt><dd>${h(record.creator_agent_name || '알 수 없음')}</dd></div><div><dt>버전</dt><dd>v${h(record.version)}</dd></div><div><dt>원본 유형</dt><dd>${h(record.provenance?.source_type || 'agent-authored')}</dd></div><div><dt>기록 시각</dt><dd>${h(record.recorded_at || record.created_at)}</dd></div></dl><p class="detail-content-text">${h(record.content)}</p><details><summary>원본 JSON</summary><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre></details>`,'MEMORY DETAIL'); }
+    if (action === 'next') { pageOffset += 50; const nextUrl = new URL(location.href); nextUrl.searchParams.set('page',String(pageOffset / 50 + 1)); history.replaceState({view:currentView},'',nextUrl.pathname + nextUrl.search + nextUrl.hash); return navigate(currentView, false); }
+    if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); const previousUrl = new URL(location.href); if (pageOffset) previousUrl.searchParams.set('page',String(pageOffset / 50 + 1)); else previousUrl.searchParams.delete('page'); history.replaceState({view:currentView},'',previousUrl.pathname + previousUrl.search + previousUrl.hash); return navigate(currentView, false); }
+    if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); const claims = record.correction_claims || []; const correction = record.correction_status ? `<section class="correction-detail"><strong>정정 상태: ${h(record.correction_status)}</strong><p>‘current’는 알려진 대체 기록이 없다는 뜻이며 사실 검증 완료를 의미하지 않습니다. 부분 정정·충돌·순환은 숨기지 않습니다.</p>${(record.supersedes_ids || []).length ? `<p>이 기록이 대체하는 항목: ${(record.supersedes_ids || []).map(value => `<code>${h(value)}</code>`).join(' ')}</p>` : ''}${claims.length ? `<div class="correction-claim-list">${claims.map(claim => `<article><div><strong>${h(claim.relation)} · ${h(claim.scope)}</strong><span class="request-status ${claim.effective_for_exclusion ? 'completed' : 'planned'}">${claim.effective_for_exclusion ? '전체 대체로 적용' : '검토 필요'}</span></div><p>${h(claim.reason)}</p><dl><dt>후속 기록</dt><dd>${h(claim.replacement_id)}</dd><dt>등록 에이전트</dt><dd>${h(claim.creator_agent_name || '알 수 없음')}</dd><dt>상태</dt><dd>${h(claim.relation_status)} · ${h(claim.replacement_lifecycle)}${claim.cycle ? ' · 순환 감지' : ''}</dd></dl></article>`).join('')}</div>` : ''}</section>` : ''; return detail(record.title || '기록 상세', `${correction}<dl class="request-detail-meta"><div><dt>작성 연결</dt><dd>${h(record.creator_agent_name || '알 수 없음')}</dd></div><div><dt>버전</dt><dd>v${h(record.version)}</dd></div><div><dt>원본 유형</dt><dd>${h(record.provenance?.source_type || 'agent-authored')}</dd></div><div><dt>기록 시각</dt><dd>${h(record.recorded_at || record.created_at)}</dd></div></dl><p class="detail-content-text">${h(record.content)}</p><details><summary>원본 JSON</summary><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre></details>`,'MEMORY DETAIL'); }
     if (action === 'request-detail') { const record = await api('/v1/feature-requests/' + encodeURIComponent(id)); return detail(record.title,featureRequestDetail(record),'FEATURE REQUEST'); }
     if (action === 'relation-detail') {
       return detail('관계 근거',`<div class="relation-detail-route"><span>${h(sourceName)}</span><strong>${h(relation)}</strong><span>${h(targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(reason)}</p></div>`,'RELATION EVIDENCE');
@@ -660,6 +741,9 @@ $('#logout').addEventListener('click',async () => {
     const initial = user.name[0].toUpperCase();
     $('#user-initial').textContent = initial; $('#topbar-initial').textContent = initial;
     $('#workspace-initial').textContent = initial; $('#workspace-name').textContent = user.name + '의 기억';
-    await navigate(viewFromLocation(), true, 'replace');
+    const initialView = viewFromLocation();
+    pageOffset = Math.max(0,(Number.parseInt(new URLSearchParams(location.search).get('page') || '1',10) - 1) * 50 || 0);
+    recordKind = initialView === 'documents' ? 'document' : 'memory';
+    await navigate(initialView, false, 'replace');
   } catch (error) { $('#console-error').textContent = error.message; $('#console-error').hidden = false; }
 })();

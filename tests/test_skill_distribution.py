@@ -26,7 +26,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     manifest = response.json()
     assert set(manifest["files"]) == {"SKILL.md", "scripts/memory.py"}
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
-    assert manifest["native_cli"]["version"] == "3.9.1"
+    assert manifest["native_cli"]["version"] == "3.10.0"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",
@@ -161,6 +161,24 @@ def test_all_skill_variants_offer_repeatable_memory_hygiene():
         assert "the agent may offer again" in skill
         assert "Avoid immediate repeated prompts" in skill
         assert "ordinary proactive recall and checkpointing" in skill
+
+
+def test_all_skill_variants_teach_retrievable_record_authoring():
+    skill_paths = [
+        ROOT / "skills/vibe-memory/SKILL.md",
+        ROOT / "claude-plugins/vibe-memory/skills/vibe-memory/SKILL.md",
+        ROOT / "plugins/vibe-memory/skills/vibe-memory/SKILL.md",
+    ]
+    for path in skill_paths:
+        skill = path.read_text()
+        assert "## Authoring records that can be found again" in skill
+        assert "Project context — good" in skill
+        assert "Decision — good" in skill
+        assert "Failure — good" in skill
+        assert "Checkpoint — good" in skill
+        assert "Correction — good" in skill
+        assert "optionally verify retrieval once" in skill
+        assert "Do not add verification calls to every save" in skill
 
 
 def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monkeypatch):

@@ -34,6 +34,7 @@
 <aside>
 <p class="eyebrow">CONNECT YOUR MEMORY</p>
 <a href="#setup">01 · 연결 준비</a>
+<a href="#account-recovery">계정 복구</a>
 <a href="#skill">02 · Skill 연결</a>
 <a href="#agent-hooks">Agent Hook 자동화</a>
 <a href="#mcp">MCP · GPT·Claude</a>
@@ -69,6 +70,12 @@ uv run vibe-memory keygen --user personal</code>
 uv run vibe-memory serve</code>
 </pre>
 <p>로컬 기본 주소는 <code>http://127.0.0.1:8080</code>입니다. <code>/docs</code>에서 API 스키마와 요청 폼을 확인할 수 있습니다. 원격 연결은 HTTPS를 사용합니다. 서버는 현재 단일 프로세스로 실행하는 개인·소규모 구성입니다.</p>
+</section>
+<section id="account-recovery">
+<h2>검증된 계정 복구</h2>
+<p>복구 메일은 self-host 운영자가 SMTP를 설정한 경우에만 사용할 수 있습니다. 계정 보안에서 현재 비밀번호와 활성화된 OTP를 다시 확인한 뒤 기존 로그인 이메일을 복구 주소로 명시적으로 검증하세요. 이전 계정은 자동으로 검증되지 않습니다.</p>
+<p>재설정 링크를 여는 것만으로는 비밀번호가 바뀌거나 토큰이 소비되지 않습니다. 확인 버튼을 눌러야 한 번만 처리됩니다. 재설정하면 브라우저 세션과 진행 중인 로그인·동의 절차는 끝나지만 OTP, 에이전트 키, MCP 연결, namespace, Vault 권한은 유지되고 확대되지 않습니다.</p>
+<p>운영 설정과 보안 경계는 <a href="https://github.com/vibememory/vibememory/blob/main/docs/self-hosting.md#verified-account-recovery" target="_blank" rel="noopener">self-host 문서</a>를 확인하세요.</p>
 </section>
 <section id="skill">
 <h2>02. Skill 연결</h2>

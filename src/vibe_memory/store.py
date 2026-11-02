@@ -177,6 +177,17 @@ class Store:
             dict(id=row["id"], event=row["event"], data=json.loads(row["payload"])) for row in rows
         ]
 
+    def recent_events(self, owner, limit=20):
+        rows = self.query(
+            """MATCH (e:ChangeEvent {owner: $owner})
+            RETURN e.id AS id, e.event AS event, e.payload AS payload
+            ORDER BY e.id DESC LIMIT $limit""",
+            dict(owner=owner, limit=limit),
+        )
+        return [
+            dict(id=row["id"], event=row["event"], data=json.loads(row["payload"])) for row in rows
+        ]
+
     @staticmethod
     def agent_record(node):
         return {key: value for key, value in node.items() if key != "owner"}
@@ -1337,20 +1348,30 @@ class Store:
                 raise NotFound()
             if edge["version"] != data.expected_version:
                 raise Conflict()
-            if edge["status"] == data.status:
+            next_status = data.status or edge["status"]
+            next_scope = data.correction_scope or edge["correction_scope"]
+            if edge["status"] == next_status and edge["correction_scope"] == next_scope:
                 return edge
             version = edge["version"] + 1
             history = edge["history"] + [
-                dict(status=data.status, reason=data.reason, at=now(), version=version)
+                dict(
+                    status=next_status,
+                    correction_scope=next_scope,
+                    reason=data.reason,
+                    at=now(),
+                    version=version,
+                )
             ]
             self.query(
                 """MATCH (a:Item {owner: $owner})-[r:Link]->(b:Item {owner: $owner})
                 WHERE r.id = $id SET r.status = $status, r.reason = $reason,
+                r.correction_scope = $correction_scope,
                 r.version = $version, r.history = $history""",
                 dict(
                     owner=owner,
                     id=id,
-                    status=data.status,
+                    status=next_status,
+                    correction_scope=next_scope,
                     reason=data.reason,
                     version=version,
                     history=json.dumps(history),
@@ -1368,7 +1389,8 @@ class Store:
             )
             return {
                 **edge,
-                "status": data.status,
+                "status": next_status,
+                "correction_scope": next_scope,
                 "reason": data.reason,
                 "version": version,
                 "history": history,

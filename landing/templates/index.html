@@ -27,8 +27,8 @@
   <div class="hero-copy">
     <p class="eyebrow"><span class="status-dot"></span> THE MEMORY LAYER FOR YOUR AGENTS</p>
     <h1>에이전트가 바뀌어도,<br>기억은 <span class="blue">이어지도록.</span></h1>
-    <p class="hero-description">매번 나를 처음부터 설명하지 마세요.<br>취향부터 프로젝트의 맥락까지, 흩어진 에이전트를<br class="desktop-break"> 하나의 기억으로 연결합니다.</p>
-    <div class="hero-actions"><a class="button primary" href="/console">콘솔로 이동 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a><a class="button button-outline" href="/guide">연결 가이드 읽기 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a></div>
+    <p class="hero-description">결정의 이유, 실패한 시도, 사용자 정정과 다음 할 일을 남기세요.<br>다음 에이전트가 근거와 미완료 작업까지 찾아<br class="desktop-break"> 같은 프로젝트를 바로 이어갑니다.</p>
+    <div class="hero-actions"><a class="button primary" href="/guide#skill">내 에이전트 연결하기 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a><a class="button button-outline" href="/console">콘솔 열기 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a></div>
     <div class="hero-support"><a class="hero-selfhost" href="https://github.com/vibememory/vibememory#quick-start-docker-compose" target="_blank" rel="noopener">GitHub에서 self-host <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg></a><div class="hero-note"><span class="mini-icon"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#network"></use></svg></span><span>REST API & Skill</span><span class="note-divider"></span><span>로컬 키워드 임베딩</span></div></div>
   </div>
   <div class="hero-connect" id="connect-ways" aria-label="Vibe Memory 연결 방법">
@@ -71,6 +71,14 @@
     <div class="memory-core"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="m8 9 9-4 8 10-7 12-12-8L8 9Zm0 0 10 18M17 5 6 19l19-4"/><circle cx="8" cy="9" r="2.8"/><circle cx="17" cy="5" r="2.8"/><circle cx="25" cy="15" r="2.8"/><circle cx="18" cy="27" r="2.8"/><circle cx="6" cy="19" r="2.8"/></svg><strong>나의 기억</strong><span>ONE SHARED CONTEXT</span></div>
     <span class="floating-label label-one"><i></i> Python을 선호해요</span><span class="floating-label label-two"><i></i> 진행 중인 프로젝트</span>
     <div class="scene-bottom" aria-live="polite"><span class="scene-bottom-icon"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-down-right"></use></svg></span><span id="agent-description">Claude Code가 나의 개발 언어 선호를 참고하는 예시입니다.</span><span class="demo-badge">예시</span></div>
+  </div>
+</section>
+<section class="handoff-story wrap" aria-labelledby="handoff-story-title">
+  <div class="handoff-story-heading"><p class="eyebrow">SYNTHETIC HANDOFF EXAMPLE</p><h2 id="handoff-story-title">한 에이전트의 작업을,<br>다음 에이전트가 이유부터 이어서.</h2><p>아래 내용은 제품 동작을 설명하기 위한 예시이며 실제 사용자 데이터가 아닙니다.</p></div>
+  <div class="handoff-story-flow">
+    <article class="handoff-agent-card"><span class="handoff-agent-label">AGENT A · 저장</span><h3>Project Atlas</h3><ul><li><strong>결정</strong> Redis 운영 부담 때문에 PostgreSQL 선택</li><li><strong>완료</strong> 인증 흐름 구현</li><li><strong>다음 할 일</strong> 권한 테스트는 아직 미완료</li></ul></article>
+    <div class="handoff-service" aria-label="Vibe Memory 서버 역할"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#database"></use></svg><strong>Vibe Memory</strong><span>저장 · 키워드 검색 · 관계 조회</span><small>서버 LLM 호출 없음<br>외부 작업 실행 없음</small></div>
+    <article class="handoff-agent-card"><span class="handoff-agent-label">AGENT B · 조회</span><h3>근거와 할 일을 함께 복구</h3><ul><li><strong>이유</strong> 단순히 “PostgreSQL 사용”만 보지 않음</li><li><strong>재개</strong> 미완료 권한 테스트부터 시작</li><li><strong>정정</strong> 사용자가 바꾼 결론은 이전 판단보다 우선</li></ul></article>
   </div>
 </section>
 <div class="principles wrap"><span>YOUR CONTEXT. YOUR CONTINUITY.</span><div><span>대화가 달라도</span><i><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#sparkles"></use></svg></i><span>도구가 달라도</span><i><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#sparkles"></use></svg></i><span>기억은 하나로</span></div></div>

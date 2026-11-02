@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 import anyio
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import (
@@ -35,6 +35,8 @@ from .auth import (
     AuthStore,
     Credentials,
     DeviceStartInput,
+    EmailInput,
+    EmailVerificationStart,
     FeatureRequestOperatorUpdate,
     KeyAccessUpdate,
     KeyInput,
@@ -42,7 +44,9 @@ from .auth import (
     NamespaceGrant,
     NamespaceInput,
     PasswordInput,
+    PasswordResetComplete,
     ProtectedSecondFactor,
+    RecoveryTokenInput,
     SecondFactorInput,
     Signup,
 )
@@ -73,6 +77,7 @@ from .deterministic import (
 )
 from .embeddings import Embedder
 from .files import FileStorage
+from .mailer import RecoveryMailDelivery
 from .mcp import LATEST_PROTOCOL, MCPHandler
 from .models import (
     AgentMessageAck,
@@ -201,7 +206,14 @@ def create_app(settings=None, embedder=None):
         database or settings.data_dir / "vault.sqlite",
         settings.vault_key_file or settings.data_dir / "vault.key",
     )
-    accounts = AuthStore(account_storage, vault.cipher)
+    mail_delivery = RecoveryMailDelivery(settings)
+    accounts = AuthStore(
+        account_storage,
+        vault.cipher,
+        mail_delivery=mail_delivery,
+        public_origin=settings.public_origin,
+        recovery_token_seconds=settings.recovery_token_seconds,
+    )
     oauth = OAuthStore(account_storage)
 
     @asynccontextmanager
@@ -220,10 +232,11 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.30.8",
+        version="0.31.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
+    app.state.accounts = accounts
     request_metrics = defaultdict(lambda: deque(maxlen=2000))
     request_metric_counts = defaultdict(int)
 
@@ -779,6 +792,39 @@ def create_app(settings=None, embedder=None):
     @app.get("/auth/security", tags=["account"])
     def account_security(user=Depends(browser_user)):
         return accounts.security(user["id"])
+
+    @app.post("/auth/recovery/email/start", tags=["account"])
+    def start_recovery_email_verification(
+        data: EmailVerificationStart, user=Depends(browser_user)
+    ):
+        return accounts.start_email_verification(user["id"], data.password, data.code)
+
+    @app.post("/auth/recovery/email/verify", tags=["account"])
+    def verify_recovery_email(data: RecoveryTokenInput, request: Request):
+        check_origin(request)
+        return accounts.verify_recovery_email(data.token)
+
+    @app.post("/auth/password-reset/request", tags=["account"])
+    def request_password_reset(
+        data: EmailInput, request: Request, background_tasks: BackgroundTasks
+    ):
+        check_origin(request)
+        accounts.check_password_reset_rate_limit(
+            data.email, request.client.host if request.client else "unknown"
+        )
+        background_tasks.add_task(
+            accounts.request_password_reset,
+            data.email,
+        )
+        return {
+            "accepted": True,
+            "message": "확인 가능한 복구 수단이 있으면 재설정 안내를 보냈습니다.",
+        }
+
+    @app.post("/auth/password-reset/complete", tags=["account"])
+    def complete_password_reset(data: PasswordResetComplete, request: Request):
+        check_origin(request)
+        return accounts.complete_password_reset(data.token, data.password)
 
     @app.post("/auth/totp/setup", tags=["account"])
     def setup_totp(data: PasswordInput, user=Depends(browser_user)):
@@ -1731,6 +1777,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "X-Accel-Buffering": "no",
             },
         )
+
+    @app.get("/v1/events/recent", tags=["service"])
+    def recent_events(
+        limit: int = Query(default=20, ge=1, le=100),
+        user=Depends(events_reader),
+        db=Depends(store),
+    ):
+        """Return bounded, content-free mutation activity for the console."""
+        return {"items": db.recent_events(user, limit), "time_basis": "UTC"}
 
     @app.get("/v1/me", tags=["service"])
     def me(request: Request, user=Depends(owner)):

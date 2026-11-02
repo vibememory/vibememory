@@ -70,6 +70,16 @@ def test_events_owner_replay_updates_and_failed_writes(client, embedder):
         "relation.updated",
     ]
     assert len(embedder.calls) == calls
+    recent = client.get(
+        "/v1/events/recent?limit=3", headers={"Authorization": "Bearer " + KEY_A2}
+    ).json()
+    assert recent["time_basis"] == "UTC"
+    assert [item["event"] for item in recent["items"]] == [
+        "relation.updated",
+        "memory.updated",
+        "relation.created",
+    ]
+    assert "private text" not in json.dumps(recent)
     assert (
         decode(client.get("/v1/events?seconds=1", headers={"Authorization": "Bearer " + KEY_B}))
         == []

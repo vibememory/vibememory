@@ -50,6 +50,18 @@ For ongoing projects, prior decisions, user preferences, corrections, task hando
 
 Do not let an unavailable memory service block independent work. Disclose missing context or failed writes, and never claim an operation succeeded without successful CLI output.
 
+## Authoring records that can be found again
+
+Write compact conclusions, not diary entries. Put the stable subject and the retrieval words an agent is likely to know in `keywords`; keep identifiers, conditions, evidence, result, and the next unresolved action in the content. A useful record stands on its own after the conversation is gone.
+
+- Project context — good: `Project Atlas uses PostgreSQL 16 in production; repository atlas-api; owner team platform; migration window 2026-11-08 UTC.` Keywords: `Project Atlas`, `PostgreSQL`, `atlas-api`, `migration`. Bad: `We talked about the database.`
+- Decision — good: `Decision: Project Atlas chose PostgreSQL over Redis for durable memory because restore operations and relational constraints are required. Revisit if p95 write latency exceeds 80 ms.` Keywords: `Project Atlas`, `database decision`, `PostgreSQL`, `Redis`. Bad: `Use Postgres.`
+- Failure — good: `Failed attempt: Redis prototype lost unflushed state during the restore drill. Evidence: run restore-2026-10-29. Next: test PostgreSQL PITR.` Keywords: `Project Atlas`, `Redis`, `failure`, `restore drill`, `PITR`. Bad: `Redis did not work.`
+- Checkpoint — good: `Goal: ship account recovery | Done: token flow and tests | Current blocker: hosted SMTP credentials absent | Next: configure provider and verify delivery | Evidence: commit abc123.` Keywords: project name, `session checkpoint`, `account recovery`, branch or commit. Bad: a transcript, raw logs, or an unverified claim of completion.
+- Correction — good: create a new record that states exactly what changed, then link it to the old record with `SUPERSEDES` or `CORRECTS`, the old record's expected version, a reason, and `full` or `partial` scope. Bad: silently overwrite history or mark a partial correction as a full replacement.
+
+For an important decision, correction, or handoff, optionally verify retrieval once after writing: run one exact or hybrid `recall` using one or two natural keywords another agent would actually know, confirm the expected ID and current version, and stop. Do not add verification calls to every save, retry noisy queries, or treat retrieval rank as truth.
+
 ## Periodic memory hygiene prompt
 
 At a natural checkpoint, when there is a concrete maintenance signal—several new or changed entities or relationships, orphaned or weakly connected records, duplicate, conflicting or obsolete memories, or a substantial completed milestone—ask in the user's language: “Would you like me to refresh the relationship graph and optimize the memories now?” A Korean equivalent is “관계 그래프를 최신화하고 기억을 한 번 최적화할까요?” Do not impose a once-per-session quota. In a long conversation or session, ask again whenever later accumulated changes make another maintenance pass useful. A decline or no reply applies only to that moment and is not a lasting preference; after further meaningful work or at a later natural checkpoint with a real maintenance signal, the agent may offer again. Avoid immediate repeated prompts and never interrupt active work. Use the state of the memories and graph rather than a rigid timer. This optional maintenance prompt is separate from ordinary proactive recall and checkpointing, which continue without asking.
@@ -130,7 +142,7 @@ Create a new checkpoint rather than editing history. When a previous checkpoint 
 ```sh
 "$VM_CLI" recall PROJECT "session checkpoint" TOPIC
 "$VM_CLI" remember 'Goal: ... | Decisions: ... | Done: ... | Current: ... | Blockers: ... | Next: ... | Evidence: ...' -k PROJECT -k "session checkpoint" -k TOPIC --kind event --source agent-session --tag session-checkpoint
-"$VM_CLI" relate NEW_ID PREVIOUS_ID --relation SUPERSEDES --reason "Newer verified session checkpoint"
+"$VM_CLI" relate NEW_ID PREVIOUS_ID --relation SUPERSEDES --correction-scope full --reason "Newer verified session checkpoint"
 ```
 
 An unavailable service or failed checkpoint must not block the task. Report the failed persistence briefly and continue with local context.
@@ -181,6 +193,9 @@ Use command help for flags. The ordinary workflow is:
 - `merge CANONICAL_ID DUPLICATE_ID... --versions '@versions.json' --reason TEXT`
   after updating the canonical record with every unique fact and keyword to retain
 - `relation-status ID --status active|retracted --reason TEXT --version N`
+- `relation-scope ID --scope unknown|full|partial --reason TEXT --version N` to
+  review a legacy correction claim without recreating it; `relate` also accepts
+  `--correction-scope`, and graph JSON uses the same field
 - `forget ID` only for explicitly authorized irreversible deletion; ordinarily archive instead
 - `feedback`, `feedback-list`, `feedback-get`
 - `feedback-admin-list` and `feedback-admin-update OWNER_ID REQUEST_ID ...` only when

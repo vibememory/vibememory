@@ -95,8 +95,10 @@ class PostgresDatabase:
             name TEXT NOT NULL,
             salt TEXT NOT NULL,
             password_hash TEXT NOT NULL,
-            created_at BIGINT NOT NULL
+            created_at BIGINT NOT NULL,
+            email_verified_at BIGINT
         );
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at BIGINT;
         CREATE TABLE IF NOT EXISTS sessions (
             hash TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -190,6 +192,25 @@ class PostgresDatabase:
             expires_at BIGINT NOT NULL,
             attempts INTEGER NOT NULL DEFAULT 0
         );
+        CREATE TABLE IF NOT EXISTS account_recovery_tokens (
+            hash TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            purpose TEXT NOT NULL CHECK(purpose IN ('verify_email','reset_password')),
+            created_at BIGINT NOT NULL,
+            expires_at BIGINT NOT NULL,
+            consumed_at BIGINT
+        );
+        CREATE INDEX IF NOT EXISTS account_recovery_tokens_user_idx
+            ON account_recovery_tokens(user_id,purpose,expires_at);
+        CREATE TABLE IF NOT EXISTS account_security_events (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            event TEXT NOT NULL,
+            created_at BIGINT NOT NULL,
+            metadata TEXT NOT NULL DEFAULT '{{}}'
+        );
+        CREATE INDEX IF NOT EXISTS account_security_events_user_idx
+            ON account_security_events(user_id,created_at DESC,id DESC);
 
         CREATE TABLE IF NOT EXISTS oauth_clients (
             client_id TEXT PRIMARY KEY,

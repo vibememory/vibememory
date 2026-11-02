@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>로그인 — Vibe Memory</title>
   <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
   <link rel="icon" href="/assets/favicon.svg">
   <link rel="stylesheet" href="/assets/style.css">
   <link rel="stylesheet" href="/assets/console.css">
@@ -38,6 +39,7 @@
         <label id="name-field" hidden>이름<input id="name" name="name" autocomplete="name" maxlength="80" placeholder="어떻게 불러드릴까요?"></label>
         <label id="email-field">이메일<input id="email" name="email" type="email" autocomplete="username" required maxlength="254" placeholder="you@example.com"></label>
         <label id="password-field">비밀번호<div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" required minlength="10" maxlength="128" placeholder="10자 이상 입력해주세요"><button type="button" id="show-password" aria-label="비밀번호 표시">보기</button></div></label>
+        <button class="auth-recovery-action" id="forgot-password" type="button">비밀번호를 잊으셨나요?</button>
         <label id="otp-field" hidden>인증 코드<input id="otp-code" name="otp-code" inputmode="numeric" autocomplete="one-time-code" minlength="6" maxlength="32" placeholder="6자리 코드 또는 복구 코드"></label>
         <p id="auth-error" class="form-error" role="alert" hidden></p>
         <button class="button primary" id="auth-submit" type="submit">로그인 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button>

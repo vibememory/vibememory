@@ -24,6 +24,12 @@ For a suspected vulnerability, use GitHub's **Security → Report a vulnerabilit
 - A default `/data` backup contains both Vault ciphertext and its decryption key and must be protected as plaintext-equivalent. Configure `MEMORY_VAULT_KEY_FILE` outside the data backup when operational separation is required.
 - `vault exec` avoids printing values but cannot prevent the launched child process from logging or exfiltrating its environment.
 - Sessions are HttpOnly and SameSite=Lax; Secure is enabled for HTTPS origins. Browser mutations require a matching Origin.
-- Current signup uses email as an unverified login identifier. Email verification, password recovery, and social login are not implemented.
+- Signup email starts as an unverified login identifier. When SMTP is configured,
+  users can explicitly verify it as a recovery address using their current
+  password and active MFA. Password-reset requests are non-enumerating and
+  rate-limited; links are short-lived, hashed, single-use, and require an
+  explicit POST confirmation. A reset revokes browser sessions and pending
+  login/consent state while preserving MFA, agent keys, MCP connections,
+  namespace grants, and Vault grants. Social login is not implemented.
 
 Kuzu is a legacy migration reader, not the production store. Review dependencies and your deployment requirements before operating a public multi-user instance.

@@ -169,6 +169,15 @@ class PostgresStore:
             ).fetchall()
         return [dict(id=row["id"], event=row["event"], data=row["payload"]) for row in rows]
 
+    def recent_events(self, owner, limit=20):
+        with self._connection() as connection:
+            rows = connection.execute(
+                """SELECT id,event,payload FROM change_events
+                WHERE owner=%s ORDER BY id DESC LIMIT %s""",
+                (owner, limit),
+            ).fetchall()
+        return [dict(id=row["id"], event=row["event"], data=row["payload"]) for row in rows]
+
     @staticmethod
     def _agent(row):
         result = dict(row)
@@ -1128,16 +1137,24 @@ class PostgresStore:
             edge = self._relation(row)
             if edge["version"] != data.expected_version:
                 raise Conflict()
-            if edge["status"] == data.status:
+            next_status = data.status or edge["status"]
+            next_scope = data.correction_scope or edge["correction_scope"]
+            if edge["status"] == next_status and edge["correction_scope"] == next_scope:
                 return edge
             version = edge["version"] + 1
             history = edge["history"] + [
-                dict(status=data.status, reason=data.reason, at=now(), version=version)
+                dict(
+                    status=next_status,
+                    correction_scope=next_scope,
+                    reason=data.reason,
+                    at=now(),
+                    version=version,
+                )
             ]
             connection.execute(
-                """UPDATE relations SET status=%s,reason=%s,version=%s,history=%s
+                """UPDATE relations SET status=%s,correction_scope=%s,reason=%s,version=%s,history=%s
                 WHERE owner=%s AND id=%s""",
-                (data.status, data.reason, version, Jsonb(history), owner, id),
+                (next_status, next_scope, data.reason, version, Jsonb(history), owner, id),
             )
             self._event(
                 owner,
@@ -1147,11 +1164,13 @@ class PostgresStore:
                     "source_id": edge["source_id"],
                     "target_id": edge["target_id"],
                     "version": version,
+                    "correction_scope": next_scope,
                 },
             )
             return {
                 **edge,
-                "status": data.status,
+                "status": next_status,
+                "correction_scope": next_scope,
                 "reason": data.reason,
                 "version": version,
                 "history": history,

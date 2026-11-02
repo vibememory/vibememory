@@ -426,3 +426,21 @@ expiry or a consumed request 410, excessive polling 429. Only hashed codes and
 keys are stored. The resulting key is a normal revocable memory key. Vault access
 is granted only when requested and visibly approved; existing keys default to no
 Vault access.
+
+### Verified email and password reset
+
+Account-recovery endpoints are browser/account operations rather than agent API
+capabilities:
+
+| Method | Path | Authentication | Purpose |
+|---|---|---|---|
+| POST | `/auth/recovery/email/start` | browser session + current password + active MFA when configured | Send a verification link for the account's existing login email |
+| POST | `/auth/recovery/email/verify` | single-use token | Explicitly confirm the recovery email |
+| POST | `/auth/password-reset/request` | public, rate limited | Return a uniform accepted response and send only for a verified account |
+| POST | `/auth/password-reset/complete` | single-use token | Replace the password and revoke browser/pending consent state |
+
+GET requests only render the login confirmation UI and never consume recovery
+tokens. Tokens are stored as hashes, expire in UTC, are invalidated when a newer
+token of the same purpose is issued, and commit at most once. Password reset
+preserves MFA, agent keys, MCP connections, namespace grants, and Vault grants;
+it neither restores a lost Vault encryption key nor expands any permission.

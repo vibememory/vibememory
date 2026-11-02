@@ -290,6 +290,31 @@ permissions without rotating the token. Changes take effect on the next request;
 active SSE streams also stop when their read permission is removed. Existing
 keys keep the legacy full non-Vault permission set until the user narrows it.
 
+### Verified account recovery
+
+Password recovery is disabled until an operator configures SMTP. Set
+`MEMORY_SMTP_HOST`, `MEMORY_SMTP_PORT`, and `MEMORY_SMTP_FROM`; add
+`MEMORY_SMTP_USERNAME` and `MEMORY_SMTP_PASSWORD` together when the relay
+requires authentication. `MEMORY_SMTP_SSL=true` selects implicit TLS, while
+`MEMORY_SMTP_STARTTLS=true` upgrades a plain connection. Do not enable both.
+`MEMORY_RECOVERY_TOKEN_SECONDS` controls the short-lived, single-use email
+verification and reset links.
+
+Existing accounts remain unverified after upgrade. A signed-in user must open
+**Console → Account security → Recovery email**, confirm the current password
+and, when enabled, the current TOTP or recovery code, then explicitly confirm
+the emailed link. Simply opening a link never consumes it or changes the
+account. Unknown, unverified, and verified email addresses receive the same
+public password-reset response, and origin/account throttles limit requests.
+
+A successful reset changes only the browser password and revokes browser
+sessions plus pending login and OAuth consent codes. Existing MFA and recovery
+codes, agent API keys, MCP connections, namespace grants, and Vault grants stay
+in place and never gain access. This is intentional continuity, not a lost-key
+recovery mechanism; users should separately revoke any suspected agent or MCP
+credential. Recent recovery events are visible in Account security without
+tokens, recipient addresses, or message bodies.
+
 Remote MCP OAuth connections are managed from the same screen. The owner can add
 or revoke memory read, memory write, feature-request, and Vault scopes without
 reconnecting the client. Changes update active access and refresh tokens

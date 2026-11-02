@@ -57,7 +57,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.30.8"
+SERVER_VERSION = "0.31.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -552,8 +552,8 @@ TOOLS = [
     ),
     _tool(
         "relation_update",
-        "Retract or reactivate a relationship",
-        "Change a relationship status with its current version and an evidence-based reason.",
+        "Update a relationship status or correction scope",
+        "Version-check and change relationship status and/or correction_scope with an evidence-based reason.",
         RelationUpdateInput,
         "memory:write",
         read_only=False,

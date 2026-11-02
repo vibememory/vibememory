@@ -1,8 +1,11 @@
 {
   "name": "@vibememory/client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
-  "license": "Apache-2.0",
+  "license": "MIT",
+  "description": "Typed dependency-free client for the Vibe Memory REST contract",
+  "repository": {"type": "git", "url": "https://github.com/vibememory/vibememory.git", "directory": "sdk/typescript"},
+  "homepage": "https://vibememory.io",
   "files": ["dist"],
   "exports": {
     ".": {

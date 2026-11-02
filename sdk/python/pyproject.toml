@@ -4,10 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vibememory-client"
-version = "0.1.0"
+version = "0.2.0"
 description = "Dependency-free typed-ish client for the Vibe Memory REST API"
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = "MIT"
+
+[project.urls]
+Homepage = "https://vibememory.io"
+Repository = "https://github.com/vibememory/vibememory"
 
 [tool.hatch.build.targets.wheel]
 packages = ["vibememory"]

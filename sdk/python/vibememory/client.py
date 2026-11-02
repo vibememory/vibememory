@@ -1,4 +1,4 @@
-"""Tiny dependency-free Vibe Memory client; it performs no LLM calls."""
+"""Dependency-free Vibe Memory client. It performs no LLM calls."""
 
 import json
 import time
@@ -8,56 +8,154 @@ import urllib.request
 
 
 class VibeMemoryError(RuntimeError):
-    def __init__(self, status, body):
-        super().__init__(f"Vibe Memory {status}: {body}")
-        self.status, self.body = status, body
+    def __init__(self, status, body, *, headers=None):
+        try:
+            payload = json.loads(body)
+        except (TypeError, json.JSONDecodeError):
+            payload = {}
+        error = payload.get("error") if isinstance(payload, dict) else {}
+        error = error if isinstance(error, dict) else {}
+        super().__init__(f"Vibe Memory {status}: {error.get('reason_code') or body}")
+        self.status = status
+        self.body = body
+        self.payload = payload
+        self.code = error.get("reason_code")
+        self.retryable = bool(error.get("retryable"))
+        self.request_id = error.get("request_id") or (headers or {}).get("X-Request-ID")
+
+
+class VibeMemoryCancelled(RuntimeError):
+    """Raised between HTTP operations when the caller's cancellation hook is set."""
 
 
 class VibeMemoryClient:
-    def __init__(self, base_url, token, namespace="default", timeout=20):
-        self.base_url, self.token, self.namespace, self.timeout = base_url.rstrip("/"), token, namespace, timeout
+    def __init__(
+        self,
+        base_url,
+        token,
+        namespace="default",
+        timeout=20,
+        contract_version="1.1",
+    ):
+        self.base_url = base_url.rstrip("/")
+        self.token = token
+        self.namespace = namespace
+        self.timeout = timeout
+        self.contract_version = contract_version
 
-    def _request(self, path, method="GET", payload=None, retry=False):
+    @staticmethod
+    def _check_cancelled(cancelled):
+        if cancelled is not None and cancelled():
+            raise VibeMemoryCancelled("Vibe Memory request cancelled")
+
+    def _request(self, path, method="GET", payload=None, retry=False, *, cancelled=None):
+        self._check_cancelled(cancelled)
         body = None if payload is None else json.dumps(payload).encode()
-        request = urllib.request.Request(self.base_url + path, data=body, method=method, headers={
-            "Authorization": "Bearer " + self.token,
-            "Content-Type": "application/json",
-            "X-Vibe-Memory-Namespace": self.namespace,
-        })
+        request = urllib.request.Request(
+            self.base_url + path,
+            data=body,
+            method=method,
+            headers={
+                "Authorization": "Bearer " + self.token,
+                "Content-Type": "application/json",
+                "X-Vibe-Memory-Namespace": self.namespace,
+                "Vibe-Memory-Contract-Version": self.contract_version,
+            },
+        )
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 return None if response.status == 204 else json.load(response)
         except urllib.error.HTTPError as error:
             if error.code == 429 and retry:
-                time.sleep(min(int(error.headers.get("Retry-After", "1")), 30))
-                return self._request(path, method, payload, False)
-            raise VibeMemoryError(error.code, error.read().decode(errors="replace")) from None
+                delay = min(int(error.headers.get("Retry-After", "1")), 30)
+                deadline = time.monotonic() + max(delay, 0)
+                while time.monotonic() < deadline:
+                    self._check_cancelled(cancelled)
+                    time.sleep(min(0.1, deadline - time.monotonic()))
+                return self._request(path, method, payload, False, cancelled=cancelled)
+            raise VibeMemoryError(
+                error.code,
+                error.read().decode(errors="replace"),
+                headers=error.headers,
+            ) from None
 
-    def get(self, record_id):
-        return self._request("/v1/records/" + urllib.parse.quote(record_id, safe=""))
+    def get(self, record_id, *, cancelled=None):
+        return self._request(
+            "/v1/records/" + urllib.parse.quote(record_id, safe=""), cancelled=cancelled
+        )
 
-    def search(self, keywords, match_mode="hybrid"):
-        return self._request("/v1/search", "POST", {"keywords": keywords, "match_mode": match_mode}, True)
+    def search(self, keywords, match_mode="hybrid", *, cancelled=None):
+        return self._request(
+            "/v1/search",
+            "POST",
+            {"keywords": keywords, "match_mode": match_mode},
+            True,
+            cancelled=cancelled,
+        )
 
-    def create(self, content, keywords, client_request_id=None):
+    def create(self, content, keywords, client_request_id=None, *, cancelled=None):
         payload = {"content": content, "keywords": keywords, "kind": "fact"}
         if client_request_id:
             payload["client_request_id"] = client_request_id
-        return self._request("/v1/memories", "POST", payload, bool(client_request_id))
+        return self._request(
+            "/v1/memories",
+            "POST",
+            payload,
+            bool(client_request_id),
+            cancelled=cancelled,
+        )
 
-    def correct(self, previous_id, expected_previous_version, replacement, reason, client_request_id):
-        return self._request("/v1/corrections/memories", "POST", {
-            "previous_id": previous_id, "expected_previous_version": expected_previous_version,
-            "replacement": {**replacement, "kind": replacement.get("kind", "fact")},
-            "relation": "CORRECTS", "correction_scope": "full", "reason": reason,
-            "client_request_id": client_request_id,
-        }, True)
+    def correct(
+        self,
+        previous_id,
+        expected_previous_version,
+        replacement,
+        reason,
+        client_request_id,
+        *,
+        cancelled=None,
+    ):
+        return self._request(
+            "/v1/corrections/memories",
+            "POST",
+            {
+                "previous_id": previous_id,
+                "expected_previous_version": expected_previous_version,
+                "replacement": {**replacement, "kind": replacement.get("kind", "fact")},
+                "relation": "CORRECTS",
+                "correction_scope": "full",
+                "reason": reason,
+                "client_request_id": client_request_id,
+            },
+            True,
+            cancelled=cancelled,
+        )
 
-    def list(self, limit=50, offset=0):
-        return self._request(f"/v1/records?limit={limit}&offset={offset}")
+    def list(self, limit=50, offset=0, *, cancelled=None):
+        return self._request(
+            f"/v1/records?limit={limit}&offset={offset}", cancelled=cancelled
+        )
 
-    def create_entities(self, items):
-        return self._request("/v1/entities/batch", "POST", {"items": items, "return": "minimal", "atomic": False})
+    def iter_records(self, limit=50, offset=0, *, cancelled=None):
+        """Yield deterministic API pages; cancellation is checked between requests."""
 
-    def context_bundle(self, **selectors):
-        return self._request("/v1/context-bundle", "POST", selectors, True)
+        while True:
+            page = self.list(limit, offset, cancelled=cancelled)
+            yield page
+            items = page.get("items", [])
+            if len(items) < limit:
+                return
+            offset += len(items)
+
+    def create_entities(self, items, *, cancelled=None):
+        return self._request(
+            "/v1/entities/batch",
+            "POST",
+            {"items": items, "return": "minimal", "atomic": False},
+            cancelled=cancelled,
+        )
+
+    def context_bundle(self, *, cancelled=None, **selectors):
+        return self._request(
+            "/v1/context-bundle", "POST", selectors, True, cancelled=cancelled
+        )

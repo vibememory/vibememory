@@ -27,5 +27,11 @@ if next_assets.exists():
     shutil.rmtree(next_assets)
 shutil.copytree(exported, destination, dirs_exist_ok=True)
 
+contracts_source = root.parent / "contracts"
+contracts_destination = destination / "contracts"
+if contracts_destination.exists():
+    shutil.rmtree(contracts_destination)
+shutil.copytree(contracts_source, contracts_destination)
+
 subprocess.run([sys.executable, str(root / "scripts/package_skill.py")], check=True)
 print("Finalized Next.js export in " + str(destination))

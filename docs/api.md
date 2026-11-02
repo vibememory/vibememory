@@ -2,7 +2,7 @@
 
 Your own server exposes an interactive schema at `/docs` and machine-readable OpenAPI at `/openapi.json`. Browser-admin routes are usable but omitted from both by default; a private deployment can set `MEMORY_PUBLIC_OPENAPI_INCLUDE_ADMIN=true`.
 
-Contract discovery is available at `/.well-known/vibe-memory`. All timestamps and temporal query fields use UTC. `X-Vibe-Memory-Namespace` selects a hard authorization partition; project values in metadata are classification only and never grant access.
+Contract discovery is available at `/.well-known/vibe-memory`. Public record, relationship and error JSON Schemas plus the minimum OpenAPI profile are served under `/contracts/v1/`; compatibility rules and the explicit UMP comparison limits are under `/contracts/`. Clients may request contract `1.0` or `1.1` with `Vibe-Memory-Contract-Version`. Responses identify the negotiated and supported versions; unknown versions return HTTP 406 with `UNSUPPORTED_CONTRACT_VERSION`. All timestamps and temporal query fields use UTC. `X-Vibe-Memory-Namespace` selects a hard authorization partition; project values in metadata are classification only and never grant access.
 
 Portable archives use raw byte streams: `GET /v1/portable-archive` returns a versioned ZIP with a SHA-256 manifest and JSONL records/relations, while `POST /v1/portable-archive/import` accepts `application/vnd.vibememory.archive+zip`. Import is a dry run unless `?apply=true` is explicit. Tokens, OAuth state, sessions, OTP data and Vault values are always excluded.
 

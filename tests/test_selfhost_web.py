@@ -54,6 +54,11 @@ def test_console_and_api_share_one_origin(settings):
         robots = client.get("/robots.txt")
         sitemap = client.get("/sitemap.xml")
         llms = client.get("/llms.txt")
+        record_contract = client.get("/contracts/v1/memory-contract.json")
+        relation_contract = client.get("/contracts/v1/relationship-contract.json")
+        error_contract = client.get("/contracts/v1/error-contract.json")
+        openapi_profile = client.get("/contracts/v1/openapi-profile.json")
+        contract_governance = client.get("/contracts/GOVERNANCE.md")
         assert "Vibe Memory — AI 에이전트를 위한 공유 기억 레이어" in landing
         assert 'rel="canonical" href="https://vibememory.io"' in landing
         assert 'name="twitter:card" content="summary_large_image"' in landing
@@ -78,6 +83,12 @@ def test_console_and_api_share_one_origin(settings):
         assert "https://vibememory.io/guide" in sitemap.text
         assert llms.status_code == 200
         assert "Vibe Memory does not call an LLM" in llms.text
+        assert record_contract.json()["title"] == "Vibe Memory Contract 1.1"
+        assert relation_contract.json()["title"] == "Vibe Memory Relationship Contract 1.1"
+        assert error_contract.json()["title"] == "Vibe Memory Error Contract 1.1"
+        assert openapi_profile.json()["openapi"] == "3.1.0"
+        assert contract_governance.status_code == 200
+        assert "Vibe Memory Contract governance" in contract_governance.text
         assert install_script.status_code == 200
         assert "Skip this step for other agents" not in install_script.text
         assert "Identify the current agent host first" in install_script.text
@@ -173,20 +184,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261102-v031-2"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v031-2"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v031-2"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v031-2"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v031-2"' in landing
-        assert '<script src="/assets/theme.js?v=20261102-v031-2" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261102-v031-2" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261102-v031-2" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261102-v031-2" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v031-2" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v031-2" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261102-v031-2" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v031-2" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261102-v031-2" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261102-v032-0"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v032-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v032-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v032-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v032-0"' in landing
+        assert '<script src="/assets/theme.js?v=20261102-v032-0" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261102-v032-0" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261102-v032-0" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261102-v032-0" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v032-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v032-0" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261102-v032-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v032-0" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261102-v032-0" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -242,9 +253,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261102-v031-2' in connect
-        assert '/assets/theme.css?v=20261102-v031-2' in connect
-        assert '/assets/product-ui.css?v=20261102-v031-2' in connect
+        assert '/assets/ui-kit.css?v=20261102-v032-0' in connect
+        assert '/assets/theme.css?v=20261102-v032-0' in connect
+        assert '/assets/product-ui.css?v=20261102-v032-0' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

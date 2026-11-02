@@ -1,0 +1,59 @@
+{
+  "openapi": "3.1.0",
+  "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
+  "info": {
+    "title": "Vibe Memory Core Compatibility Profile",
+    "version": "1.1",
+    "license": {"name": "MIT", "identifier": "MIT"}
+  },
+  "x-vibe-memory-profile": {
+    "name": "core-rest",
+    "time_basis": "UTC",
+    "server_inference": false,
+    "keyword_source": "agent-supplied",
+    "contract_negotiation_header": "Vibe-Memory-Contract-Version",
+    "supported_versions_discovery": "/.well-known/vibe-memory"
+  },
+  "paths": {
+    "/.well-known/vibe-memory": {
+      "get": {"operationId": "discoverMemoryContract", "responses": {"200": {"description": "Contract discovery"}}}
+    },
+    "/v1/capabilities": {
+      "get": {"operationId": "getCapabilities", "responses": {"200": {"description": "Feature and grant negotiation"}}}
+    },
+    "/v1/memories": {
+      "post": {"operationId": "createMemory", "responses": {"201": {"description": "Created memory"}}}
+    },
+    "/v1/records/{id}": {
+      "get": {
+        "operationId": "getRecord",
+        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {
+          "200": {
+            "description": "Current record",
+            "content": {"application/json": {"schema": {"$ref": "memory-contract.json"}}}
+          }
+        }
+      }
+    },
+    "/v1/search": {
+      "post": {"operationId": "searchRecords", "responses": {"200": {"description": "Keyword search results"}}}
+    },
+    "/v1/relations": {
+      "post": {
+        "operationId": "createRelationship",
+        "responses": {
+          "201": {
+            "description": "Created relationship",
+            "content": {"application/json": {"schema": {"$ref": "relationship-contract.json"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "VibeMemoryError": {"$ref": "error-contract.json"}
+    }
+  }
+}

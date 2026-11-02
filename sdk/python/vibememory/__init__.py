@@ -1,3 +1,3 @@
-from .client import VibeMemoryClient, VibeMemoryError
+from .client import VibeMemoryCancelled, VibeMemoryClient, VibeMemoryError
 
-__all__ = ["VibeMemoryClient", "VibeMemoryError"]
+__all__ = ["VibeMemoryCancelled", "VibeMemoryClient", "VibeMemoryError"]

@@ -96,6 +96,11 @@ REST and MCP expose a deterministic current-connection authorization contract.
 credential, action-level grants, tool exposure, per-resource policy, and external
 service permissions separate. They never expose tokens or merge permissions from
 another connection; unknown external policy remains explicitly unevaluated.
+The implementation-independent record, relationship and error schemas, minimum
+OpenAPI profile, compatibility governance and black-box runner live under
+[`contracts/`](contracts) and [`conformance/`](conformance). Hosted and self-hosted
+servers publish the same files under `/contracts/` and negotiate contract `1.0`
+or `1.1` with `Vibe-Memory-Contract-Version`.
 
 Claude Code users can also install the repository's marketplace plugin after the
 native CLI is available on `PATH`:

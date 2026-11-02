@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   trailingSlash: false,
   poweredByHeader: false,
   images: { unoptimized: true },
-  generateBuildId: async () => "vibe-memory-20261102-v031-2",
+  generateBuildId: async () => "vibe-memory-20261102-v032-0",
 };
 
 export default nextConfig;

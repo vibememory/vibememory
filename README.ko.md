@@ -40,6 +40,8 @@ skills/vibe-memory/bin/vibe-memory vault exec \
 
 REST와 MCP는 현재 요청에 실제로 사용된 연결만 설명하는 결정론적 권한 계약을 제공합니다. `/v1/auth-context`, `/v1/capabilities`, `/v1/permission-check`와 MCP의 `auth_context`, `capabilities_get`, `permission_check`는 전송 방식·자격증명·작업별 권한·도구 노출·리소스별 정책·외부 서비스 권한을 분리합니다. 토큰 원문을 노출하거나 다른 연결의 권한을 합치지 않으며, 확인할 수 없는 외부 정책은 `not_evaluated`로 명시합니다.
 
+구현체와 분리된 기록·관계·오류 JSON Schema, 최소 OpenAPI 프로파일, 호환성 변경 절차와 black-box 검증기는 [`contracts/`](contracts), [`conformance/`](conformance)에 있습니다. hosted와 self-hosted 모두 `/contracts/`에 같은 자료를 공개하며 `Vibe-Memory-Contract-Version`으로 계약 `1.0` 또는 `1.1`을 협상합니다.
+
 Claude Code·Codex·Hermes Agent·OpenClaw의 자동 불러오기와 체크포인트 Hook은 사용자가 검토하고 범위를 선택한 뒤에만 켜지는 어댑터로 제공합니다. 설치·해제와 개인정보 경계는 [Hook 가이드](docs/agent-hooks.md), 실제 검증 버전과 제한사항은 랜딩과 같은 데이터로 생성되는 [에이전트 지원표](docs/agent-support.md)를 참고하세요. 이 Hook 연동에는 SSE가 필요하지 않습니다.
 
 ## GPT·Claude 원격 MCP 연결

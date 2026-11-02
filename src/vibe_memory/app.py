@@ -61,6 +61,8 @@ from .batch import (
     request_hash,
 )
 from .capabilities import (
+    CONTRACT_VERSION,
+    SUPPORTED_CONTRACT_VERSIONS,
     build_auth_context,
     capability_contract,
     permission_check,
@@ -232,7 +234,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.31.2",
+        version="0.32.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -259,8 +261,37 @@ def create_app(settings=None, embedder=None):
     @app.middleware("http")
     async def request_contract(request: Request, call_next):
         request.state.request_id = uuid4().hex
+        requested_contract = request.headers.get("Vibe-Memory-Contract-Version", "").strip()
+        negotiated_contract = requested_contract or CONTRACT_VERSION
+        if negotiated_contract not in SUPPORTED_CONTRACT_VERSIONS:
+            response = JSONResponse(
+                status_code=406,
+                content={
+                    "detail": "Requested Vibe Memory contract version is not supported",
+                    "supported_contract_versions": list(SUPPORTED_CONTRACT_VERSIONS),
+                    "error": structured_error(
+                        request_id=request.state.request_id,
+                        context_ref=None,
+                        operation="contract_negotiate",
+                        resource_type="service",
+                        reason_code="UNSUPPORTED_CONTRACT_VERSION",
+                        required_action="use_supported_contract_version",
+                    ),
+                },
+            )
+            response.headers["X-Request-ID"] = request.state.request_id
+            response.headers["Vibe-Memory-Contract-Version"] = CONTRACT_VERSION
+            response.headers["Vibe-Memory-Contract-Supported"] = ", ".join(
+                SUPPORTED_CONTRACT_VERSIONS
+            )
+            return response
+        request.state.negotiated_contract_version = negotiated_contract
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
+        response.headers["Vibe-Memory-Contract-Version"] = negotiated_contract
+        response.headers["Vibe-Memory-Contract-Supported"] = ", ".join(
+            SUPPORTED_CONTRACT_VERSIONS
+        )
         context_ref = getattr(request.state, "context_ref", "")
         if context_ref:
             response.headers["Vibe-Memory-Context-Ref"] = context_ref
@@ -395,6 +426,10 @@ def create_app(settings=None, embedder=None):
             "enforcement": "isolated_owner_partition",
             "grants": getattr(request.state, "namespace_grants", None),
         }
+        context["negotiated_contract_version"] = getattr(
+            request.state, "negotiated_contract_version", CONTRACT_VERSION
+        )
+        context["supported_contract_versions"] = list(SUPPORTED_CONTRACT_VERSIONS)
         return context
 
     def admin_user(user=Depends(browser_user)):
@@ -1444,6 +1479,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     async def conflict(request, error):
         return error_response(request, 409, "Version conflict; reload the current resource")
 
+    @app.exception_handler(DuplicateRequestConflict)
+    async def idempotency_conflict(request, error):
+        return error_response(
+            request,
+            409,
+            "client_request_id was already used with different content",
+            reason_code="IDEMPOTENCY_CONFLICT",
+        )
+
     @app.exception_handler(SnapshotConflict)
     async def snapshot_conflict(request, error):
         return error_response(
@@ -1649,7 +1693,9 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     @app.get("/.well-known/vibe-memory", tags=["service"])
     def public_memory_contract():
         return {
-            "schema_version": "1.1",
+            "schema_version": CONTRACT_VERSION,
+            "contract_version": CONTRACT_VERSION,
+            "supported_contract_versions": list(SUPPORTED_CONTRACT_VERSIONS),
             "service": "vibe-memory",
             "time_basis": "UTC",
             "inference": "agent_supplied_only",
@@ -1659,6 +1705,14 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "portable_export": "/v1/portable-archive",
                 "portable_import": "/v1/portable-archive/import",
                 "mcp": "/mcp",
+            },
+            "contracts": {
+                "record": "/contracts/v1/memory-contract.json",
+                "relationship": "/contracts/v1/relationship-contract.json",
+                "error": "/contracts/v1/error-contract.json",
+                "openapi_profile": "/contracts/v1/openapi-profile.json",
+                "governance": "/contracts/GOVERNANCE.md",
+                "ump_mapping": "/contracts/ump-mapping.md",
             },
             "profiles": ["core-rest", "mcp", "namespaces", "portable-archive", "valid-time"],
             "extensions": {

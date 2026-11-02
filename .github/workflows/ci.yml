@@ -20,6 +20,11 @@ jobs:
           key: keyword-model-${{ runner.os }}-${{ hashFiles('uv.lock') }}
       - run: uv sync --frozen
       - run: uv run ruff check src ops tests scripts skills/vibe-memory/scripts
+      - name: Build public client SDKs
+        run: |
+          npm ci --prefix sdk/typescript
+          npm run build --prefix sdk/typescript
+          uv build --project sdk/python --out-dir "$RUNNER_TEMP/sdk-dist"
       - name: Verify published skill matches source
         run: |
           python3 landing/scripts/package_skill.py
@@ -58,6 +63,20 @@ jobs:
           docker compose -p vibe-memory-ci up -d
       - name: Verify full installation
         run: uv run python scripts/selfhost_smoke.py --phase create --state-file "$RUNNER_TEMP/vibe-state.json"
+      - name: Run public black-box contract profiles
+        run: |
+          conformance_token="$(jq -r .key "$RUNNER_TEMP/vibe-state.json")"
+          uv run python conformance/run.py \
+            --base-url http://localhost:8080 \
+            --token "$conformance_token" \
+            --contract-version 1.1 \
+            --junit "$RUNNER_TEMP/conformance-1.1.xml" \
+            --output "$RUNNER_TEMP/conformance-1.1.json"
+          uv run python conformance/run.py \
+            --base-url http://localhost:8080 \
+            --token "$conformance_token" \
+            --contract-version 1.0 \
+            --output "$RUNNER_TEMP/conformance-1.0.json"
       - name: Replace container and verify persistent data
         run: |
           docker compose -p vibe-memory-ci up -d --force-recreate

@@ -1,5 +1,7 @@
 import io
+import json
 import zipfile
+from pathlib import Path
 
 from conftest import SpyEmbedder
 from fastapi.testclient import TestClient
@@ -7,6 +9,7 @@ from fastapi.testclient import TestClient
 from vibe_memory.app import create_app
 
 ORIGIN = "https://vibememory.io"
+CONTRACTS = Path(__file__).parents[1] / "contracts"
 
 
 def test_namespace_grants_hard_isolate_records(settings):
@@ -99,3 +102,72 @@ def test_public_contract_and_admin_metrics(settings):
         metrics = client.get("/v1/admin/metrics").json()
         assert metrics["privacy"] == "fixed-cardinality metadata only"
         assert all("user" not in item for item in metrics["requests"])
+
+
+def test_contract_documents_and_version_negotiation(client):
+    discovery = client.get("/.well-known/vibe-memory").json()
+    assert discovery["contract_version"] == "1.1"
+    assert discovery["supported_contract_versions"] == ["1.0", "1.1"]
+    assert discovery["contracts"] == {
+        "record": "/contracts/v1/memory-contract.json",
+        "relationship": "/contracts/v1/relationship-contract.json",
+        "error": "/contracts/v1/error-contract.json",
+        "openapi_profile": "/contracts/v1/openapi-profile.json",
+        "governance": "/contracts/GOVERNANCE.md",
+        "ump_mapping": "/contracts/ump-mapping.md",
+    }
+
+    for name, title in (
+        ("memory-contract.json", "Vibe Memory Contract 1.1"),
+        ("relationship-contract.json", "Vibe Memory Relationship Contract 1.1"),
+        ("error-contract.json", "Vibe Memory Error Contract 1.1"),
+    ):
+        schema = json.loads((CONTRACTS / "v1" / name).read_text(encoding="utf-8"))
+        assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+        assert schema["title"] == title
+        assert schema["additionalProperties"] is True
+
+    profile = json.loads(
+        (CONTRACTS / "v1" / "openapi-profile.json").read_text(encoding="utf-8")
+    )
+    assert profile["openapi"] == "3.1.0"
+    assert profile["x-vibe-memory-profile"]["server_inference"] is False
+    assert {"/v1/memories", "/v1/records/{id}", "/v1/search", "/v1/relations"} <= set(
+        profile["paths"]
+    )
+
+    legacy = client.get("/v1/capabilities", headers={"Vibe-Memory-Contract-Version": "1.0"})
+    assert legacy.status_code == 200
+    assert legacy.headers["vibe-memory-contract-version"] == "1.0"
+    assert legacy.headers["vibe-memory-contract-supported"] == "1.0, 1.1"
+    assert legacy.json()["negotiated_contract_version"] == "1.0"
+    assert legacy.json()["supported_contract_versions"] == ["1.0", "1.1"]
+
+    current = client.get("/v1/capabilities")
+    assert current.headers["vibe-memory-contract-version"] == "1.1"
+    assert current.json()["negotiated_contract_version"] == "1.1"
+
+    unsupported = client.get(
+        "/v1/capabilities", headers={"Vibe-Memory-Contract-Version": "9.0"}
+    )
+    assert unsupported.status_code == 406
+    assert unsupported.json()["supported_contract_versions"] == ["1.0", "1.1"]
+    assert unsupported.json()["error"]["reason_code"] == "UNSUPPORTED_CONTRACT_VERSION"
+
+
+def test_idempotency_conflict_uses_public_error_contract(client):
+    payload = {
+        "content": "First idempotent value",
+        "keywords": ["contract-idempotency"],
+        "client_request_id": "contract-idempotency-v1",
+    }
+    assert client.post("/v1/memories", json=payload).status_code == 201
+    conflict = client.post(
+        "/v1/memories", json={**payload, "content": "Different idempotent value"}
+    )
+    assert conflict.status_code == 409
+    error = conflict.json()["error"]
+    assert error["schema_version"] == "1.1"
+    assert error["reason_code"] == "IDEMPOTENCY_CONFLICT"
+    assert error["retryable"] is False
+    assert error["request_id"] == conflict.headers["x-request-id"]

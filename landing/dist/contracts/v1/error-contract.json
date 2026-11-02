@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibememory.io/contracts/v1/error-contract.json",
+  "title": "Vibe Memory Error Contract 1.1",
+  "description": "Machine-readable REST or MCP operation failure without user content echoing.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "context",
+    "operation",
+    "resource_type",
+    "reason_code",
+    "retryable",
+    "required_action",
+    "request_id"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.1"},
+    "context": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["ref"],
+          "properties": {"ref": {"type": "string", "minLength": 1}},
+          "additionalProperties": false
+        }
+      ]
+    },
+    "operation": {"type": "string", "minLength": 1},
+    "resource_type": {"type": "string", "minLength": 1},
+    "reason_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "retryable": {"type": "boolean"},
+    "required_action": {"type": ["string", "null"]},
+    "request_id": {"type": "string"}
+  },
+  "additionalProperties": true
+}

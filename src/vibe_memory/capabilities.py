@@ -5,6 +5,7 @@ from __future__ import annotations
 from .clock import utc_now_iso
 
 CONTRACT_VERSION = "1.1"
+SUPPORTED_CONTRACT_VERSIONS = ("1.0", CONTRACT_VERSION)
 
 
 # The registry describes server features independently from the grant carried by
@@ -178,6 +179,11 @@ def capability_contract(auth_context):
         )
     return {
         "schema_version": CONTRACT_VERSION,
+        "contract_version": CONTRACT_VERSION,
+        "supported_contract_versions": list(SUPPORTED_CONTRACT_VERSIONS),
+        "negotiated_contract_version": auth_context.get(
+            "negotiated_contract_version", CONTRACT_VERSION
+        ),
         "context_ref": auth_context["context_ref"],
         "checked_at": utc_now_iso(),
         "evaluation": "metadata_only",

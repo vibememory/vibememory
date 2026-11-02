@@ -145,7 +145,7 @@ def test_skill_commands_are_anchored_to_the_loaded_skill_directory():
     assert "Cloudflare `1010`" in skill
 
 
-def test_all_skill_variants_offer_rate_limited_memory_hygiene():
+def test_all_skill_variants_offer_repeatable_memory_hygiene():
     skill_paths = [
         ROOT / "skills/vibe-memory/SKILL.md",
         ROOT / "claude-plugins/vibe-memory/skills/vibe-memory/SKILL.md",
@@ -155,9 +155,11 @@ def test_all_skill_variants_offer_rate_limited_memory_hygiene():
         skill = path.read_text()
         assert "## Periodic memory hygiene prompt" in skill
         assert "관계 그래프를 최신화하고 기억을 한 번 최적화할까요?" in skill
-        assert "Ask at most once per conversation or session" in skill
-        assert "not merely because time passed" in skill
-        assert "do not ask again in that session" in skill
+        assert "Do not impose a once-per-session quota" in skill
+        assert "ask again whenever later accumulated changes" in skill
+        assert "A decline or no reply applies only to that moment" in skill
+        assert "the agent may offer again" in skill
+        assert "Avoid immediate repeated prompts" in skill
         assert "ordinary proactive recall and checkpointing" in skill
 
 

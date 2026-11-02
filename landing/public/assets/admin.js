@@ -11,32 +11,38 @@ let offset = 0, payload = {items:[],counts:{},total:0}, userOffset = 0;
 let usersPayload = {items:[],total:0}, operatorPayload = {items:[]}, toastTimer, userSearchTimer;
 const adminRoot = document.querySelector('.admin-page');
 const adminNavLinks = [...document.querySelectorAll('[data-admin-nav]')];
+const adminView = location.pathname === '/admin/requests' ? 'requests'
+  : location.pathname === '/admin/operators' ? 'operators'
+  : location.pathname === '/admin/users' ? 'users'
+  : 'overview';
+const adminViewCopy = {
+  overview:['관리자','PRODUCT OPERATIONS','운영 대시보드','서비스 운영 현황과 관리 도구를 확인합니다.'],
+  requests:['기능 요청','FEATURE REQUESTS','기능 요청 관리','모든 워크스페이스의 요청을 검토하고 처리 결과를 공개합니다.'],
+  operators:['운영 에이전트','AGENT OPERATIONS','운영 에이전트','전체 기능 요청을 처리할 수 있는 에이전트 권한을 관리합니다.'],
+  users:['사용자','USER DIRECTORY','사용자 관리','가입 사용자와 연결·기록·저장 용량 현황을 확인합니다.']
+};
 
 function setAdminNavOpen(open) {
   adminRoot?.classList.toggle('admin-nav-open', open);
   $('#admin-menu-toggle')?.setAttribute('aria-expanded', String(open));
   $('#admin-sidebar-backdrop')?.setAttribute('tabindex', open ? '0' : '-1');
 }
-function setActiveAdminSection(id) {
+function setActiveAdminView(view) {
   adminNavLinks.forEach(link => {
-    if (link.dataset.adminNav === id) link.setAttribute('aria-current', 'page');
+    if (link.dataset.adminNav === view) link.setAttribute('aria-current', 'page');
     else link.removeAttribute('aria-current');
   });
 }
 $('#admin-menu-toggle')?.addEventListener('click',() => setAdminNavOpen(!adminRoot?.classList.contains('admin-nav-open')));
 $('#admin-sidebar-backdrop')?.addEventListener('click',() => setAdminNavOpen(false));
-adminNavLinks.forEach(link => link.addEventListener('click',() => {
-  setActiveAdminSection(link.dataset.adminNav);
-  setAdminNavOpen(false);
-}));
+adminNavLinks.forEach(link => link.addEventListener('click',() => setAdminNavOpen(false)));
 document.addEventListener('keydown',event => { if (event.key === 'Escape') setAdminNavOpen(false); });
-if ('IntersectionObserver' in window) {
-  const sectionObserver = new IntersectionObserver(entries => {
-    const visible = entries.filter(entry => entry.isIntersecting).sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
-    if (visible) setActiveAdminSection(visible.target.id);
-  }, {rootMargin:'-72px 0px -58% 0px',threshold:[0,.08,.25]});
-  document.querySelectorAll('[data-admin-section]').forEach(section => sectionObserver.observe(section));
-}
+setActiveAdminView(adminView);
+const [breadcrumb,kicker,title,description] = adminViewCopy[adminView];
+$('#admin-breadcrumb-current').textContent = breadcrumb;
+$('#admin-heading-kicker').textContent = kicker;
+$('#admin-heading-title').textContent = title;
+$('#admin-heading-description').textContent = description;
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers:{'Content-Type':'application/json'}, credentials:'same-origin', ...options});
@@ -45,7 +51,7 @@ async function api(path, options = {}) {
     try { data = await response.json(); } catch { throw new Error('서버 응답을 확인할 수 없습니다.'); }
   }
   if (!response.ok) {
-    if (response.status === 401) { location.replace('/login?next=%2Fadmin'); throw new Error('로그인이 필요합니다.'); }
+    if (response.status === 401) { location.replace('/login?next=' + encodeURIComponent(location.pathname + location.search)); throw new Error('로그인이 필요합니다.'); }
     if (response.status === 403) { location.replace('/console'); throw new Error('관리자 권한이 필요합니다.'); }
     throw new Error(typeof data?.detail === 'string' ? data.detail : '요청을 처리하지 못했습니다.');
   }
@@ -74,7 +80,7 @@ function renderStats() {
     ['in_progress', '처리 중', payload.counts.in_progress || 0],
     ['completed', '완료', payload.counts.completed || 0],
   ];
-  const selected = $('#status-filter').value;
+  const selected = $('#status-filter')?.value || '';
   $('#admin-stats').innerHTML = cards.map(([value,label,count]) => `<button type="button" data-status="${value}" class="${selected === value ? 'selected' : ''}"><span>${h(label)}</span><strong>${count}</strong><small>${value ? 'STATUS' : 'ALL REQUESTS'}</small></button>`).join('');
 }
 function visibleItems() {
@@ -95,6 +101,10 @@ async function load() {
   const status = $('#status-filter').value;
   payload = await api(`/v1/admin/feature-requests?limit=50&offset=${offset}${status ? `&status=${encodeURIComponent(status)}` : ''}`);
   renderStats(); renderRows();
+}
+async function loadOverview() {
+  payload = await api('/v1/admin/feature-requests?limit=1&offset=0');
+  renderStats();
 }
 function renderUsers() {
   $('#user-description').textContent = `${usersPayload.total}명의 사용자 중 ${usersPayload.items.length}명을 표시합니다.`;
@@ -140,6 +150,10 @@ document.addEventListener('click', async event => {
   const button = event.target.closest('button');
   if (!button) return;
   if (button.dataset.status !== undefined) {
+    if (adminView === 'overview') {
+      location.href = '/admin/requests' + (button.dataset.status ? `?status=${encodeURIComponent(button.dataset.status)}` : '');
+      return;
+    }
     $('#status-filter').value = button.dataset.status; offset = 0; load().catch(showError); return;
   }
   if (button.dataset.action === 'edit') editRequest(button.dataset.owner, button.dataset.id);
@@ -198,6 +212,12 @@ function showError(error) { $('#admin-error').textContent = error.message; $('#a
     const account = await api('/auth/me');
     if (!account.is_admin) { location.replace('/console'); return; }
     $('#admin-name').textContent = account.user.name; $('#admin-email').textContent = account.user.email;
-    await Promise.all([load(), loadUsers(), loadOperators()]);
+    if (adminView === 'requests') {
+      const requestedStatus = new URLSearchParams(location.search).get('status');
+      if (['received','reviewing','planned','in_progress','completed','declined'].includes(requestedStatus)) $('#status-filter').value = requestedStatus;
+      await load();
+    } else if (adminView === 'operators') await loadOperators();
+    else if (adminView === 'users') await loadUsers();
+    else await loadOverview();
   } catch (error) { showError(error); }
 })();

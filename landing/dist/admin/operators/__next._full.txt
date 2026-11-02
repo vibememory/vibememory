@@ -1,0 +1,119 @@
+1:"$Sreact.fragment"
+2:"/_next/static/chunks/0umf92h1sb77c.js"
+3:I[39756,["$2"],"default"]
+4:I[37457,["$2"],"default"]
+d:"ViewportBoundary"
+e:I[97367,["$2"],"$d"]
+10:"MetadataBoundary"
+11:I[97367,["$2"],"$10"]
+12:"$Sreact.suspense"
+14:I[68027,["$2"],"default",1]
+:HL["/assets/fonts/noto-sans-jp.css?v=20261102-v032-1","style"]
+:HL["/assets/fonts/noto-sans-sc.css?v=20261102-v032-1","style"]
+:HL["/assets/style.css?v=20261102-v032-1","style"]
+:HL["/assets/i18n.css?v=20261102-v032-1","style"]
+:HL["/assets/console-fixes.css?v=20261102-v032-1","style"]
+:HL["/assets/theme.css?v=20261102-v032-1","style"]
+:HL["/assets/product-ui.css?v=20261102-v032-1","style"]
+:HL["/assets/admin.css?v=20261102-v032-1","style"]
+:HL["/assets/ui-kit.css?v=20261102-v032-1","style"]
+6:X
+9:T278d,
+  <aside class="admin-sidebar" id="admin-sidebar" aria-label="콘솔 메뉴" data-ui-shell>
+    <a class="admin-sidebar-brand" href="/admin" aria-label="Vibe Memory 관리자 홈"><img src="/assets/favicon.svg" width="30" height="30" alt=""><span>vibe<span>memory</span></span><em>ADMIN</em></a>
+    <nav>
+      <p>ADMINISTRATION</p>
+      <a href="/admin" data-admin-nav="overview"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#home"></use></svg><span>대시보드</span></a>
+      <a href="/admin/requests" data-admin-nav="requests"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg><span>기능 요청</span></a>
+      <a href="/admin/operators" data-admin-nav="operators"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg><span>운영 에이전트</span></a>
+      <a href="/admin/users" data-admin-nav="users"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#network"></use></svg><span>사용자</span></a>
+      <p class="admin-sidebar-group">WORKSPACE</p>
+      <a href="/console"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#home"></use></svg><span>내 콘솔</span></a>
+      <a href="/guide" target="_blank" rel="noopener"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#external-link"></use></svg><span>문서</span></a>
+    </nav>
+    <div class="admin-sidebar-bottom">
+      <div class="admin-identity"><small>ADMINISTRATOR</small><strong id="admin-name">권한 확인 중…</strong><span id="admin-email"></span></div>
+      <button id="admin-logout" type="button"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg><span>로그아웃</span></button>
+    </div>
+  </aside>
+  <button class="admin-sidebar-backdrop" id="admin-sidebar-backdrop" type="button" aria-label="메뉴 닫기" tabindex="-1"></button>
+
+  <div class="admin-body">
+    <header class="admin-header" data-ui-shell>
+      <button class="admin-menu-toggle" id="admin-menu-toggle" type="button" aria-label="메뉴 열기" aria-controls="admin-sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
+      <div class="admin-breadcrumb"><span>Vibe Memory</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"></path></svg><strong id="admin-breadcrumb-current">관리자</strong></div>
+      <nav aria-label="관리자"><a href="/console">내 콘솔</a></nav>
+    </header>
+
+  <main class="admin-main" data-ui-shell>
+    <div class="admin-heading">
+      <div><p id="admin-heading-kicker">PRODUCT OPERATIONS</p><h1 id="admin-heading-title">운영 대시보드</h1><span id="admin-heading-description">서비스 운영 현황과 관리 도구를 확인합니다.</span></div>
+    </div>
+    <div id="admin-error" class="admin-error" role="alert" hidden></div>
+
+    <section class="admin-overview" id="admin-overview" data-admin-section="overview">
+      <section class="admin-stats" id="admin-stats" aria-label="기능 요청 현황"></section>
+    </section>
+
+    <section class="admin-panel" id="admin-requests" data-admin-section="requests">
+      <div class="admin-toolbar">
+        <div><h2>처리 큐</h2><p id="queue-description">요청을 불러오는 중입니다.</p></div>
+        <div class="admin-filters"><label><span>상태</span><select id="status-filter"><option value="">전체 상태</option><option value="received">접수됨</option><option value="reviewing">검토 중</option><option value="planned">계획됨</option><option value="in_progress">처리 중</option><option value="completed">완료</option><option value="declined">보류</option></select></label><label class="admin-search"><span>검색</span><input id="request-search" type="search" placeholder="제목·사용자·결과 검색"></label><button id="admin-refresh" type="button">새로고침</button></div>
+      </div>
+      <div class="admin-table-scroll"><table class="admin-table"><thead><tr><th>요청</th><th>요청자</th><th>우선순위</th><th>상태</th><th>처리 결과</th><th>최종 갱신</th><th></th></tr></thead><tbody id="request-rows"><tr><td colspan="7" class="admin-loading">불러오는 중…</td></tr></tbody></table></div>
+      <div class="admin-pager"><button id="admin-previous" type="button"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg> 이전</button><span id="admin-page-number">1 페이지</span><button id="admin-next" type="button">다음 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button></div>
+    </section>
+
+    <section class="admin-panel admin-operators-panel" id="admin-operators" data-admin-section="operators">
+      <div class="admin-toolbar">
+        <div><h2>운영 에이전트</h2><p>선택한 에이전트만 모든 사용자의 기능 요청을 조회하고 처리 결과를 수정할 수 있습니다.</p></div>
+        <button id="operators-refresh" type="button">새로고침</button>
+      </div>
+      <div class="admin-operator-notice"><strong>기능 요청 전용 권한</strong><span>사용자 기억·문서·관계·Vault·사용자 목록에는 관리자 권한이 확대되지 않습니다. 필요할 때만 승인하고 작업 후 회수하세요.</span></div>
+      <div class="admin-operator-list" id="operator-agent-list"><p class="admin-loading">에이전트 연결을 불러오는 중…</p></div>
+    </section>
+
+    <section class="admin-panel admin-users-panel" id="admin-users" data-admin-section="users">
+      <div class="admin-toolbar">
+        <div><h2>사용자</h2><p id="user-description">사용자 목록을 불러오는 중입니다.</p></div>
+        <div class="admin-filters"><label class="admin-search"><span>사용자 검색</span><input id="user-search" type="search" placeholder="이름·이메일 검색"></label><button id="users-refresh" type="button">새로고침</button></div>
+      </div>
+      <div class="admin-table-scroll"><table class="admin-table admin-users-table"><thead><tr><th>사용자</th><th>권한</th><th>보안</th><th>가입 시각</th><th>연결</th><th>기록</th><th>저장 용량</th></tr></thead><tbody id="user-rows"><tr><td colspan="7" class="admin-loading">불러오는 중…</td></tr></tbody></table></div>
+      <div class="admin-pager"><button id="users-previous" type="button"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-left"></use></svg> 이전</button><span id="users-page-number">1 페이지</span><button id="users-next" type="button">다음 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></button></div>
+    </section>
+  </main>
+  </div>
+
+  <dialog class="ui-modal" id="request-editor">
+    <form id="request-editor-form">
+      <div class="admin-dialog-heading"><div><p>FEATURE REQUEST</p><h2 id="request-heading">요청 편집 및 처리</h2></div><button class="admin-dialog-close" type="button" aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div>
+      <div class="admin-request-context"><div><span>요청자</span><strong id="requester-name"></strong><small id="requester-email"></small></div><div><span>등록 에이전트</span><strong id="request-agent-name"></strong><small id="request-source"></small></div></div>
+      <input id="request-owner-id" type="hidden"><input id="request-id" type="hidden">
+      <label>요청 제목<input id="request-edit-title" type="text" maxlength="200" required></label>
+      <label>요청 내용<textarea id="request-edit-description" maxlength="10000" rows="5" required></textarea></label>
+      <label>사용 사례<textarea id="request-edit-use-case" maxlength="4000" rows="3" placeholder="이 기능이 필요한 실제 상황을 적어주세요."></textarea></label>
+      <label>우선순위<select id="request-edit-priority" required><option value="low">낮음</option><option value="medium">보통</option><option value="high">높음</option></select></label>
+      <label>처리 상태<select id="request-status" required><option value="received">접수됨</option><option value="reviewing">검토 중</option><option value="planned">계획됨</option><option value="in_progress">처리 중</option><option value="completed">완료</option><option value="declined">보류</option></select></label>
+      <label>처리 결과<textarea id="request-result" maxlength="10000" rows="6" placeholder="사용자에게 공개할 처리 내용과 남은 작업을 적어주세요."></textarea></label>
+      <label>관련 결과 링크<input id="request-result-url" type="url" maxlength="2048" placeholder="https://github.com/..."></label>
+      <p id="request-editor-error" class="admin-form-error" role="alert" hidden></p>
+      <div class="admin-dialog-actions"><button class="admin-dialog-close" type="button">취소</button><button class="button primary" id="request-save" type="submit">요청 변경사항 저장</button></div>
+    </form>
+  </dialog>
+  <dialog class="ui-modal ui-modal--compact" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <form><div class="ui-confirm-icon" aria-hidden="true"><svg class="svg-icon"><use href="/assets/icons.svg#alert"></use></svg></div><div class="admin-dialog-heading"><div><p>PLEASE CONFIRM</p><h2 id="confirm-title">계속할까요?</h2></div><button type="button" class="ui-icon-button" data-ui-confirm-cancel aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div><p class="ui-confirm-message" id="confirm-message"></p><div class="admin-dialog-actions"><button class="secondary-button" id="confirm-cancel" data-ui-confirm-cancel type="button">취소</button><button class="button primary" id="confirm-submit" type="submit">확인</button></div></form>
+  </dialog>
+  <div class="admin-toast" id="admin-toast" role="status" aria-live="polite"></div>
+8:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/admin.css",{"rel":"stylesheet","href":"/assets/admin.css?v=20261102-v032-1"}],["$","link","/assets/ui-kit.css",{"rel":"stylesheet","href":"/assets/ui-kit.css?v=20261102-v032-1"}]],["$","link",null,{"rel":"stylesheet","href":"/assets/theme.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/product-ui.css?v=20261102-v032-1"}],["$","div",null,{"className":"admin-page admin-view-operators","dangerouslySetInnerHTML":{"__html":"$9"}}],["$La","$Lb"]],null,"$Lc"]}],"p":false,"v":null}}]]
+7:[["children",{"s":"operators","h":512,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],"p":false,"v":"$6"},"c":"$Q8"}]]
+5:[["children",{"s":"admin","h":512,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],"p":false,"v":"$6"},"c":"$Q7"}]]
+0:{"P":null,"c":["","admin","operators"],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","suppressHydrationWarning":true,"children":[["$","head",null,{"children":[["$","script",null,{"src":"/assets/theme-init.js?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/fonts/noto-sans-jp.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/fonts/noto-sans-sc.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/theme.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/product-ui.css?v=20261102-v032-1"}],["$","script",null,{"src":"/assets/theme.js?v=20261102-v032-1","defer":true}],["$","script",null,{"src":"/assets/i18n.js?v=20261102-v032-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261102-v032-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[[],null,null,["$","div",null,{"className":"$undefined","dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 <svg class=\"svg-icon\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#arrow-right\"></use></svg></a></main>"}}],[]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]]}]]}],"p":false,"v":null},"c":"$Q5"},"h":{"r":["$","$1","h",{"children":[null,["$","$Le",null,{"children":"$Lf"}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":"$L13"}]}],null]}],null]}],"p":false,"v":null}},"m":"$undefined","G":["$14",[]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"vibe-memory-20261102-v032-1"}
+15:I[97367,["$2"],"OutletBoundary"]
+6:C
+a:["$","script","/assets/ui-kit.js",{"src":"/assets/ui-kit.js?v=20261102-v032-1","defer":true}]
+b:["$","script","/assets/admin.js",{"src":"/assets/admin.js?v=20261102-v032-1","defer":true}]
+c:["$","$L15",null,{"children":["$","$12",null,{"name":"Next.MetadataOutlet","children":"$@16"}]}]
+f:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc","media":"(prefers-color-scheme: light)"}],["$","meta","3",{"name":"theme-color","content":"#0b1020","media":"(prefers-color-scheme: dark)"}]]
+17:I[27201,["$2"],"IconMark"]
+13:[["$","title","0",{"children":"Operator agents · Admin | Vibe Memory"}],["$","meta","1",{"name":"description","content":"Claude Code, Codex, Cursor 등 여러 AI 에이전트가 기억과 관계를 공유하도록 연결하는 오픈소스 메모리 레이어입니다. MCP, Skill, Rust CLI와 self-hosting을 지원합니다."}],["$","meta","2",{"name":"application-name","content":"Vibe Memory"}],["$","link","3",{"rel":"author","href":"https://github.com/vibememory"}],["$","meta","4",{"name":"author","content":"Vibe Memory contributors"}],["$","link","5",{"rel":"manifest","href":"/site.webmanifest","crossOrigin":"$undefined"}],["$","meta","6",{"name":"keywords","content":"AI agent memory,에이전트 메모리,Claude Code memory,Codex memory,MCP server,agent skills,knowledge graph,self-hosted AI,Vibe Memory"}],["$","meta","7",{"name":"referrer","content":"strict-origin-when-cross-origin"}],["$","meta","8",{"name":"creator","content":"Vibe Memory contributors"}],["$","meta","9",{"name":"publisher","content":"Vibe Memory"}],["$","meta","10",{"name":"robots","content":"noindex, nofollow, noarchive"}],["$","meta","11",{"name":"category","content":"technology"}],["$","meta","12",{"name":"mobile-web-app-capable","content":"yes"}],["$","meta","13",{"name":"format-detection","content":"telephone=no, address=no, email=no"}],["$","link","14",{"rel":"shortcut icon","href":"/assets/favicon.svg"}],["$","link","15",{"rel":"icon","href":"/assets/favicon.svg","type":"image/svg+xml"}],["$","$L17","16",{}]]
+16:null

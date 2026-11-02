@@ -40,7 +40,7 @@ test('support page is public, canonical, and identifies its purpose', () => {
 });
 
 test('private product routes are explicitly excluded from indexing', () => {
-  for (const page of ['admin', 'capture', 'connect', 'console', 'login']) {
+  for (const page of ['admin', 'admin/requests', 'admin/operators', 'admin/users', 'capture', 'connect', 'console', 'login']) {
     const html = read(`dist/${page}.html`);
     assert.match(html, /<meta name="robots" content="noindex, nofollow, noarchive"/);
     assert.doesNotMatch(html, /<link rel="canonical"/);

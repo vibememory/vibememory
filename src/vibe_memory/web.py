@@ -41,6 +41,9 @@ def mount_web(app, configured=None):
         ("/capture", "capture.html"),
         ("/console", "console.html"),
         ("/admin", "admin.html"),
+        ("/admin/requests", "admin/requests.html"),
+        ("/admin/operators", "admin/operators.html"),
+        ("/admin/users", "admin/users.html"),
         ("/guide", "guide.html"),
         ("/support", "support.html"),
     ]:

@@ -16,6 +16,9 @@ def test_console_and_api_share_one_origin(settings):
             ("/login", "auth-form"),
             ("/console", "console-main"),
             ("/admin", "admin-main"),
+            ("/admin/requests", "admin-main"),
+            ("/admin/operators", "admin-main"),
+            ("/admin/users", "admin-main"),
             ("/guide", "Vibe Memory"),
             ("/support", "VIBE MEMORY SUPPORT"),
             ("/capture", "capture-form"),
@@ -30,6 +33,9 @@ def test_console_and_api_share_one_origin(settings):
         capture = client.get("/capture").text
         console = client.get("/console").text
         admin = client.get("/admin").text
+        admin_requests = client.get("/admin/requests").text
+        admin_operators = client.get("/admin/operators").text
+        admin_users = client.get("/admin/users").text
         connect = client.get("/connect").text
         install_script = client.get("/assets/install-prompt.js")
         locale_script = client.get("/assets/i18n.js")
@@ -184,20 +190,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261102-v032-0"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v032-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v032-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v032-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v032-0"' in landing
-        assert '<script src="/assets/theme.js?v=20261102-v032-0" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261102-v032-0" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261102-v032-0" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261102-v032-0" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v032-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v032-0" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261102-v032-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v032-0" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261102-v032-0" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261102-v032-1"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v032-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v032-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v032-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v032-1"' in landing
+        assert '<script src="/assets/theme.js?v=20261102-v032-1" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261102-v032-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261102-v032-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261102-v032-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v032-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v032-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261102-v032-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v032-1" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261102-v032-1" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -253,9 +259,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261102-v032-0' in connect
-        assert '/assets/theme.css?v=20261102-v032-0' in connect
-        assert '/assets/product-ui.css?v=20261102-v032-0' in connect
+        assert '/assets/ui-kit.css?v=20261102-v032-1' in connect
+        assert '/assets/theme.css?v=20261102-v032-1' in connect
+        assert '/assets/product-ui.css?v=20261102-v032-1' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -353,15 +359,22 @@ def test_console_and_api_share_one_origin(settings):
         assert "PRODUCT OPERATIONS" in admin
         assert ".admin-stats" in admin_styles.text
         assert 'class="admin-sidebar" id="admin-sidebar"' in admin
-        assert 'data-admin-nav="admin-overview"' in admin
-        assert 'data-admin-nav="admin-requests"' in admin
-        assert 'data-admin-nav="admin-operators"' in admin
-        assert 'data-admin-nav="admin-users"' in admin
+        assert 'href="/admin" data-admin-nav="overview"' in admin
+        assert 'href="/admin/requests" data-admin-nav="requests"' in admin
+        assert 'href="/admin/operators" data-admin-nav="operators"' in admin
+        assert 'href="/admin/users" data-admin-nav="users"' in admin
+        assert 'class="admin-page admin-view-overview"' in admin
+        assert 'class="admin-page admin-view-requests"' in admin_requests
+        assert 'class="admin-page admin-view-operators"' in admin_operators
+        assert 'class="admin-page admin-view-users"' in admin_users
         assert 'id="admin-menu-toggle"' in admin
         assert 'id="admin-sidebar-backdrop"' in admin
         assert "function setAdminNavOpen" in admin_script.text
-        assert "IntersectionObserver" in admin_script.text
+        assert "const adminView = location.pathname === '/admin/requests'" in admin_script.text
+        assert "await loadOverview()" in admin_script.text
+        assert "Promise.all([load(), loadUsers(), loadOperators()])" not in admin_script.text
         assert ".admin-sidebar" in admin_styles.text
+        assert ".admin-page.admin-view-users #admin-users" in admin_styles.text
         assert ".admin-page.admin-nav-open .admin-sidebar" in admin_styles.text
         assert "Console UI refresh" in console_styles.text
         assert ".console-page{\n  --sidebar-width:280px" in console_styles.text

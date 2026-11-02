@@ -9,6 +9,34 @@ const statusInfo = status => ({
 const priorityLabel = priority => ({high:'높음',medium:'보통',low:'낮음'}[priority] || priority);
 let offset = 0, payload = {items:[],counts:{},total:0}, userOffset = 0;
 let usersPayload = {items:[],total:0}, operatorPayload = {items:[]}, toastTimer, userSearchTimer;
+const adminRoot = document.querySelector('.admin-page');
+const adminNavLinks = [...document.querySelectorAll('[data-admin-nav]')];
+
+function setAdminNavOpen(open) {
+  adminRoot?.classList.toggle('admin-nav-open', open);
+  $('#admin-menu-toggle')?.setAttribute('aria-expanded', String(open));
+  $('#admin-sidebar-backdrop')?.setAttribute('tabindex', open ? '0' : '-1');
+}
+function setActiveAdminSection(id) {
+  adminNavLinks.forEach(link => {
+    if (link.dataset.adminNav === id) link.setAttribute('aria-current', 'page');
+    else link.removeAttribute('aria-current');
+  });
+}
+$('#admin-menu-toggle')?.addEventListener('click',() => setAdminNavOpen(!adminRoot?.classList.contains('admin-nav-open')));
+$('#admin-sidebar-backdrop')?.addEventListener('click',() => setAdminNavOpen(false));
+adminNavLinks.forEach(link => link.addEventListener('click',() => {
+  setActiveAdminSection(link.dataset.adminNav);
+  setAdminNavOpen(false);
+}));
+document.addEventListener('keydown',event => { if (event.key === 'Escape') setAdminNavOpen(false); });
+if ('IntersectionObserver' in window) {
+  const sectionObserver = new IntersectionObserver(entries => {
+    const visible = entries.filter(entry => entry.isIntersecting).sort((a,b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible) setActiveAdminSection(visible.target.id);
+  }, {rootMargin:'-72px 0px -58% 0px',threshold:[0,.08,.25]});
+  document.querySelectorAll('[data-admin-section]').forEach(section => sectionObserver.observe(section));
+}
 
 async function api(path, options = {}) {
   const response = await fetch(path, {headers:{'Content-Type':'application/json'}, credentials:'same-origin', ...options});

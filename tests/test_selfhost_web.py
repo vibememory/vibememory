@@ -169,20 +169,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261102-v030-7"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v030-7"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v030-7"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v030-7"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v030-7"' in landing
-        assert '<script src="/assets/theme.js?v=20261102-v030-7" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261102-v030-7" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261102-v030-7" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261102-v030-7" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v030-7" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v030-7" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261102-v030-7" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v030-7" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261102-v030-7" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261102-v030-8"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v030-8"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v030-8"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v030-8"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v030-8"' in landing
+        assert '<script src="/assets/theme.js?v=20261102-v030-8" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261102-v030-8" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261102-v030-8" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261102-v030-8" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v030-8" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v030-8" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261102-v030-8" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261102-v030-8" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261102-v030-8" defer="">' in admin
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -238,9 +238,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261102-v030-7' in connect
-        assert '/assets/theme.css?v=20261102-v030-7' in connect
-        assert '/assets/product-ui.css?v=20261102-v030-7' in connect
+        assert '/assets/ui-kit.css?v=20261102-v030-8' in connect
+        assert '/assets/theme.css?v=20261102-v030-8' in connect
+        assert '/assets/product-ui.css?v=20261102-v030-8' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -336,6 +336,17 @@ def test_console_and_api_share_one_origin(settings):
         assert "user.totp_enabled" in admin_script.text
         assert "PRODUCT OPERATIONS" in admin
         assert ".admin-stats" in admin_styles.text
+        assert 'class="admin-sidebar" id="admin-sidebar"' in admin
+        assert 'data-admin-nav="admin-overview"' in admin
+        assert 'data-admin-nav="admin-requests"' in admin
+        assert 'data-admin-nav="admin-operators"' in admin
+        assert 'data-admin-nav="admin-users"' in admin
+        assert 'id="admin-menu-toggle"' in admin
+        assert 'id="admin-sidebar-backdrop"' in admin
+        assert "function setAdminNavOpen" in admin_script.text
+        assert "IntersectionObserver" in admin_script.text
+        assert ".admin-sidebar" in admin_styles.text
+        assert ".admin-page.admin-nav-open .admin-sidebar" in admin_styles.text
         assert "Console UI refresh" in console_styles.text
         assert ".console-page{\n  --sidebar-width:280px" in console_styles.text
         assert ".welcome-panel{grid-template-columns:minmax(0,1fr);gap:22px" in console_styles.text

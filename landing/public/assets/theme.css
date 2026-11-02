@@ -346,6 +346,7 @@ html[data-theme="dark"] .mcp-connect-actions > div { border-color: #344158; back
 
 /* Admin, modal, flyout, language control */
 html[data-theme="dark"] .admin-header,
+html[data-theme="dark"] .admin-sidebar,
 html[data-theme="dark"] .admin-identity,
 html[data-theme="dark"] .admin-stats button,
 html[data-theme="dark"] .admin-panel,
@@ -361,6 +362,14 @@ html[data-theme="dark"] .admin-request-title,
 html[data-theme="dark"] .admin-users-table td strong,
 html[data-theme="dark"] .admin-operator-card strong,
 html[data-theme="dark"] .admin-dialog-heading h2 { color: #edf2ff; }
+html[data-theme="dark"] .admin-sidebar-brand,
+html[data-theme="dark"] .admin-breadcrumb strong { color: #edf2ff; }
+html[data-theme="dark"] .admin-sidebar nav > a,
+html[data-theme="dark"] .admin-sidebar-bottom > button { color: #9aa8bf; }
+html[data-theme="dark"] .admin-sidebar nav > a:hover,
+html[data-theme="dark"] .admin-sidebar-bottom > button:hover { background: #192335; color: #fff; }
+html[data-theme="dark"] .admin-sidebar nav > a[aria-current="page"] { background: #1c2c52; color: #9db3ff; }
+html[data-theme="dark"] .admin-menu-toggle { border-color: #344158; background: #101725; color: #b6c2d5; }
 html[data-theme="dark"] .admin-header nav a,
 html[data-theme="dark"] .admin-header nav button,
 html[data-theme="dark"] .admin-heading > div > span,

@@ -1,10 +1,10 @@
-:HL["/assets/fonts/noto-sans-jp.css?v=20261102-v030-7","style"]
-:HL["/assets/fonts/noto-sans-sc.css?v=20261102-v030-7","style"]
-:HL["/assets/style.css?v=20261102-v030-7","style"]
-:HL["/assets/i18n.css?v=20261102-v030-7","style"]
-:HL["/assets/console-fixes.css?v=20261102-v030-7","style"]
-:HL["/assets/theme.css?v=20261102-v030-7","style"]
-:HL["/assets/product-ui.css?v=20261102-v030-7","style"]
+:HL["/assets/fonts/noto-sans-jp.css?v=20261102-v030-8","style"]
+:HL["/assets/fonts/noto-sans-sc.css?v=20261102-v030-8","style"]
+:HL["/assets/style.css?v=20261102-v030-8","style"]
+:HL["/assets/i18n.css?v=20261102-v030-8","style"]
+:HL["/assets/console-fixes.css?v=20261102-v030-8","style"]
+:HL["/assets/theme.css?v=20261102-v030-8","style"]
+:HL["/assets/product-ui.css?v=20261102-v030-8","style"]
 :HL["/assets/brands/claude-code.png","image"]
 :HL["/assets/brands/codex.png","image"]
 :HL["/assets/brands/cursor.svg","image"]
@@ -12,4 +12,4 @@
 :HL["/assets/brands/hermes.png","image"]
 :HL["/assets/brands/openclaw.svg","image"]
 1:[["children",{"s":"__PAGE__","h":160}]]
-0:{"b":"vibe-memory-20261102-v030-7","t":{"t":{"s":"","h":80,"c":"$Q1"}}}
+0:{"b":"vibe-memory-20261102-v030-8","t":{"t":{"s":"","h":80,"c":"$Q1"}}}

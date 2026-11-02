@@ -33,6 +33,12 @@ keywords. Before writing, recall the prior checkpoint; if an equivalent state is
 already stored, skip the write. Relate a newer checkpoint to the prior record with
 `SUPERSEDES` and a concise reason.
 
+## Periodic memory hygiene prompt
+
+At a natural checkpoint, when there is a concrete maintenance signal—several new or changed entities or relationships, orphaned or weakly connected records, duplicate, conflicting or obsolete memories, or a substantial completed milestone—ask once in the user's language: “Would you like me to refresh the relationship graph and optimize the memories now?” A Korean equivalent is “관계 그래프를 최신화하고 기억을 한 번 최적화할까요?” Ask at most once per conversation or session, never while active work is still in progress, and not merely because time passed. If the user declines or ignores it, do not ask again in that session; wait for a later session with new maintenance evidence. This optional maintenance prompt is separate from ordinary proactive recall and checkpointing, which continue without repeated consent prompts.
+
+If the user agrees, inspect before mutating. Use `graph-audit` plus targeted `recall`, `get`, and `graph` operations to identify the exact scope and evidence. “Refresh” means agent-authored entity and relationship repair backed by evidence. “Optimize” means deduplicating confirmed matches, improving keywords, preserving a canonical record, and recoverably archiving confirmed obsolete duplicates; it never means server-side inference, blanket rewriting, or irreversible deletion. Review `graph-diff` before `graph-apply` when relationship changes are proposed, keep conflicts visible, and require explicit authorization for `forget` or any destructive expansion.
+
 For repository work, include the locally verified project, branch, abbreviated
 commit, and whether uncommitted changes remain. Git cannot recover uncommitted
 content, so summarize only the useful verified delta without copying file

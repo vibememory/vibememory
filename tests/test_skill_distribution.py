@@ -145,6 +145,22 @@ def test_skill_commands_are_anchored_to_the_loaded_skill_directory():
     assert "Cloudflare `1010`" in skill
 
 
+def test_all_skill_variants_offer_rate_limited_memory_hygiene():
+    skill_paths = [
+        ROOT / "skills/vibe-memory/SKILL.md",
+        ROOT / "claude-plugins/vibe-memory/skills/vibe-memory/SKILL.md",
+        ROOT / "plugins/vibe-memory/skills/vibe-memory/SKILL.md",
+    ]
+    for path in skill_paths:
+        skill = path.read_text()
+        assert "## Periodic memory hygiene prompt" in skill
+        assert "관계 그래프를 최신화하고 기억을 한 번 최적화할까요?" in skill
+        assert "Ask at most once per conversation or session" in skill
+        assert "not merely because time passed" in skill
+        assert "do not ask again in that session" in skill
+        assert "ordinary proactive recall and checkpointing" in skill
+
+
 def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monkeypatch):
     installed = tmp_path / "installed"
     (installed / "scripts").mkdir(parents=True)

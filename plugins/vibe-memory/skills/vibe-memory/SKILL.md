@@ -19,6 +19,12 @@ For non-trivial work where previous context may matter:
 
 An unavailable memory service must not block independent work. Never claim a read or write succeeded unless the tool returned success.
 
+## Periodic memory hygiene prompt
+
+At a natural checkpoint, when there is a concrete maintenance signal—several new or changed entities or relationships, orphaned or weakly connected records, duplicate, conflicting or obsolete memories, or a substantial completed milestone—ask once in the user's language: “Would you like me to refresh the relationship graph and optimize the memories now?” A Korean equivalent is “관계 그래프를 최신화하고 기억을 한 번 최적화할까요?” Ask at most once per conversation or session, never while active work is still in progress, and not merely because time passed. If the user declines or ignores it, do not ask again in that session; wait for a later session with new maintenance evidence. This optional maintenance prompt is separate from ordinary proactive recall and checkpointing, which continue without repeated consent prompts.
+
+If the user agrees, inspect before mutating. Use available graph diagnostics plus targeted search, list, fetch, and graph operations to identify the exact scope and evidence. “Refresh” means agent-authored entity and relationship repair backed by evidence. “Optimize” means deduplicating confirmed matches, improving keywords, preserving a canonical record, and recoverably archiving confirmed obsolete duplicates; it never means server-side inference, blanket rewriting, or irreversible deletion. Preview relationship changes when supported, keep conflicts visible, and require explicit authorization for irreversible deletion or any destructive expansion.
+
 ## Authorization context
 
 Authorization belongs to the exact current MCP connection. Never combine its scopes with another token, browser session, agent, or remembered grant; read never implies write. MCP transport, host/client policy, Vibe Memory permission, per-resource policy, tool exposure, and third-party service permission are separate layers. If a layer cannot be verified, report it as unknown or not evaluated.

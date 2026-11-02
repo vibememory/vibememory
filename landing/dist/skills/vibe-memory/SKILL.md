@@ -50,6 +50,12 @@ For ongoing projects, prior decisions, user preferences, corrections, task hando
 
 Do not let an unavailable memory service block independent work. Disclose missing context or failed writes, and never claim an operation succeeded without successful CLI output.
 
+## Periodic memory hygiene prompt
+
+At a natural checkpoint, when there is a concrete maintenance signal—several new or changed entities or relationships, orphaned or weakly connected records, duplicate, conflicting or obsolete memories, or a substantial completed milestone—ask once in the user's language: “Would you like me to refresh the relationship graph and optimize the memories now?” A Korean equivalent is “관계 그래프를 최신화하고 기억을 한 번 최적화할까요?” Ask at most once per conversation or session, never while active work is still in progress, and not merely because time passed. If the user declines or ignores it, do not ask again in that session; wait for a later session with new maintenance evidence. This optional maintenance prompt is separate from ordinary proactive recall and checkpointing, which continue without repeated consent prompts.
+
+If the user agrees, inspect before mutating. Use `graph-audit` plus targeted `recall`, `get`, and `graph` operations to identify the exact scope and evidence. “Refresh” means agent-authored entity and relationship repair backed by evidence. “Optimize” means deduplicating confirmed matches, improving keywords, preserving a canonical record, and recoverably archiving confirmed obsolete duplicates; it never means server-side inference, blanket rewriting, or irreversible deletion. Review `graph-diff` before `graph-apply` when relationship changes are proposed, keep conflicts visible, and require explicit authorization for `forget` or any destructive expansion.
+
 ## Authorization context
 
 Treat authentication and authorization as properties of the exact connection used for the current call. Never combine permissions from another API key, MCP client, browser session, agent, or remembered result. Read access never implies write access, MCP is a transport rather than a permission, and tool visibility is not proof that the host will allow execution. Vibe Memory permission, host/client policy, and a third-party service's permission are separate layers; report an unverified layer as unknown or not evaluated instead of guessing.

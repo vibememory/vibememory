@@ -14,4 +14,3 @@ Use the absolute `VM_CLI` path. Ask `COMMAND --help` or `template TYPE` only whe
 - Product requests: `feedback`, `feedback-list`, `feedback-get`; operator-only `feedback-admin-list`, `feedback-admin-update`
 
 For structured writes, inspect `template memory|entity|document|relation|feedback|context-bundle|graph-diff|graph-apply`, prepare JSON in a private temporary file, then use `from-json` or the command-specific file argument. Use `--metadata '@file.json'` and `--provenance '@file.json'` when appropriate. The CLI owns endpoint paths, authentication, raw byte upload, bounded retries, field names, and compact output.
-

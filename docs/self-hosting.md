@@ -219,12 +219,17 @@ For most self-hosters, the single container plus an HTTPS reverse proxy is suffi
 ### Live skill distribution
 
 Every installation serves its current skill at `/skills/vibe-memory/SKILL.md`,
-its SHA-256 revision manifest at `/skills/vibe-memory/manifest.json`, and the
-install ZIP at `/downloads/vibe-memory-skill.zip`. These public endpoints send
-`Cache-Control: no-store`; they contain no account data or credentials.
+its progressive SHA-256 manifest at `/skills/vibe-memory/manifest-v2.json`, and
+the install ZIP at `/downloads/vibe-memory-skill.zip`. The canonical
+`/skills/vibe-memory/manifest.json` returns schema v2 normally and a two-file
+schema-v1 recovery manifest to pre-3.11 CLI and compatibility-bootstrap
+User-Agents. These public endpoints send `Cache-Control: no-store`; they contain
+no account data or credentials.
 
-The official hosted service additionally publishes the same archive, manifest,
-Skill file, and `SHA256SUMS` as GitHub release assets. Agent onboarding uses the
+The official hosted service additionally publishes the same archive,
+`manifest-v2.json`, progressive Skill files, and `SHA256SUMS` as GitHub release
+assets. Its stable `manifest.json` asset is the schema-v1 legacy recovery bridge.
+Agent onboarding uses the
 stable `releases/latest/download/vibe-memory-skill.zip` URL so ordinary
 non-browser download clients do not depend on Cloudflare's browser-signature
 classification. A hosted `403` body containing `error code: 1010` means

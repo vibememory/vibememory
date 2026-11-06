@@ -1,20 +1,20 @@
 {
   "schema_version": 2,
-  "revision": "60e6c49d971ae2f27cd31a93506fcaf0b62a3d7d52fa140f270d83c2d97cdd22",
+  "revision": "d721b95778af6102d14ff66c8d0279135aaa3eed36a27bae4d6609860885e20e",
   "files": {
     "SKILL.md": "2f21ba7846431354b9d99c2ef9202549b5e953fea6332781d5dc54c82092d727",
-    "scripts/memory.py": "705638d5d134d02d0d67d9b3a40769798ed95e4f84d80d17c6a929e2c2ed5038",
-    "references/authorization.md": "e3fc72d6669eb02a36cdcaefd8f9f5f2b094e789beded43a08bd33b2f11a6a25",
-    "references/commands.md": "6be4f37e0cafa0a27725d8ed8d0c3fe831503fe8a355cb20bcb18c193aa10bbd",
-    "references/data-and-search.md": "f377ed6f26a0eb170b5a85934e1c41787626312383987443bb86afaa4bcc34f8",
-    "references/graph-and-corrections.md": "7467d9423a161f271a58113e27b373e7807e8d4769e9dc16ad8b4081ed939b63",
-    "references/installation.md": "8e842c494f3f85872a10ce5d62061aa6c89ed99b25bd1fe8dda29c330a7cf047",
+    "scripts/memory.py": "6a2cccd1db63cfed8e07306571953b47ce7b022d1d371326cdb0516a88981afe",
+    "references/authorization.md": "273bd8fff95d7cae8e01b5ba88e1f9b64d8d2bedcc8f17acdb94dc756604e7c4",
+    "references/commands.md": "6f56a0b72a86c029ba742154702e753e81c1b2b233262c03561ee81719340aad",
+    "references/data-and-search.md": "7690dd7156e9629708eed202d41b713c78f51326476693a2e5efe24cce2dd05d",
+    "references/graph-and-corrections.md": "b350222dfa87a552d04dccec2f00b92026c97742660daa23a1267ab270e79594",
+    "references/installation.md": "8351976ad451a82c9de1f82af2ae8e8205b0fd30b5585cb153486794daa26399",
     "references/lifecycle.md": "c8be91c7db9b6dd470b90beeaa4d2f0b8dfae91a4c1e6bbbc69f968b79dd1e46",
-    "references/messages.md": "fcc443844827fa196d6032d18b176d5d89493a184633d061baf390f013975bcd",
+    "references/messages.md": "d00b37665107d3faba8902d74261aae41c4895cb96f312c440b2608ebbeb5b37",
     "references/portability.md": "e865e62c213614ea37222aa2131417d76be0ceaff305fb37690830c56df43d83",
-    "references/product-feedback.md": "2de75f2463251ecafe9839a26d49f7c7d19c1f2f4de580546063b125f2029479",
-    "references/vault.md": "916663e6c6cb3267b35ef60777dd314e73930d5352246515604bc6fd8bdcf8ad",
-    "references/workflows.md": "cec984878bec8898f4ac3ac54e3c0abee02882cecce50b9b5712f216eee22f87"
+    "references/product-feedback.md": "7cdffa58365528144ba2a8634d52f236a7b236e86314549e0f4573a3031e985b",
+    "references/vault.md": "1dc036cb0b5927b27d468f4b0958bd0e98750e2f9f397a3ce0524f92615472ef",
+    "references/workflows.md": "c20a2e77a9831b3083099773def8c6c3f8957cb20c7434345205dda02893181c"
   },
   "release_assets": {
     "SKILL.md": "SKILL.md",
@@ -37,29 +37,29 @@
     "url": "/skills/vibe-memory/cli/3b63ccadfdde76a6af0c2de4389f23af8ef181fe3f03f8d63989ed0f3482b126/vibe-memory"
   },
   "native_cli": {
-    "version": "3.12.0",
+    "version": "3.12.1",
     "repository": "https://github.com/vibememory/cli",
     "targets": {
       "linux-x86_64": {
-        "sha256": "4ab7ea13235a2bd8ee919ea34015ee0db1f1a78767c391b23f1503778244e1b6",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.12.0/vibe-memory-linux-x86_64"
+        "sha256": "5e4bf7a12f004d9f959d98029320f886681d688271c6b57ec803d89d04eff0ba",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.12.1/vibe-memory-linux-x86_64"
       },
       "macos-aarch64": {
-        "sha256": "239f6841dabb440549b57b255e8e565247a557f717f9f168b22d5a4d1240c68c",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.12.0/vibe-memory-macos-aarch64"
+        "sha256": "c4184889efe5e3b553ceee9e4de901b5467e2dc128c0923d061f88d142c216bb",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.12.1/vibe-memory-macos-aarch64"
       },
       "macos-x86_64": {
-        "sha256": "63bab9a11d739822a722ec90a0328d31192062ccffd3bb5715f4be7da1d4fe50",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.12.0/vibe-memory-macos-x86_64"
+        "sha256": "fbbac06cce12b0ffc9213fb9b9a8422608372b8d547af7523ad75ccec4af3e44",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.12.1/vibe-memory-macos-x86_64"
       },
       "windows-x86_64": {
-        "sha256": "aeee4ee666875dca5c10190da4718b5020664e7b2514ac63fc668a95b06e34a8",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.12.0/vibe-memory-windows-x86_64.exe"
+        "sha256": "5a08f0a281290a46b9277725264e8feaa9f2830bbaa2ba61bd72e433ddf44974",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.12.1/vibe-memory-windows-x86_64.exe"
       }
     }
   },
   "archive": "/downloads/vibe-memory-skill.zip",
-  "archive_sha256": "afe81e30729449ef4e680557cd463f9cf2e6cbf7d4142a0ea7879e4618db616f",
+  "archive_sha256": "ebd70e2cc9daf1e434782cdd569444af1a4fd1e90546e2aac5b0d8c0dc7b8144",
   "official_archive_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip",
-  "official_manifest_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
+  "official_manifest_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/manifest-v2.json"
 }

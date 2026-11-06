@@ -65,7 +65,8 @@ Copy [`skills/vibe-memory`](skills/vibe-memory) into your agent's skill director
 
 For remote agents and other non-browser installers, the supported initial archive
 is the [latest GitHub release asset](https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip).
-The release also includes `manifest.json`, `SKILL.md`, and `SHA256SUMS`. This avoids
+The release also includes the progressive `manifest-v2.json`, legacy recovery
+`manifest.json`, `SKILL.md`, and `SHA256SUMS`. This avoids
 vanity-domain Browser Integrity Check false positives without disabling TLS,
 spoofing a browser, or relaxing protection for authenticated application routes.
 For the hosted service, the bootstrap and native Skill sync read this GitHub

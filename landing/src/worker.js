@@ -1,4 +1,12 @@
 // Only the selected API namespaces reach the private tunnel. All other paths are static assets.
+export function needsLegacySkillManifest(userAgent = '') {
+  if (userAgent.startsWith('VibeMemoryBootstrap/')) return true;
+  const match = /^VibeMemoryCLI\/(\d+)\.(\d+)\.(\d+)(?:\s|$)/.exec(userAgent);
+  if (!match) return false;
+  const version = match.slice(1).map(Number);
+  return version[0] < 3 || (version[0] === 3 && version[1] < 11);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -53,6 +61,17 @@ export default {
           });
         }
       } catch { /* A session-check failure must not make the public landing unavailable. */ }
+    }
+    if (url.pathname === '/skills/vibe-memory/manifest.json'
+        && ['GET', 'HEAD'].includes(request.method)
+        && needsLegacySkillManifest(request.headers.get('User-Agent') || '')) {
+      const legacyUrl = new URL(request.url);
+      legacyUrl.pathname = '/skills/vibe-memory/manifest-v1.json';
+      const asset = await env.ASSETS.fetch(new Request(legacyUrl, request));
+      const response = new Response(asset.body, asset);
+      response.headers.set('Cache-Control', 'no-store');
+      response.headers.set('X-Content-Type-Options', 'nosniff');
+      return response;
     }
     const apiPath = url.pathname.startsWith('/auth/')
       || url.pathname.startsWith('/v1/')

@@ -15,9 +15,11 @@ from urllib.parse import urlsplit
 ROOT = Path(__file__).resolve().parents[1]
 REPOSITORY = "https://github.com/vibememory/cli"
 OFFICIAL_SERVICE_ORIGIN = "https://vibememory.io"
-OFFICIAL_MANIFEST_URL = (
-    "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
+OFFICIAL_DISTRIBUTION_BASE = (
+    "https://github.com/vibememory/vibememory/releases/latest/download"
 )
+OFFICIAL_MANIFEST_URL = OFFICIAL_DISTRIBUTION_BASE + "/manifest-v2.json"
+OFFICIAL_LEGACY_MANIFEST_URL = OFFICIAL_DISTRIBUTION_BASE + "/manifest.json"
 
 
 def config_path():
@@ -65,7 +67,16 @@ def read_response(response, limit):
 def manifest_url(base):
     if base == OFFICIAL_SERVICE_ORIGIN:
         return OFFICIAL_MANIFEST_URL
-    return base + "/skills/vibe-memory/manifest.json"
+    return base + "/skills/vibe-memory/manifest-v2.json"
+
+
+def manifest_urls(base):
+    if base == OFFICIAL_SERVICE_ORIGIN:
+        return (OFFICIAL_MANIFEST_URL, OFFICIAL_LEGACY_MANIFEST_URL)
+    return (
+        base + "/skills/vibe-memory/manifest-v2.json",
+        base + "/skills/vibe-memory/manifest.json",
+    )
 
 
 def fetch_manifest(url):
@@ -73,7 +84,7 @@ def fetch_manifest(url):
         url,
         headers={"Cache-Control": "no-cache", "User-Agent": "VibeMemoryBootstrap/3.0"},
     )
-    if url == OFFICIAL_MANIFEST_URL:
+    if url in (OFFICIAL_MANIFEST_URL, OFFICIAL_LEGACY_MANIFEST_URL):
         response = urllib.request.urlopen(request, timeout=20)
         final = urlsplit(response.geturl())
         if final.scheme != "https" or final.hostname not in (
@@ -202,13 +213,26 @@ def installed_skill_matches(manifest):
 
 def ensure_cli():
     service = origin()
-    distribution_manifest = manifest_url(service)
+    distribution_manifests = manifest_urls(service)
     print("Vibe Memory bootstrap: service API origin " + service, file=sys.stderr)
     print(
-        "Vibe Memory bootstrap: distribution manifest " + distribution_manifest,
+        "Vibe Memory bootstrap: distribution manifest " + distribution_manifests[0],
         file=sys.stderr,
     )
-    manifest = fetch_manifest(distribution_manifest)
+    manifest = None
+    preferred_error = None
+    for distribution_manifest in distribution_manifests:
+        try:
+            manifest = fetch_manifest(distribution_manifest)
+            break
+        except (ValueError, OSError, urllib.error.URLError, json.JSONDecodeError) as error:
+            if preferred_error is None:
+                preferred_error = error
+    if manifest is None:
+        raise ValueError(
+            "Skill manifest v2 and compatibility fallback both failed: "
+            + str(preferred_error)
+        )
     digest, url = validate_native(manifest)
     print("Vibe Memory bootstrap: manifest verified", file=sys.stderr)
     if installed_skill_matches(manifest):

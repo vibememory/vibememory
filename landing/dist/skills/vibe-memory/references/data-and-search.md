@@ -11,4 +11,3 @@ Release a quarantined record only after exact review using versioned `security`,
 Resolve duplicates with `recall/get` before creation. Before update/archive/restore/merge, fetch the current version and reconsider on conflict. Merge only after identity evidence and after preserving every unique fact/keyword in the canonical record. Prefer recoverable `archive`, `trash`, and `restore`; use `forget` only with explicit irreversible-deletion authority.
 
 Analyze files with agent tools. `upload` streams opaque bytes—never multipart forms or base64 JSON—and does no analysis, chunking, or embedding. Prepare MIME type, hash, summary, keywords, entities, and page/section evidence yourself, then use `document --file-id ID` when original storage is authorized.
-

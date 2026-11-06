@@ -44,7 +44,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     assert manifest["schema_version"] == 2
     assert set(manifest["files"]) == expected_files
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
-    assert manifest["native_cli"]["version"] == "3.12.0"
+    assert manifest["native_cli"]["version"] == "3.12.1"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",
@@ -65,7 +65,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
         "https://github.com/vibememory/vibememory/releases/latest/download/"
         "vibe-memory-skill.zip"
     )
-    assert manifest["official_manifest_mirror"].endswith("/manifest.json")
+    assert manifest["official_manifest_mirror"].endswith("/manifest-v2.json")
     assert set(manifest["release_assets"]) == expected_files
     assert manifest["release_assets"]["SKILL.md"] == "SKILL.md"
     assert manifest["release_assets"]["scripts/memory.py"] == "memory.py"
@@ -106,6 +106,48 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     legacy = client.get(manifest["cli"]["url"])
     assert legacy.status_code == 200
     assert hashlib.sha256(legacy.content).hexdigest() == manifest["cli"]["sha256"]
+
+
+def test_legacy_cli_receives_a_two_file_recovery_manifest(client):
+    client.headers.pop("Authorization")
+    legacy = client.get(
+        "/skills/vibe-memory/manifest.json",
+        headers={"User-Agent": "VibeMemoryCLI/3.9.1"},
+    ).json()
+    bootstrap = client.get(
+        "/skills/vibe-memory/manifest.json",
+        headers={"User-Agent": "VibeMemoryBootstrap/3.0"},
+    ).json()
+    modern = client.get(
+        "/skills/vibe-memory/manifest.json",
+        headers={"User-Agent": "VibeMemoryCLI/3.11.0"},
+    ).json()
+    progressive = client.get("/skills/vibe-memory/manifest-v2.json").json()
+
+    assert legacy == bootstrap
+    assert legacy["schema_version"] == 1
+    assert set(legacy["files"]) == {"SKILL.md", "scripts/memory.py"}
+    assert legacy["release_assets"] == {
+        "SKILL.md": "SKILL-legacy.md",
+        "scripts/memory.py": "memory.py",
+    }
+    assert legacy["compatibility"]["progressive_manifest"] == "manifest-v2.json"
+    assert modern["schema_version"] == 2
+    assert modern == progressive
+
+    revision = hashlib.sha256(
+        json.dumps(legacy["files"], sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert legacy["revision"] == revision
+    for name, digest in legacy["files"].items():
+        release = client.get(
+            "/skills/vibe-memory/releases/" + legacy["revision"] + "/" + name
+        )
+        assert release.status_code == 200
+        assert hashlib.sha256(release.content).hexdigest() == digest
+    assert b"legacy update bridge" in client.get(
+        "/skills/vibe-memory/releases/" + legacy["revision"] + "/SKILL.md"
+    ).content
 
 
 def test_bootstrap_selects_and_verifies_native_binary(tmp_path, monkeypatch):
@@ -241,10 +283,14 @@ def test_bootstrap_separates_official_distribution_from_service_origin(tmp_path)
     launcher = load_launcher(installed / "scripts/memory.py", "distribution_origin_bootstrap")
     assert launcher.manifest_url("https://vibememory.io") == launcher.OFFICIAL_MANIFEST_URL
     assert launcher.manifest_url("https://memory.example.com") == (
-        "https://memory.example.com/skills/vibe-memory/manifest.json"
+        "https://memory.example.com/skills/vibe-memory/manifest-v2.json"
     )
     assert launcher.manifest_url("http://localhost:8080") == (
-        "http://localhost:8080/skills/vibe-memory/manifest.json"
+        "http://localhost:8080/skills/vibe-memory/manifest-v2.json"
+    )
+    assert launcher.manifest_urls("https://vibememory.io") == (
+        launcher.OFFICIAL_MANIFEST_URL,
+        launcher.OFFICIAL_LEGACY_MANIFEST_URL,
     )
 
 
@@ -259,3 +305,16 @@ def test_published_revision_is_reproducible_and_releases_are_immutable(tmp_path)
     release = public / "skills/vibe-memory/releases" / revision
     for name, digest in manifest["files"].items():
         assert hashlib.sha256((release / name).read_bytes()).hexdigest() == digest
+
+    legacy_manifest = json.loads(
+        (public / "skills/vibe-memory/manifest-v1.json").read_text()
+    )
+    legacy_revision = hashlib.sha256(
+        json.dumps(
+            legacy_manifest["files"], sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    assert legacy_revision == legacy_manifest["revision"]
+    legacy_release = public / "skills/vibe-memory/releases" / legacy_revision
+    for name, digest in legacy_manifest["files"].items():
+        assert hashlib.sha256((legacy_release / name).read_bytes()).hexdigest() == digest

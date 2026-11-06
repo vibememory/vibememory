@@ -1,9 +1,20 @@
 """Serve the same console and API from one origin for self-hosted installations."""
 
+import re
 from pathlib import Path
 
+from fastapi import Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
+LEGACY_CLI_USER_AGENT = re.compile(r"^VibeMemoryCLI/(\d+)\.(\d+)\.(\d+)(?:\s|$)")
+
+
+def needs_legacy_skill_manifest(user_agent):
+    if user_agent.startswith("VibeMemoryBootstrap/"):
+        return True
+    match = LEGACY_CLI_USER_AGENT.match(user_agent)
+    return bool(match and tuple(int(part) for part in match.groups()) < (3, 11, 0))
 
 
 def mount_web(app, configured=None):
@@ -33,6 +44,25 @@ def mount_web(app, configured=None):
             return FileResponse(directory / filename, headers={"Cache-Control": "no-store"})
 
         return response
+
+    def skill_manifest(request: Request):
+        filename = (
+            "skills/vibe-memory/manifest-v1.json"
+            if needs_legacy_skill_manifest(request.headers.get("user-agent", ""))
+            else "skills/vibe-memory/manifest.json"
+        )
+        return FileResponse(
+            directory / filename,
+            media_type="application/json",
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
+
+    app.add_api_route(
+        "/skills/vibe-memory/manifest.json",
+        skill_manifest,
+        methods=["GET", "HEAD"],
+        include_in_schema=False,
+    )
 
     for route, filename in [
         ("/", "index.html"),

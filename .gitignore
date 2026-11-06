@@ -32,6 +32,8 @@ obj/
 
 # Maintainer-only deployment state and old prototype; keep locally, never publish.
 legacy/
+!skills/vibe-memory/legacy/
+!skills/vibe-memory/legacy/SKILL.md
 landing/wrangler.jsonc
 landing/deployment.json
 ops/cloudflare-origin.json

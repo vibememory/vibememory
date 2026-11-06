@@ -35,14 +35,16 @@ jobs:
         run: |
           mkdir release
           cp landing/dist/downloads/vibe-memory-skill.zip release/
-          cp landing/dist/skills/vibe-memory/manifest.json release/
+          cp landing/dist/skills/vibe-memory/manifest-v1.json release/manifest.json
+          cp landing/dist/skills/vibe-memory/manifest-v2.json release/
+          cp skills/vibe-memory/legacy/SKILL.md release/SKILL-legacy.md
           python3 - <<'PY'
           import json
           import shutil
           from pathlib import Path
 
           root = Path("skills/vibe-memory")
-          manifest = json.loads(Path("release/manifest.json").read_text())
+          manifest = json.loads(Path("release/manifest-v2.json").read_text())
           for source, asset in manifest["release_assets"].items():
               shutil.copyfile(root / source, Path("release") / asset)
           PY

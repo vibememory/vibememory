@@ -9,4 +9,3 @@ For consequential claims, fetch each selected evidence record and pin its `recor
 Active correction cycles remain visible. If `correction_graph_complete` or `cycle_check_complete` is false, treat the claim as unresolved and never hide the older record.
 
 For deterministic bulk repair, prepare `template graph-diff`, run `graph-diff`, review every `create`, `unchanged`, `conflicting_claim`, `unknown`, and scoped retract candidate. For `graph-apply`, copy the returned diff hash and approve only exact reviewed create client IDs/retract relation IDs. Never approve unknown/conflicting items or infer an omitted edge should be removed. Use stable client request IDs across retries.
-

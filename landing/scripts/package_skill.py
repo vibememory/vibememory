@@ -14,6 +14,13 @@ tracked = ["SKILL.md", "scripts/memory.py"] + sorted(
 )
 contents = {name: (source / name).read_bytes() for name in tracked}
 files = {name: hashlib.sha256(contents[name]).hexdigest() for name in tracked}
+legacy_contents = {
+    "SKILL.md": (source / "legacy/SKILL.md").read_bytes(),
+    "scripts/memory.py": contents["scripts/memory.py"],
+}
+legacy_files = {
+    name: hashlib.sha256(data).hexdigest() for name, data in legacy_contents.items()
+}
 native_cli = json.loads((source / "native-cli.json").read_text())
 legacy_cli = {
     "path": "bin/vibe-memory",
@@ -32,6 +39,14 @@ for name, data in contents.items():
         destination = directory / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(data)
+legacy_revision = hashlib.sha256(
+    json.dumps(legacy_files, sort_keys=True, separators=(",", ":")).encode()
+).hexdigest()
+legacy_release = web / "skills/vibe-memory/releases" / legacy_revision
+for name, data in legacy_contents.items():
+    destination = legacy_release / name
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
 output = web / "downloads/vibe-memory-skill.zip"
 output.parent.mkdir(parents=True, exist_ok=True)
 with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -65,8 +80,35 @@ manifest = {
         "vibe-memory-skill.zip"
     ),
     "official_manifest_mirror": (
-        "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
+        "https://github.com/vibememory/vibememory/releases/latest/download/manifest-v2.json"
     ),
 }
 (web / "skills/vibe-memory/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+(web / "skills/vibe-memory/manifest-v2.json").write_text(
+    json.dumps(manifest, indent=2) + "\n"
+)
+legacy_manifest = {
+    "schema_version": 1,
+    "revision": legacy_revision,
+    "files": legacy_files,
+    "release_assets": {
+        "SKILL.md": "SKILL-legacy.md",
+        "scripts/memory.py": "memory.py",
+    },
+    "cli": legacy_cli,
+    "native_cli": native_cli,
+    "archive": "/downloads/vibe-memory-skill.zip",
+    "archive_sha256": archive_sha256,
+    "official_archive_mirror": manifest["official_archive_mirror"],
+    "official_manifest_mirror": (
+        "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json"
+    ),
+    "compatibility": {
+        "purpose": "pre-3.11-cli-recovery",
+        "progressive_manifest": "manifest-v2.json",
+    },
+}
+(web / "skills/vibe-memory/manifest-v1.json").write_text(
+    json.dumps(legacy_manifest, indent=2) + "\n"
+)
 print("Published skill revision " + revision)

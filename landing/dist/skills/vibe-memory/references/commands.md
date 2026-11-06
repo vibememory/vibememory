@@ -7,6 +7,8 @@ Use the absolute `VM_CLI` path. Ask `COMMAND --help` or `template TYPE` only whe
 - Creation: `remember`, `entity`, `document`, `upload`, `relate`, `from-json`
 - Versioned maintenance: `keywords`, `update`, `security`, `archive`, `restore`, `merge`, `relation-status`, `relation-scope`; `forget` only with explicit irreversible authority
 - Deterministic graph repair: `graph-audit`, `template graph-diff`, `graph-diff`, `template graph-apply`, `graph-apply`
+- Memory maintenance: `maintenance-audit`; fetch selected candidates, then use versioned `update`, `merge`, `archive`, and graph diff/apply only after approval
+- Agent Memory Repo: `agent-memory-export OUTPUT`, `template agent-memory-diff`, `agent-memory-diff FILE`, `template agent-memory-apply`, `agent-memory-apply FILE`
 - Messages: `agents`, `message send|inbox|sent|get|ack|watch`
 - Vault: `vault list|capture|exec`
 - Product requests: `feedback`, `feedback-list`, `feedback-get`; operator-only `feedback-admin-list`, `feedback-admin-update`

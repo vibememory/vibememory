@@ -237,6 +237,9 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "graph_audit",
             "graph_diff",
             "graph_apply",
+            "memory_maintenance_audit",
+            "agent_memory_repo_diff",
+            "agent_memory_repo_apply",
             "events_poll",
             "quarantine_list",
             "feature_requests_list",
@@ -291,6 +294,57 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         )["result"]["structuredContent"]
         assert audit["llm_calls"] == 0
         assert audit["content_included"] is False
+
+        maintenance = mcp(
+            client,
+            credentials["access_token"],
+            33,
+            "tools/call",
+            {"name": "memory_maintenance_audit", "arguments": {"minimum_keywords": 2}},
+        )["result"]["structuredContent"]
+        assert maintenance["llm_calls"] == 0
+        assert maintenance["server_recommendations"] is False
+
+        repo_entries = {
+            "repository": "https://example.com/team/agent-memory.git",
+            "revision": "mcp-test",
+            "entries": [
+                {
+                    "client_request_id": "mcp-agent-memory-entry",
+                    "content": "Portable memory is reviewed before import",
+                    "title": "Portable memory review",
+                    "kind": "instruction",
+                    "keywords": ["MCP", "portability"],
+                    "path": "MEMORY.md",
+                    "line": 7,
+                }
+            ],
+        }
+        repo_diff = mcp(
+            client,
+            credentials["access_token"],
+            34,
+            "tools/call",
+            {"name": "agent_memory_repo_diff", "arguments": repo_entries},
+        )["result"]["structuredContent"]
+        assert repo_diff["items"][0]["classification"] == "create"
+        repo_apply = mcp(
+            client,
+            credentials["access_token"],
+            35,
+            "tools/call",
+            {
+                "name": "agent_memory_repo_apply",
+                "arguments": {
+                    **repo_entries,
+                    "approved_diff_hash": repo_diff["diff_hash"],
+                    "approved_client_request_ids": ["mcp-agent-memory-entry"],
+                    "reason": "Approved after reviewing the exact MCP diff",
+                },
+            },
+        )["result"]["structuredContent"]
+        assert repo_apply["created"][0]["record"]["security_state"] == "quarantined"
+        imported_repo_record_id = repo_apply["created"][0]["record"]["id"]
 
         found = mcp(
             client,
@@ -376,7 +430,10 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "tools/call",
             {"name": "quarantine_list", "arguments": {}},
         )["result"]["structuredContent"]["items"]
-        assert [item["id"] for item in quarantined] == [external["id"]]
+        assert {item["id"] for item in quarantined} == {
+            external["id"],
+            imported_repo_record_id,
+        }
         hidden = mcp(
             client,
             credentials["access_token"],

@@ -28,6 +28,15 @@ from fastapi.responses import (
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .agent_memory_repo import (
+    SnapshotConflict as AgentMemoryRepoSnapshotConflict,
+)
+from .agent_memory_repo import (
+    agent_memory_repo_diff,
+    apply_agent_memory_repo,
+    export_agent_memory_repo,
+    memory_maintenance_audit,
+)
 from .auth import (
     COOKIE,
     DEFAULT_AGENT_PERMISSIONS,
@@ -82,6 +91,8 @@ from .files import FileStorage
 from .mailer import RecoveryMailDelivery
 from .mcp import LATEST_PROTOCOL, MCPHandler
 from .models import (
+    AgentMemoryRepoApplyInput,
+    AgentMemoryRepoDiffInput,
     AgentMessageAck,
     AgentMessageInput,
     ContextBundleInput,
@@ -96,6 +107,7 @@ from .models import (
     KeywordUpdate,
     MemoryCorrectionInput,
     MemoryInput,
+    MemoryMaintenanceAuditInput,
     RecordArchive,
     RecordMerge,
     RecordSecurityUpdate,
@@ -234,7 +246,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.33.0",
+        version="0.34.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -1704,6 +1716,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "auth_context": "/v1/auth-context",
                 "portable_export": "/v1/portable-archive",
                 "portable_import": "/v1/portable-archive/import",
+                "agent_memory_repo_export": "/v1/agent-memory-repo/export",
+                "agent_memory_repo_diff": "/v1/agent-memory-repo/diff",
+                "agent_memory_repo_apply": "/v1/agent-memory-repo/apply",
+                "memory_maintenance_audit": "/v1/memory-maintenance/audit",
                 "mcp": "/mcp",
             },
             "contracts": {
@@ -1714,7 +1730,15 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "governance": "/contracts/GOVERNANCE.md",
                 "ump_mapping": "/contracts/ump-mapping.md",
             },
-            "profiles": ["core-rest", "mcp", "namespaces", "portable-archive", "valid-time"],
+            "profiles": [
+                "core-rest",
+                "mcp",
+                "namespaces",
+                "portable-archive",
+                "agent-memory-repo",
+                "memory-maintenance",
+                "valid-time",
+            ],
             "extensions": {
                 "historical_recorded_time": "unsupported",
                 "raw_file_portable_export": "unsupported",
@@ -2894,6 +2918,72 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         except Exception:
             log.exception("Retrieval failed")
             raise HTTPException(503, "Retrieval unavailable") from None
+
+    @app.post("/v1/memory-maintenance/audit", tags=["maintenance"])
+    def maintenance_audit(
+        data: MemoryMaintenanceAuditInput,
+        user=Depends(memory_reader),
+        db=Depends(store),
+    ):
+        return memory_maintenance_audit(db, user, data)
+
+    @app.get("/v1/agent-memory-repo/export", tags=["portability"])
+    def agent_memory_repo_export(
+        request: Request,
+        include_untrusted: bool = False,
+        include_quarantined: bool = False,
+        user=Depends(memory_reader),
+        db=Depends(store),
+    ):
+        try:
+            body, manifest = export_agent_memory_repo(
+                db,
+                user,
+                getattr(request.state, "namespace_id", "default"),
+                include_untrusted=include_untrusted,
+                include_quarantined=include_quarantined,
+            )
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
+        return Response(
+            body,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": 'attachment; filename="agent-memory-repo.zip"',
+                "X-Vibe-Memory-Agent-Memory-Repo-Version": manifest["adapter_version"],
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.post("/v1/agent-memory-repo/diff", tags=["portability"])
+    def agent_memory_repo_dry_run(
+        data: AgentMemoryRepoDiffInput,
+        user=Depends(memory_reader),
+        db=Depends(store),
+    ):
+        return agent_memory_repo_diff(db, user, data)
+
+    @app.post("/v1/agent-memory-repo/apply", tags=["portability"])
+    def agent_memory_repo_import_apply(
+        request: Request,
+        data: AgentMemoryRepoApplyInput,
+        user=Depends(memory_writer),
+        db=Depends(store),
+    ):
+        try:
+            with db.lock:
+                return apply_agent_memory_repo(
+                    db,
+                    embedder,
+                    user,
+                    data,
+                    request.state.agent_id,
+                    request.state.agent_name,
+                )
+        except AgentMemoryRepoSnapshotConflict:
+            raise HTTPException(409, "Agent Memory Repo diff changed after approval") from None
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
 
     @app.get("/v1/portable-archive", tags=["portability"])
     def portable_export(

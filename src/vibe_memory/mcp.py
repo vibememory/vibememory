@@ -5,6 +5,14 @@ from typing import Literal
 
 from pydantic import Field, ValidationError, model_validator
 
+from .agent_memory_repo import (
+    SnapshotConflict as AgentMemoryRepoSnapshotConflict,
+)
+from .agent_memory_repo import (
+    agent_memory_repo_diff,
+    apply_agent_memory_repo,
+    memory_maintenance_audit,
+)
 from .batch import (
     RECORD_FIELDS,
     RELATION_FIELDS,
@@ -29,6 +37,8 @@ from .deterministic import (
     graph_diff,
 )
 from .models import (
+    AgentMemoryRepoApplyInput,
+    AgentMemoryRepoDiffInput,
     AgentMessageAck,
     AgentMessageInput,
     ContextBundleInput,
@@ -42,6 +52,7 @@ from .models import (
     Input,
     MemoryCorrectionInput,
     MemoryInput,
+    MemoryMaintenanceAuditInput,
     RecordArchive,
     RecordMerge,
     RecordSecurityUpdate,
@@ -57,7 +68,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.33.0"
+SERVER_VERSION = "0.34.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -91,7 +102,11 @@ SERVER_INSTRUCTIONS = (
     "combine permissions from another token or connection, infer write access from read access, "
     "or treat host policy, tool exposure, Vibe Memory grants, and third-party service permissions "
     "as interchangeable. Use auth_context and permission_check; unverified external permissions "
-    "remain unknown."
+    "remain unknown. Use memory_maintenance_audit to identify metadata-only maintenance candidates; "
+    "fetch and evaluate selected records yourself, show exact proposed changes to the user, and "
+    "apply only approved version-checked operations. For Agent Memory Repo imports, parse files and "
+    "infer keywords client-side, then use agent_memory_repo_diff before agent_memory_repo_apply; "
+    "the server never parses the repository and imported entries remain quarantined until reviewed."
 )
 
 
@@ -364,6 +379,26 @@ TOOLS = [
         read_only=True,
     ),
     _tool(
+        "memory_maintenance_audit",
+        "Audit memory maintenance candidates without content",
+        "Report exact duplicate hashes, stale metadata, weak keyword indexes, missing source "
+        "metadata, orphans, and unresolved corrections. Fetch selected records and reason about "
+        "them client-side; the server makes no recommendation and performs no write.",
+        MemoryMaintenanceAuditInput,
+        "memory:read",
+        read_only=True,
+    ),
+    _tool(
+        "agent_memory_repo_diff",
+        "Dry-run agent-prepared Agent Memory Repo entries",
+        "Compare entries and keywords already parsed by the connected agent with current memory. "
+        "The server does not parse repository files or infer keywords and returns a snapshot-bound "
+        "approval hash without writing.",
+        AgentMemoryRepoDiffInput,
+        "memory:read",
+        read_only=True,
+    ),
+    _tool(
         "relations_list",
         "List relationships",
         "Use this to inspect relationships and their agent-supplied reasons and status.",
@@ -568,6 +603,15 @@ TOOLS = [
         read_only=False,
     ),
     _tool(
+        "agent_memory_repo_apply",
+        "Import explicitly approved Agent Memory Repo entries",
+        "Create only entry IDs explicitly approved from an unchanged agent_memory_repo_diff. "
+        "Imported records are quarantined until separately reviewed and trusted.",
+        AgentMemoryRepoApplyInput,
+        "memory:write",
+        read_only=False,
+    ),
+    _tool(
         "message_send",
         "Send a message to another agent",
         "Queue an agent-authored message for one addressable agent in this account. Do not send "
@@ -609,6 +653,8 @@ MODEL_MAP = {
     "context_bundle_get": ContextBundleInput,
     "graph_audit": GraphAuditInput,
     "graph_diff": GraphDiffInput,
+    "memory_maintenance_audit": MemoryMaintenanceAuditInput,
+    "agent_memory_repo_diff": AgentMemoryRepoDiffInput,
     "relations_list": RelationListInput,
     "events_poll": EventListInput,
     "quarantine_list": QuarantineListInput,
@@ -632,6 +678,7 @@ MODEL_MAP = {
     "record_merge": RecordMerge,
     "relation_update": RelationUpdateInput,
     "graph_apply": GraphApplyInput,
+    "agent_memory_repo_apply": AgentMemoryRepoApplyInput,
     "message_send": AgentMessageInput,
     "message_ack": MessageAckInput,
     "feature_request_submit": FeatureRequestInput,
@@ -1007,6 +1054,18 @@ class MCPHandler:
                     f"Dry-run classified {len(diff['items'])} desired relationships.",
                     diff,
                 )
+            if name == "memory_maintenance_audit":
+                audit = memory_maintenance_audit(db, owner, data)
+                return _text_result(
+                    f"Audited {audit['stats']['records']} records for metadata-only maintenance candidates.",
+                    audit,
+                )
+            if name == "agent_memory_repo_diff":
+                diff = agent_memory_repo_diff(db, owner, data)
+                return _text_result(
+                    f"Dry-run classified {len(diff['items'])} agent-prepared repository entries.",
+                    diff,
+                )
             if name == "relations_list":
                 relations = db.relations(
                     owner,
@@ -1363,6 +1422,20 @@ class MCPHandler:
                     f"Applied {len(created)} creates and {len(retracted)} retractions.",
                     result,
                 )
+            if name == "agent_memory_repo_apply":
+                with db.lock:
+                    result = apply_agent_memory_repo(
+                        db,
+                        self.embedder,
+                        owner,
+                        data,
+                        principal["agent_id"],
+                        principal["agent_name"],
+                    )
+                return _text_result(
+                    f"Imported {len(result['created'])} approved Agent Memory Repo entries.",
+                    result,
+                )
             if name == "message_send":
                 message, created = db.send_message(
                     account_owner, principal["agent_id"], principal["agent_name"], data
@@ -1394,6 +1467,12 @@ class MCPHandler:
         except SnapshotConflict:
             return _tool_error(
                 "The graph snapshot changed; rerun graph_diff or restart context pagination.",
+                "SNAPSHOT_CONFLICT",
+                required_action="rerun_preflight",
+            )
+        except AgentMemoryRepoSnapshotConflict:
+            return _tool_error(
+                "The Agent Memory Repo snapshot changed; rerun agent_memory_repo_diff.",
                 "SNAPSHOT_CONFLICT",
                 required_action="rerun_preflight",
             )

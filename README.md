@@ -31,6 +31,8 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; agents can create owner-bound, one-time browser capture links so values never need to pass through chat.
 - **Byte streams:** upload originals as `application/octet-stream`, then attach agent-prepared JSON using `file_id`.
 - **Portable skill:** a compact `SKILL.md`, native Rust CLI, and verified compatibility bootstrap, with no vendor SDK requirement.
+- **Open memory portability:** export a human-readable Agent Memory Repo working copy and import only agent-parsed, keyworded, explicitly approved entries into quarantine.
+- **Agent-led maintenance:** content-free duplicate/staleness/index audits feed the existing reviewed record and graph workflows without server-side inference.
 
 ## Quick start: Docker Compose
 
@@ -82,6 +84,10 @@ skills/vibe-memory/bin/vibe-memory remember 'I prefer Python examples' \
 
 # The agent extracts these keywords before sending the request.
 skills/vibe-memory/bin/vibe-memory recall Python 'code examples'
+
+# Export a human-readable Git working copy, or inspect maintenance candidates.
+skills/vibe-memory/bin/vibe-memory agent-memory-export ./agent-memory-repo.zip
+skills/vibe-memory/bin/vibe-memory maintenance-audit --minimum-keywords 2
 
 # Secret values stay out of chat and persistent shell configuration.
 skills/vibe-memory/bin/vibe-memory vault exec \

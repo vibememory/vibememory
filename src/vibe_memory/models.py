@@ -577,6 +577,107 @@ class GraphApplyInput(GraphDiffInput):
         return self
 
 
+class MemoryMaintenanceAuditInput(Input):
+    """Metadata-only selectors for agent-led memory maintenance."""
+
+    include_untrusted: bool = False
+    include_quarantined: bool = False
+    stale_before: datetime | None = None
+    minimum_keywords: int = Field(default=2, ge=1, le=32)
+    candidate_limit: int = Field(default=100, ge=1, le=500)
+
+    @field_validator("stale_before")
+    @classmethod
+    def normalize_stale_before(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("stale_before must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def safe_security_filters(self):
+        if self.include_quarantined and not self.include_untrusted:
+            raise ValueError("include_quarantined requires include_untrusted")
+        return self
+
+
+class AgentMemoryRepoEntry(KeywordsInput):
+    """One entry parsed and interpreted by a connected agent.
+
+    The server deliberately does not parse repository files or infer keywords.
+    """
+
+    client_request_id: str = Field(min_length=1, max_length=100)
+    content: str = Field(min_length=1, max_length=10000)
+    title: str = Field(default="", max_length=300)
+    kind: Literal["fact", "preference", "event", "instruction"] = "fact"
+    source: str = Field(default="", max_length=2000)
+    tags: list[Annotated[str, Field(min_length=1, max_length=80)]] = Field(
+        default_factory=list, max_length=30
+    )
+    path: str = Field(min_length=1, max_length=500)
+    line: int = Field(ge=1, le=100000000)
+    added_at: datetime | None = None
+    links: list[Annotated[str, Field(min_length=1, max_length=500)]] = Field(
+        default_factory=list, max_length=100
+    )
+
+    @field_validator("path")
+    @classmethod
+    def safe_relative_path(cls, value):
+        normalized = value.replace("\\", "/")
+        if normalized.startswith("/") or any(part in {"", ".", ".."} for part in normalized.split("/")):
+            raise ValueError("path must be a normalized relative repository path")
+        return normalized
+
+    @field_validator("links")
+    @classmethod
+    def unique_links(cls, values):
+        if len(values) != len(set(values)):
+            raise ValueError("links must be unique")
+        return values
+
+    @field_validator("added_at")
+    @classmethod
+    def normalize_added_at(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("added_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+
+class AgentMemoryRepoDiffInput(Input):
+    repository: str = Field(min_length=1, max_length=2048)
+    revision: str = Field(default="", max_length=200)
+    entries: list[AgentMemoryRepoEntry] = Field(min_length=1, max_length=100)
+
+    @model_validator(mode="after")
+    def unique_agent_memory_repo_entries(self):
+        request_ids = [entry.client_request_id for entry in self.entries]
+        coordinates = [(entry.path, entry.line) for entry in self.entries]
+        if len(request_ids) != len(set(request_ids)):
+            raise ValueError("client_request_id values must be unique")
+        if len(coordinates) != len(set(coordinates)):
+            raise ValueError("repository path and line coordinates must be unique")
+        return self
+
+
+class AgentMemoryRepoApplyInput(AgentMemoryRepoDiffInput):
+    approved_diff_hash: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
+    approved_client_request_ids: list[
+        Annotated[str, Field(min_length=1, max_length=100)]
+    ] = Field(min_length=1, max_length=100)
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def explicit_agent_memory_repo_approval(self):
+        if len(self.approved_client_request_ids) != len(set(self.approved_client_request_ids)):
+            raise ValueError("approved_client_request_ids must be unique")
+        return self
+
+
 class FeatureRequestInput(Input):
     title: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=10000)

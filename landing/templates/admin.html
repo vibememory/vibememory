@@ -47,6 +47,21 @@
 
     <section class="admin-overview" id="admin-overview" data-admin-section="overview">
       <section class="admin-stats" id="admin-stats" aria-label="기능 요청 현황"></section>
+      <div class="admin-overview-grid">
+        <section class="admin-panel admin-overview-queue" aria-labelledby="admin-overview-queue-title">
+          <div class="admin-toolbar"><div><h2 id="admin-overview-queue-title">최근 기능 요청</h2><p>모든 워크스페이스에서 최근 접수·변경된 요청입니다.</p></div><a href="/admin/requests">전체 큐 보기 <svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a></div>
+          <div class="admin-overview-request-list" id="admin-overview-request-list"><p class="admin-loading">최근 요청을 불러오는 중…</p></div>
+        </section>
+        <section class="admin-panel admin-overview-tools" aria-labelledby="admin-overview-tools-title">
+          <div class="admin-toolbar"><div><h2 id="admin-overview-tools-title">운영 도구</h2><p>관리 범위별 전용 화면으로 이동합니다.</p></div></div>
+          <nav aria-label="관리자 도구">
+            <a href="/admin/requests"><span class="admin-overview-tool-icon"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#alert"></use></svg></span><span><strong>기능 요청</strong><small>요청 검토와 처리 결과 공개</small></span><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a>
+            <a href="/admin/operators"><span class="admin-overview-tool-icon"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#activity"></use></svg></span><span><strong>운영 에이전트</strong><small>전체 요청 처리 권한 승인·회수</small></span><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a>
+            <a href="/admin/users"><span class="admin-overview-tool-icon"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#network"></use></svg></span><span><strong>사용자 디렉터리</strong><small>계정, 연결과 저장 용량 확인</small></span><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#arrow-right"></use></svg></a>
+          </nav>
+          <footer><span><i></i> 관리자 브라우저 세션</span><span>시간 기준 UTC</span></footer>
+        </section>
+      </div>
     </section>
 
     <section class="admin-panel" id="admin-requests" data-admin-section="requests">

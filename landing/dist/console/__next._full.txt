@@ -8,17 +8,17 @@ e:I[97367,["$2"],"$d"]
 11:I[97367,["$2"],"$10"]
 12:"$Sreact.suspense"
 14:I[68027,["$2"],"default",1]
-:HL["/assets/fonts/noto-sans-jp.css?v=20261102-v032-1","style"]
-:HL["/assets/fonts/noto-sans-sc.css?v=20261102-v032-1","style"]
-:HL["/assets/style.css?v=20261102-v032-1","style"]
-:HL["/assets/i18n.css?v=20261102-v032-1","style"]
-:HL["/assets/console-fixes.css?v=20261102-v032-1","style"]
-:HL["/assets/theme.css?v=20261102-v032-1","style"]
-:HL["/assets/product-ui.css?v=20261102-v032-1","style"]
-:HL["/assets/console.css?v=20261102-v032-1","style"]
-:HL["/assets/ui-kit.css?v=20261102-v032-1","style"]
+:HL["/assets/fonts/noto-sans-jp.css?v=20261106-v033-0","style"]
+:HL["/assets/fonts/noto-sans-sc.css?v=20261106-v033-0","style"]
+:HL["/assets/style.css?v=20261106-v033-0","style"]
+:HL["/assets/i18n.css?v=20261106-v033-0","style"]
+:HL["/assets/console-fixes.css?v=20261106-v033-0","style"]
+:HL["/assets/theme.css?v=20261106-v033-0","style"]
+:HL["/assets/product-ui.css?v=20261106-v033-0","style"]
+:HL["/assets/console.css?v=20261106-v033-0","style"]
+:HL["/assets/ui-kit.css?v=20261106-v033-0","style"]
 6:X
-8:T23a5,
+8:T24fc,
   <a class="skip" href="#console-main">본문으로 바로가기</a>
 
   <aside class="sidebar" aria-label="워크스페이스 메뉴" data-ui-shell>
@@ -27,11 +27,11 @@ e:I[97367,["$2"],"$d"]
         <img src="/assets/favicon.svg" width="28" height="28" alt="">
         <span>vibe<span class="brand-light">memory</span></span>
       </a>
-      <span class="plan-badge">PERSONAL</span>
+      <span class="plan-badge">CLOUD</span>
     </div>
     <button class="workspace" type="button" data-action="home">
       <span class="workspace-icon" id="workspace-initial">V</span>
-      <span class="workspace-copy"><strong id="workspace-name">나의 워크스페이스</strong><small>Personal workspace</small></span>
+      <span class="workspace-copy"><strong id="workspace-name">나의 워크스페이스</strong><small><i class="workspace-live"></i> Personal workspace</small></span>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3 3 3-3"/></svg>
     </button>
     <nav aria-label="콘솔 메뉴">
@@ -59,20 +59,20 @@ e:I[97367,["$2"],"$d"]
   <div class="console-body" data-ui-shell>
     <header class="console-header">
       <button id="menu-toggle" aria-expanded="false" aria-label="메뉴 열기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-      <div class="breadcrumb"><span>Vibe Memory</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg><strong id="breadcrumb">대시보드</strong></div>
+      <div class="breadcrumb"><span>Workspace</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg><strong id="breadcrumb">대시보드</strong></div>
       <button class="topbar-search" type="button" data-action="focus-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><span>기억 검색</span><kbd>/</kbd></button>
-      <div class="topbar-actions"><span class="service-status"><i></i>API 정상</span><a href="/guide" target="_blank" rel="noopener">문서</a><button class="topbar-avatar" type="button" data-action="toggle-account" aria-label="계정 메뉴"><span id="topbar-initial">V</span></button></div>
+      <div class="topbar-actions"><span class="service-status"><i></i>Live</span><a href="/guide" target="_blank" rel="noopener">문서</a><button class="topbar-create" type="button" data-action="add-memory" aria-label="새 기억 추가"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>새 기억</span></button><button class="topbar-avatar" type="button" data-action="toggle-account" aria-label="계정 메뉴"><span id="topbar-initial">V</span></button></div>
     </header>
 
     <main id="console-main">
       <div class="console-page-heading">
-        <div><p class="eyebrow" id="view-eyebrow">WORKSPACE OVERVIEW</p><h1 id="view-title">대시보드</h1><p id="view-description">에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.</p></div>
+        <div><p class="eyebrow" id="view-eyebrow">WORKSPACE OVERVIEW</p><h1 id="view-title">대시보드</h1><p id="view-description">에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.</p><div class="page-context"><span><i></i> Live workspace</span><span>UTC</span><span id="view-sync-label">실시간 데이터</span></div></div>
         <button class="button primary" id="primary-action" hidden></button>
       </div>
       <div class="console-banner" id="console-error" role="alert" hidden></div>
       <div id="view-content" aria-live="polite"><div class="loading-state"><span></span>워크스페이스를 불러오는 중입니다…</div></div>
     </main>
-    <footer class="console-footer"><span><i></i> All systems operational</span><span>Vibe Memory · Your context, carried forward.</span></footer>
+    <footer class="console-footer"><span><i></i> All systems operational</span><span>Cloud workspace · UTC</span></footer>
   </div>
 
   <dialog class="ui-modal" id="editor"><form id="editor-form"><div class="dialog-heading"><div><p class="dialog-kicker">VIBE MEMORY</p><h2 id="editor-title"></h2></div><button type="button" class="ui-icon-button close-dialog" aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div><div id="editor-fields"></div><p class="form-error" id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button close-dialog">취소</button><button type="submit" class="button primary" id="editor-submit">저장</button></div></form></dialog>
@@ -88,14 +88,14 @@ e:I[97367,["$2"],"$d"]
     <form><div class="ui-confirm-icon" aria-hidden="true"><svg class="svg-icon"><use href="/assets/icons.svg#alert"></use></svg></div><div class="dialog-heading"><div><p class="dialog-kicker">PLEASE CONFIRM</p><h2 id="confirm-title">계속할까요?</h2></div><button type="button" class="ui-icon-button" id="confirm-cancel-top" data-ui-confirm-cancel aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div><p class="ui-confirm-message" id="confirm-message"></p><div class="dialog-actions"><button class="secondary-button" id="confirm-cancel" data-ui-confirm-cancel type="button">취소</button><button class="button primary" id="confirm-submit" type="submit">확인</button></div></form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-7:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/console.css",{"rel":"stylesheet","href":"/assets/console.css?v=20261102-v032-1"}],["$","link","/assets/ui-kit.css",{"rel":"stylesheet","href":"/assets/ui-kit.css?v=20261102-v032-1"}]],["$","link",null,{"rel":"stylesheet","href":"/assets/theme.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/product-ui.css?v=20261102-v032-1"}],["$","div",null,{"className":"console-page","dangerouslySetInnerHTML":{"__html":"$8"}}],["$L9","$La","$Lb"]],null,"$Lc"]}],"p":false,"v":null}}]]
+7:[["children",{"s":"__PAGE__","h":512,"d":{"r":["$","$1","c",{"children":[[[["$","link","/assets/console.css",{"rel":"stylesheet","href":"/assets/console.css?v=20261106-v033-0"}],["$","link","/assets/ui-kit.css",{"rel":"stylesheet","href":"/assets/ui-kit.css?v=20261106-v033-0"}]],["$","link",null,{"rel":"stylesheet","href":"/assets/theme.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/product-ui.css?v=20261106-v033-0"}],["$","div",null,{"className":"console-page","dangerouslySetInnerHTML":{"__html":"$8"}}],["$L9","$La","$Lb"]],null,"$Lc"]}],"p":false,"v":null}}]]
 5:[["children",{"s":"console","h":512,"d":{"r":["$","$1","c",{"children":[null,["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":"$undefined","forbidden":"$undefined","unauthorized":"$undefined"}]]}],"p":false,"v":"$6"},"c":"$Q7"}]]
-0:{"P":null,"c":["","console"],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","suppressHydrationWarning":true,"children":[["$","head",null,{"children":[["$","script",null,{"src":"/assets/theme-init.js?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/fonts/noto-sans-jp.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/fonts/noto-sans-sc.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/theme.css?v=20261102-v032-1"}],["$","link",null,{"rel":"stylesheet","href":"/assets/product-ui.css?v=20261102-v032-1"}],["$","script",null,{"src":"/assets/theme.js?v=20261102-v032-1","defer":true}],["$","script",null,{"src":"/assets/i18n.js?v=20261102-v032-1","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261102-v032-1","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[[],null,null,["$","div",null,{"className":"$undefined","dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 <svg class=\"svg-icon\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#arrow-right\"></use></svg></a></main>"}}],[]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]]}]]}],"p":false,"v":null},"c":"$Q5"},"h":{"r":["$","$1","h",{"children":[null,["$","$Le",null,{"children":"$Lf"}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":"$L13"}]}],null]}],null]}],"p":false,"v":null}},"m":"$undefined","G":["$14",[]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"vibe-memory-20261102-v032-1"}
+0:{"P":null,"c":["","console"],"q":"","i":false,"t":{"t":{"s":"","h":528,"d":{"r":["$","$1","c",{"children":[[["$","script","script-0",{"src":"/_next/static/chunks/0umf92h1sb77c.js","async":true,"nonce":"$undefined"}]],["$","html",null,{"lang":"ko","suppressHydrationWarning":true,"children":[["$","head",null,{"children":[["$","script",null,{"src":"/assets/theme-init.js?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/fonts/noto-sans-jp.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/fonts/noto-sans-sc.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/style.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/i18n.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/console-fixes.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/theme.css?v=20261106-v033-0"}],["$","link",null,{"rel":"stylesheet","href":"/assets/product-ui.css?v=20261106-v033-0"}],["$","script",null,{"src":"/assets/theme.js?v=20261106-v033-0","defer":true}],["$","script",null,{"src":"/assets/i18n.js?v=20261106-v033-0","defer":true}],["$","script",null,{"src":"/assets/install-prompt.js?v=20261106-v033-0","defer":true}]]}],["$","body",null,{"children":["$","$L3",null,{"parallelRouterKey":"children","error":"$undefined","errorStyles":"$undefined","errorScripts":"$undefined","template":["$","$L4",null,{}],"templateStyles":"$undefined","templateScripts":"$undefined","notFound":[[[],null,null,["$","div",null,{"className":"$undefined","dangerouslySetInnerHTML":{"__html":"<main class=\"wrap section\"><p class=\"eyebrow\">404 / CONTEXT NOT FOUND</p><h1>이 페이지는<br>기억에 없네요.</h1><p class=\"guide-intro\">주소를 확인하거나 Vibe Memory 홈에서 다시 시작하세요.</p><a class=\"button primary\" href=\"/\">홈으로 돌아가기 <svg class=\"svg-icon\" aria-hidden=\"true\"><use href=\"/assets/icons.svg#arrow-right\"></use></svg></a></main>"}}],[]],[]],"forbidden":"$undefined","unauthorized":"$undefined"}]}]]}]]}],"p":false,"v":null},"c":"$Q5"},"h":{"r":["$","$1","h",{"children":[null,["$","$Le",null,{"children":"$Lf"}],["$","$L11",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$12",null,{"name":"Next.Metadata","children":"$L13"}]}],null]}],null]}],"p":false,"v":null}},"m":"$undefined","G":["$14",[]],"S":true,"r":"$undefined","s":"$undefined","a":"$undefined","l":"$undefined","p":"$undefined","d":"$undefined","b":"vibe-memory-20261106-v033-0"}
 15:I[97367,["$2"],"OutletBoundary"]
 6:C
-9:["$","script","/assets/vendor/cytoscape.min.js",{"src":"/assets/vendor/cytoscape.min.js?v=20261102-v032-1","defer":true}]
-a:["$","script","/assets/ui-kit.js",{"src":"/assets/ui-kit.js?v=20261102-v032-1","defer":true}]
-b:["$","script","/assets/console.js",{"src":"/assets/console.js?v=20261102-v032-1","defer":true}]
+9:["$","script","/assets/vendor/cytoscape.min.js",{"src":"/assets/vendor/cytoscape.min.js?v=20261106-v033-0","defer":true}]
+a:["$","script","/assets/ui-kit.js",{"src":"/assets/ui-kit.js?v=20261106-v033-0","defer":true}]
+b:["$","script","/assets/console.js",{"src":"/assets/console.js?v=20261106-v033-0","defer":true}]
 c:["$","$L15",null,{"children":["$","$12",null,{"name":"Next.MetadataOutlet","children":"$@16"}]}]
 f:[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}],["$","meta","2",{"name":"theme-color","content":"#f8f9fc","media":"(prefers-color-scheme: light)"}],["$","meta","3",{"name":"theme-color","content":"#0b1020","media":"(prefers-color-scheme: dark)"}]]
 17:I[27201,["$2"],"IconMark"]

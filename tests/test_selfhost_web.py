@@ -190,20 +190,23 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261102-v032-1"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261102-v032-1"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261102-v032-1"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261102-v032-1"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261102-v032-1"' in landing
-        assert '<script src="/assets/theme.js?v=20261102-v032-1" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261102-v032-1" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261102-v032-1" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261102-v032-1" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261102-v032-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v032-1" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261102-v032-1" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261102-v032-1" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261102-v032-1" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261106-v033-0"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261106-v033-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261106-v033-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261106-v033-0"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261106-v033-0"' in landing
+        assert '<script src="/assets/theme.js?v=20261106-v033-0" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261106-v033-0" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261106-v033-0" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261106-v033-0" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261106-v033-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261106-v033-0" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261106-v033-0" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261106-v033-0" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261106-v033-0" defer="">' in admin
+        assert 'class="admin-overview-grid"' in admin
+        assert "function renderOverview()" in admin_script.text
+        assert "/v1/admin/feature-requests?limit=5&offset=0" in admin_script.text
         assert 'self.__next_s||[]).push(["/assets/i18n.js"' not in landing
         assert landing.index("/assets/install-prompt.js") < landing.index("/assets/app.js")
         assert console.index("/assets/install-prompt.js") < console.index("/assets/console.js")
@@ -259,9 +262,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261102-v032-1' in connect
-        assert '/assets/theme.css?v=20261102-v032-1' in connect
-        assert '/assets/product-ui.css?v=20261102-v032-1' in connect
+        assert '/assets/ui-kit.css?v=20261106-v033-0' in connect
+        assert '/assets/theme.css?v=20261106-v033-0' in connect
+        assert '/assets/product-ui.css?v=20261106-v033-0' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -339,9 +342,19 @@ def test_console_and_api_share_one_origin(settings):
         assert "localStorage.setItem(dashboardGuideKey, '1')" in console_script.text
         assert 'data-action="dismiss-dashboard-guide"' in console_script.text
         assert "Dashboard console: operational data first" in console_styles.text
-        assert "내 기억 용량" in console_script.text
+        assert "워크스페이스 저장 용량" in console_script.text
         assert "formatBytes(stats.storage_bytes)" in console_script.text
         assert ".storage-usage-card" in console_styles.text
+        assert 'class="topbar-create"' in console
+        assert 'class="workspace-live"' in console
+        assert 'class="page-context"' in console
+        assert "const [stats, recent, keys, mcp, activity]" in console_script.text
+        assert "mcp.items.length" in console_script.text
+        assert 'class="storage-composition"' in console_script.text
+        assert "SaaS workspace refresh" in product_styles.text
+        assert ".topbar-create" in product_styles.text
+        assert "flex: 0 0 36px" in product_styles.text
+        assert ".admin-page { --admin-sidebar-width: 244px" in product_styles.text
         assert "처리 결과" in console_script.text
         assert "featureRequestDetail" in console_script.text
         assert ".request-status.completed" in console_styles.text

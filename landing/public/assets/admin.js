@@ -83,6 +83,14 @@ function renderStats() {
   const selected = $('#status-filter')?.value || '';
   $('#admin-stats').innerHTML = cards.map(([value,label,count]) => `<button type="button" data-status="${value}" class="${selected === value ? 'selected' : ''}"><span>${h(label)}</span><strong>${count}</strong><small>${value ? 'STATUS' : 'ALL REQUESTS'}</small></button>`).join('');
 }
+function renderOverview() {
+  const target = $('#admin-overview-request-list');
+  if (!target) return;
+  target.innerHTML = payload.items.length ? payload.items.map(item => {
+    const [label,style] = statusInfo(item.status);
+    return `<a href="/admin/requests" class="admin-overview-request"><span class="admin-overview-request-mark ${h(style)}"></span><span><strong>${h(item.title)}</strong><small>${h(item.requester?.name || 'Legacy workspace')} · ${h(utcDate(item.updated_at))}</small></span><span class="admin-status ${h(style)}">${h(label)}</span></a>`;
+  }).join('') : '<p class="admin-empty">아직 접수된 기능 요청이 없습니다.</p>';
+}
 function visibleItems() {
   const query = $('#request-search').value.trim().toLowerCase();
   if (!query) return payload.items;
@@ -103,8 +111,8 @@ async function load() {
   renderStats(); renderRows();
 }
 async function loadOverview() {
-  payload = await api('/v1/admin/feature-requests?limit=1&offset=0');
-  renderStats();
+  payload = await api('/v1/admin/feature-requests?limit=5&offset=0');
+  renderStats(); renderOverview();
 }
 function renderUsers() {
   $('#user-description').textContent = `${usersPayload.total}명의 사용자 중 ${usersPayload.items.length}명을 표시합니다.`;

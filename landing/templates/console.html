@@ -23,11 +23,11 @@
         <img src="/assets/favicon.svg" width="28" height="28" alt="">
         <span>vibe<span class="brand-light">memory</span></span>
       </a>
-      <span class="plan-badge">PERSONAL</span>
+      <span class="plan-badge">CLOUD</span>
     </div>
     <button class="workspace" type="button" data-action="home">
       <span class="workspace-icon" id="workspace-initial">V</span>
-      <span class="workspace-copy"><strong id="workspace-name">나의 워크스페이스</strong><small>Personal workspace</small></span>
+      <span class="workspace-copy"><strong id="workspace-name">나의 워크스페이스</strong><small><i class="workspace-live"></i> Personal workspace</small></span>
       <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m7 8 3 3 3-3"/></svg>
     </button>
     <nav aria-label="콘솔 메뉴">
@@ -55,20 +55,20 @@
   <div class="console-body" data-ui-shell>
     <header class="console-header">
       <button id="menu-toggle" aria-expanded="false" aria-label="메뉴 열기"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
-      <div class="breadcrumb"><span>Vibe Memory</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg><strong id="breadcrumb">대시보드</strong></div>
+      <div class="breadcrumb"><span>Workspace</span><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m8 5 5 5-5 5"/></svg><strong id="breadcrumb">대시보드</strong></div>
       <button class="topbar-search" type="button" data-action="focus-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg><span>기억 검색</span><kbd>/</kbd></button>
-      <div class="topbar-actions"><span class="service-status"><i></i>API 정상</span><a href="/guide" target="_blank" rel="noopener">문서</a><button class="topbar-avatar" type="button" data-action="toggle-account" aria-label="계정 메뉴"><span id="topbar-initial">V</span></button></div>
+      <div class="topbar-actions"><span class="service-status"><i></i>Live</span><a href="/guide" target="_blank" rel="noopener">문서</a><button class="topbar-create" type="button" data-action="add-memory" aria-label="새 기억 추가"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>새 기억</span></button><button class="topbar-avatar" type="button" data-action="toggle-account" aria-label="계정 메뉴"><span id="topbar-initial">V</span></button></div>
     </header>
 
     <main id="console-main">
       <div class="console-page-heading">
-        <div><p class="eyebrow" id="view-eyebrow">WORKSPACE OVERVIEW</p><h1 id="view-title">대시보드</h1><p id="view-description">에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.</p></div>
+        <div><p class="eyebrow" id="view-eyebrow">WORKSPACE OVERVIEW</p><h1 id="view-title">대시보드</h1><p id="view-description">에이전트와 함께 쌓아가는 기억을 한곳에서 관리하세요.</p><div class="page-context"><span><i></i> Live workspace</span><span>UTC</span><span id="view-sync-label">실시간 데이터</span></div></div>
         <button class="button primary" id="primary-action" hidden></button>
       </div>
       <div class="console-banner" id="console-error" role="alert" hidden></div>
       <div id="view-content" aria-live="polite"><div class="loading-state"><span></span>워크스페이스를 불러오는 중입니다…</div></div>
     </main>
-    <footer class="console-footer"><span><i></i> All systems operational</span><span>Vibe Memory · Your context, carried forward.</span></footer>
+    <footer class="console-footer"><span><i></i> All systems operational</span><span>Cloud workspace · UTC</span></footer>
   </div>
 
   <dialog class="ui-modal" id="editor"><form id="editor-form"><div class="dialog-heading"><div><p class="dialog-kicker">VIBE MEMORY</p><h2 id="editor-title"></h2></div><button type="button" class="ui-icon-button close-dialog" aria-label="닫기"><svg class="svg-icon" aria-hidden="true"><use href="/assets/icons.svg#close"></use></svg></button></div><div id="editor-fields"></div><p class="form-error" id="editor-error" role="alert" hidden></p><div class="dialog-actions"><button type="button" class="secondary-button close-dialog">취소</button><button type="submit" class="button primary" id="editor-submit">저장</button></div></form></dialog>

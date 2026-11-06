@@ -301,7 +301,7 @@ async function bindRelationshipGraph(records, relations) {
   relationshipResizeObserver.observe(stage);
 }
 const viewInfo = {
-  overview: ['대시보드','WORKSPACE CONSOLE','대시보드','워크스페이스 데이터 · 연결 상태 · 최근 활동','설치 프롬프트 복사','copy'],
+  overview: ['대시보드','WORKSPACE OVERVIEW','대시보드','기억 자산, 연결 상태와 최근 변경을 한눈에 확인합니다.','설치 프롬프트 복사','copy'],
   memories: ['기억','YOUR PERSONAL CONTEXT','기억','내가 남긴 사실과 취향, 에이전트가 구성한 엔티티를 확인하세요.','기억 추가','plus'],
   documents: ['문서 · 파일','YOUR KNOWLEDGE, CONNECTED','문서 · 파일','원본과 에이전트가 분석한 문서 메타정보를 관리하세요.','원본 업로드','upload'],
   relations: ['관계 그래프','CONNECTIONS WITH A REASON','관계 그래프','에이전트가 구성한 기억의 연결과 근거를 살펴보세요.'],
@@ -337,13 +337,14 @@ async function navigate(view, reset = true, historyMode = 'push') {
   $('#console-main').classList.toggle('is-graph-view', view === 'relations');
   $('#breadcrumb').textContent = info[0]; $('#view-eyebrow').textContent = info[1];
   $('#view-title').textContent = info[2]; $('#view-description').textContent = info[3];
+  $('#view-sync-label').textContent = '실시간 데이터';
   $('#primary-action').hidden = !info[4]; $('#primary-action').innerHTML = info[4] ? `${h(info[4])} ${icon(info[5] || 'arrow-right')}` : '';
   $('#console-error').hidden = true; $('#view-content').innerHTML = '<div class="loading-state">불러오는 중…</div>';
   $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded', 'false');
   try {
     let html, graphPayload = null;
     if (view === 'overview') {
-      const [stats, recent, keys, activity] = await Promise.all([api('/v1/stats'), api('/v1/records?limit=6'), api('/auth/api-keys'), api('/v1/events/recent?limit=12')]);
+      const [stats, recent, keys, mcp, activity] = await Promise.all([api('/v1/stats'), api('/v1/records?limit=6'), api('/auth/api-keys'), api('/auth/mcp-connections'), api('/v1/events/recent?limit=12')]);
       const totalRecords = stats.memory + stats.document + stats.file + stats.entity;
       const statIcons = [
         '<svg viewBox="0 0 24 24"><path d="M9 4.5A3.5 3.5 0 0 0 5.5 8v1A3.5 3.5 0 0 0 4 15.5 3.5 3.5 0 0 0 7.5 19H9m6-14.5A3.5 3.5 0 0 1 18.5 8v1a3.5 3.5 0 0 1 1.5 6.5 3.5 3.5 0 0 1-3.5 3.5H15M9 4v16m6-16v16"/></svg>',
@@ -352,16 +353,20 @@ async function navigate(view, reset = true, historyMode = 'push') {
         '<svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="m8.3 11 7.4-3.7M8.3 13l7.4 3.7"/></svg>'
       ];
       const statsData = [
-        ['기억', stats.memory, '저장된 사실과 선호', 'memories'],
-        ['문서 · 파일', stats.document + stats.file, '연결된 지식 자료', 'documents'],
-        ['엔티티', stats.entity, '식별된 사람과 대상', 'memories'],
-        ['활성 관계', stats.relations, '기억 사이의 연결', 'relations']
+        ['기억', stats.memory, '저장된 사실과 선호', 'memories', 'MEMORY'],
+        ['문서 · 파일', stats.document + stats.file, '연결된 지식 자료', 'documents', 'KNOWLEDGE'],
+        ['엔티티', stats.entity, '식별된 사람과 대상', 'memories', 'ENTITIES'],
+        ['활성 관계', stats.relations, '기억 사이의 연결', 'relations', 'GRAPH']
       ];
       const guide = dashboardGuideHidden() ? '' : `<section class="dashboard-guide" aria-label="빠른 시작"><div class="dashboard-guide-copy"><span>QUICK START</span><strong>워크스페이스 빠른 작업</strong></div><div class="dashboard-guide-actions"><button data-action="add-memory">${icon('plus')} 기억 추가</button><button data-action="upload-file">${icon('upload')} 파일 업로드</button><button data-view="agents">${icon('network')} 에이전트 연결</button><button class="dashboard-guide-dismiss" data-action="dismiss-dashboard-guide">다시 보지 않기 ${icon('close')}</button></div></section>`;
       const agentBrands = [['claude-code.png','Claude Code'],['codex.png','Codex'],['cursor.svg','Cursor'],['muse.svg','Muse Code'],['openclaw.svg','OpenClaw'],['hermes.png','Hermes']];
-      const storageCard = `<section class="storage-usage-card" aria-labelledby="storage-usage-title"><div class="storage-usage-main"><span class="storage-usage-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span><div><span class="storage-usage-label" id="storage-usage-title">내 기억 용량</span><strong>${formatBytes(stats.storage_bytes)}</strong><small>현재 논리 사용량 · 휴지통 포함</small></div></div><div class="storage-usage-breakdown"><div><span>기억 데이터</span><strong>${formatBytes(stats.memory_bytes)}</strong></div><div><span>원본 파일</span><strong>${formatBytes(stats.file_bytes)}</strong></div><p>앱 저장 한도 미설정</p></div></section>`;
+      const storageTotal = Math.max(Number(stats.storage_bytes || 0), 1);
+      const memoryShare = Math.min(100, Number(stats.memory_bytes || 0) / storageTotal * 100);
+      const fileShare = Math.min(100 - memoryShare, Number(stats.file_bytes || 0) / storageTotal * 100);
+      const storageCard = `<section class="storage-usage-card" aria-labelledby="storage-usage-title"><div class="storage-usage-main"><span class="storage-usage-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.7 3.1 3 7 3s7-1.3 7-3V5M5 11v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span><div><span class="storage-usage-label" id="storage-usage-title">워크스페이스 저장 용량</span><strong>${formatBytes(stats.storage_bytes)}</strong><small>현재 논리 사용량 · 휴지통 포함</small></div></div><div class="storage-usage-breakdown"><div><span>기억 데이터</span><strong>${formatBytes(stats.memory_bytes)}</strong></div><div><span>원본 파일</span><strong>${formatBytes(stats.file_bytes)}</strong></div><p>사용량 기준</p></div><div class="storage-composition" aria-label="저장 용량 구성"><span style="width:${memoryShare.toFixed(2)}%"></span><i style="width:${fileShare.toFixed(2)}%"></i></div></section>`;
       const checkedAt = dateTime(new Date().toISOString());
-      html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target],index) => `<article class="stat-card"><div class="stat-card-top"><span class="stat-card-label">${h(label)}</span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div>${storageCard}<div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 ${icon('arrow-right')}</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 확인</h2><p>실제 API 응답 기준</p></div><span class="console-live-badge"><i></i>CHECKED</span></div><div class="console-status-list"><div><span>확인 범위</span><strong class="status-ok">통계 · 기록 · 키</strong></div><div><span>확인 시각</span><strong>${h(checkedAt)}</strong></div><div><span>에이전트 키</span><strong>${keys.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
+      $('#view-sync-label').textContent = `동기화 ${checkedAt}`;
+      html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target,code],index) => `<article class="stat-card"><div class="stat-card-top"><span><small class="stat-card-code">${h(code)}</small><span class="stat-card-label">${h(label)}</span></span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div>${storageCard}<div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 ${icon('arrow-right')}</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>워크스페이스 상태</h2><p>실제 API 응답 기준</p></div><span class="console-live-badge"><i></i>LIVE</span></div><div class="console-status-list"><div><span>API 상태</span><strong class="status-ok">정상</strong></div><div><span>Agent 연결</span><strong>${keys.items.length}</strong></div><div><span>MCP 연결</span><strong>${mcp.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div><div><span>확인 시각</span><strong>${h(checkedAt)}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
       const activityLabel = event => ({'memory.created':'기억 생성','memory.updated':'기억 수정','memory.archived':'기억 보관','memory.restored':'기억 복원','memory.deleted':'기억 삭제','document.created':'문서 등록','entity.created':'엔티티 생성','file.created':'파일 등록','relation.created':'관계 생성','relation.updated':'관계 변경','feature_request.updated':'기능 요청 변경'}[event] || event.replaceAll('.',' · '));
       html += `<section class="console-panel activity-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 활동</h2><p>원문과 키워드를 포함하지 않는 변경 이벤트 · 최신순</p></div><span class="request-count">${activity.items.length}건</span></div>${activity.items.length ? `<div class="activity-list">${activity.items.map(item => `<article><span class="activity-icon">${icon(item.event.startsWith('relation') ? 'network' : item.event.startsWith('file') || item.event.startsWith('document') ? 'file' : 'activity')}</span><div><strong>${h(activityLabel(item.event))}</strong><small>${h(item.data?.id || item.data?.record_id || item.data?.relation_id || item.data?.feature_request_id || 'workspace')}</small></div><code>#${h(item.id)}</code></article>`).join('')}</div>` : empty('아직 활동이 없습니다.','기억이나 관계가 변경되면 내용 없이 이벤트 메타데이터만 표시됩니다.')}</section>`;
     } else if (view === 'memories' || view === 'documents') {

@@ -38,6 +38,8 @@ For every non-trivial authorized task where prior context may matter: Do not wai
 
 The service being unavailable must not block independent work. Report failed reads/writes and never claim success without successful CLI output. Read [references/workflows.md](references/workflows.md) for checkpoint shape, retrievable examples, optional one-time retrieval verification, and graph/memory hygiene.
 
+When a handoff must preserve discussed versus accepted/rejected choices, or distinguish implemented/local-tested/merged/deployed claims from later observations, use the optional Decision or Checkpoint profile. Read [references/profiles.md](references/profiles.md) before authoring one. Never infer a missing profile as decided or verified.
+
 ## Authorization and data rules
 
 Authorization belongs to the exact current API key or MCP connection. Never combine permissions across a browser, token, agent, remembered grant, or namespace. Read never implies write; MCP transport, host policy, service permission, resource grant, and third-party permission are separate layers. Use only the server-granted namespace. Preserve safe error fields, never credentials or resource bodies. Read [references/authorization.md](references/authorization.md) when identity, capabilities, permission checks, namespaces, or failures matter.
@@ -52,6 +54,7 @@ For Git-readable portability, export an Agent Memory Repo working copy. When imp
 
 - Installation, sync, update, checksums, self-hosting: [references/installation.md](references/installation.md)
 - Record authoring, checkpoints, hygiene prompt: [references/workflows.md](references/workflows.md)
+- Structured Decision and Checkpoint evidence profiles: [references/profiles.md](references/profiles.md)
 - Commands and templates: [references/commands.md](references/commands.md)
 - Auth, permissions, MCP, namespaces: [references/authorization.md](references/authorization.md)
 - Search, provenance, files, lifecycle: [references/data-and-search.md](references/data-and-search.md)

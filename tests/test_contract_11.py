@@ -113,6 +113,8 @@ def test_contract_documents_and_version_negotiation(client):
         "relationship": "/contracts/v1/relationship-contract.json",
         "error": "/contracts/v1/error-contract.json",
         "openapi_profile": "/contracts/v1/openapi-profile.json",
+        "decision_profile": "/contracts/v1/decision-profile.json",
+        "checkpoint_profile": "/contracts/v1/checkpoint-profile.json",
         "governance": "/contracts/GOVERNANCE.md",
         "ump_mapping": "/contracts/ump-mapping.md",
     }
@@ -135,6 +137,13 @@ def test_contract_documents_and_version_negotiation(client):
     assert {"/v1/memories", "/v1/records/{id}", "/v1/search", "/v1/relations"} <= set(
         profile["paths"]
     )
+
+    decision = json.loads((CONTRACTS / "v1" / "decision-profile.json").read_text())
+    checkpoint = json.loads((CONTRACTS / "v1" / "checkpoint-profile.json").read_text())
+    assert decision["additionalProperties"] is False
+    assert checkpoint["additionalProperties"] is False
+    assert "truth" in decision["description"]
+    assert "never executed" in checkpoint["description"]
 
     legacy = client.get("/v1/capabilities", headers={"Vibe-Memory-Contract-Version": "1.0"})
     assert legacy.status_code == 200

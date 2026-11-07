@@ -18,6 +18,26 @@ def load_python_client():
 
 def test_python_sdk_structured_error_cancellation_and_pages():
     module = load_python_client()
+    decision = module.decision_profile_metadata(
+        {
+            "type": "checkpoint",
+            "version": 99,
+            "state": "open",
+            "topic": "database",
+            "applies_to": {"scope": "project"},
+        }
+    )
+    assert decision["vibe_memory_profile"]["type"] == "decision"
+    assert decision["vibe_memory_profile"]["version"] == 1
+    checkpoint = module.checkpoint_profile_metadata(
+        {
+            "claimed_stage": "implemented",
+            "observation_kind": "author_reported",
+            "target": {"scope": "API"},
+            "observed_at": "2026-11-07T00:00:00Z",
+        }
+    )
+    assert checkpoint["vibe_memory_profile_observation"] == "author_reported"
     body = json.dumps(
         {
             "error": {
@@ -59,7 +79,15 @@ def test_sdk_package_versions_and_typescript_contract():
     typescript_source = (ROOT / "sdk" / "typescript" / "src" / "index.ts").read_text(
         encoding="utf-8"
     )
-    assert python_package["project"]["version"] == "0.2.0"
-    assert typescript_package["version"] == "0.2.0"
-    for exported in ("VibeMemoryError", "RequestOptions", "BatchResult", "async *records"):
+    assert python_package["project"]["version"] == "0.3.0"
+    assert typescript_package["version"] == "0.3.0"
+    for exported in (
+        "VibeMemoryError",
+        "RequestOptions",
+        "BatchResult",
+        "async *records",
+        "decisionProfileMetadata",
+        "checkpointProfileMetadata",
+        "createWithMetadata",
+    ):
         assert exported in typescript_source

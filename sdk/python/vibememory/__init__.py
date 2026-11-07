@@ -1,3 +1,15 @@
-from .client import VibeMemoryCancelled, VibeMemoryClient, VibeMemoryError
+from .client import (
+    VibeMemoryCancelled,
+    VibeMemoryClient,
+    VibeMemoryError,
+    checkpoint_profile_metadata,
+    decision_profile_metadata,
+)
 
-__all__ = ["VibeMemoryCancelled", "VibeMemoryClient", "VibeMemoryError"]
+__all__ = [
+    "VibeMemoryCancelled",
+    "VibeMemoryClient",
+    "VibeMemoryError",
+    "checkpoint_profile_metadata",
+    "decision_profile_metadata",
+]

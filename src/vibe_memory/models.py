@@ -4,6 +4,8 @@ from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from vibe_memory.profiles import normalize_metadata_profiles
+
 Keyword = Annotated[str, Field(min_length=1, max_length=100)]
 
 
@@ -91,11 +93,7 @@ class RecordInput(KeywordsInput):
     @field_validator("metadata")
     @classmethod
     def bounded_metadata(cls, value):
-        import json
-
-        if len(json.dumps(value, ensure_ascii=False, allow_nan=False)) > 30000:
-            raise ValueError("metadata must fit within 30000 characters of JSON")
-        return value
+        return normalize_metadata_profiles(value)
 
     @field_validator("valid_from", "valid_to")
     @classmethod
@@ -121,6 +119,7 @@ class RecordInput(KeywordsInput):
             }
         )
         self.metadata = {**self.metadata, "vibe_memory_temporal": temporal}
+        self.metadata = normalize_metadata_profiles(self.metadata)
         return self
 
 

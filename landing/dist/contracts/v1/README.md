@@ -8,6 +8,8 @@ Normative machine-readable documents:
 - `relationship-contract.json`: agent-authored edge, evidence, correction scope and lifecycle.
 - `error-contract.json`: shared REST/MCP reason code and retry contract.
 - `openapi-profile.json`: minimum REST compatibility surface without implementation internals.
+- `decision-profile.json`: optional decision state, scope, reported decider, UTC time and evidence coordinates; conformance does not establish authority or truth.
+- `checkpoint-profile.json`: optional claimed stage, environment and observation evidence; stored commands are data only and are never executed by the service.
 
 Time is UTC. `valid_from`/`valid_to` describe when an agent says a claim applies. `created_at`/`recorded_at` describe when the server recorded the current version. Historical `known_at` reconstruction is reported as `current_versions_only` until a server advertises that extension.
 

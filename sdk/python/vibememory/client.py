@@ -7,6 +7,33 @@ import urllib.parse
 import urllib.request
 
 
+def decision_profile_metadata(profile, metadata=None):
+    """Build agent-supplied Decision metadata without asserting truth or authority."""
+
+    profile = {**profile, "type": "decision", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_profile": profile,
+        "vibe_memory_profile_type": "decision",
+        "vibe_memory_profile_version": 1,
+        "vibe_memory_profile_state": profile["state"],
+    }
+
+
+def checkpoint_profile_metadata(profile, metadata=None):
+    """Build data-only Checkpoint metadata; commands are not executed by the service."""
+
+    profile = {**profile, "type": "checkpoint", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_profile": profile,
+        "vibe_memory_profile_type": "checkpoint",
+        "vibe_memory_profile_version": 1,
+        "vibe_memory_profile_state": profile["claimed_stage"],
+        "vibe_memory_profile_observation": profile["observation_kind"],
+    }
+
+
 class VibeMemoryError(RuntimeError):
     def __init__(self, status, body, *, headers=None):
         try:
@@ -95,6 +122,25 @@ class VibeMemoryClient:
 
     def create(self, content, keywords, client_request_id=None, *, cancelled=None):
         payload = {"content": content, "keywords": keywords, "kind": "fact"}
+        if client_request_id:
+            payload["client_request_id"] = client_request_id
+        return self._request(
+            "/v1/memories",
+            "POST",
+            payload,
+            bool(client_request_id),
+            cancelled=cancelled,
+        )
+
+    def create_with_metadata(
+        self, content, keywords, metadata, client_request_id=None, *, cancelled=None
+    ):
+        payload = {
+            "content": content,
+            "keywords": keywords,
+            "kind": "fact",
+            "metadata": metadata,
+        }
         if client_request_id:
             payload["client_request_id"] = client_request_id
         return self._request(

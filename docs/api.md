@@ -212,6 +212,14 @@ ordinary retrieval; quarantined records require both explicit opt-ins.
 
 The response contains stored IDs, versions, provenance, security and correction
 state, latest authenticated writer, retrieval reasons, and explicit edges.
+Optional `metadata.vibe_memory_profile` values are preserved unchanged in get,
+search, and context-bundle results. Decision profile v1 distinguishes
+`proposed`/`open`/`decided`/`rejected`/`unknown`; Checkpoint profile v1 separates
+the claimed stage from `author_reported`/`observed`/`reproduced`/`failed`/`unavailable`.
+Exact scalar mirrors (`vibe_memory_profile_type`, `vibe_memory_profile_state`, and
+`vibe_memory_profile_observation`) can be used with `metadata_filters`. Profile
+validation establishes shape only—not truth, authority, approval, deployment, or
+independent verification. Stored reproduction commands are never executed.
 `include_content` defaults to false. `limit` and `byte_limit` bound each page. The
 opaque `next_cursor` binds the normalized selector to record/edge versions; if the
 selected snapshot changes, reuse returns 409 and the caller must restart. With an

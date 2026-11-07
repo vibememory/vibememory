@@ -1,4 +1,72 @@
 export type SearchMode = "exact" | "semantic" | "hybrid";
+export type ProfileScope = {scope: string; project?: string; environment?: string};
+export type ProfileEvidence = {record_id: string; version: number};
+export type DecisionProfile = {
+  type: "decision";
+  version: 1;
+  state: "proposed" | "open" | "decided" | "rejected" | "unknown";
+  topic: string;
+  option?: string;
+  applies_to: ProfileScope;
+  reported_decider?: string;
+  decided_at?: string;
+  evidence?: ProfileEvidence[];
+  reason?: string;
+  reconsider_when?: string[];
+};
+export type CheckpointProfile = {
+  type: "checkpoint";
+  version: 1;
+  claimed_stage: "unknown" | "planned" | "implemented" | "local_tests_passed" | "merged" | "deployed" | "operationally_verified";
+  observation_kind: "author_reported" | "observed" | "reproduced" | "failed" | "unavailable";
+  target: ProfileScope;
+  observed_at: string;
+  commit?: string;
+  artifact_digest?: string;
+  environment_identity?: string;
+  lockfile_digest?: string;
+  reproduction?: {command: string; reported_result: string};
+  reported_result?: string;
+  evidence?: ProfileEvidence[];
+  remaining_unknowns?: string[];
+};
+export type ProfileMetadata = Record<string, unknown> & {
+  vibe_memory_profile: DecisionProfile | CheckpointProfile;
+  vibe_memory_profile_type: "decision" | "checkpoint";
+  vibe_memory_profile_version: 1;
+  vibe_memory_profile_state: string;
+  vibe_memory_profile_observation?: CheckpointProfile["observation_kind"];
+};
+
+/** Builds agent-supplied metadata; this does not establish truth, authority, or approval. */
+export function decisionProfileMetadata(
+  profile: Omit<DecisionProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+): ProfileMetadata {
+  return {
+    ...metadata,
+    vibe_memory_profile: {...profile, type: "decision", version: 1},
+    vibe_memory_profile_type: "decision",
+    vibe_memory_profile_version: 1,
+    vibe_memory_profile_state: profile.state,
+  };
+}
+
+/** Builds data-only checkpoint metadata; stored commands are never run by Vibe Memory. */
+export function checkpointProfileMetadata(
+  profile: Omit<CheckpointProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+): ProfileMetadata {
+  return {
+    ...metadata,
+    vibe_memory_profile: {...profile, type: "checkpoint", version: 1},
+    vibe_memory_profile_type: "checkpoint",
+    vibe_memory_profile_version: 1,
+    vibe_memory_profile_state: profile.claimed_stage,
+    vibe_memory_profile_observation: profile.observation_kind,
+  };
+}
+
 export type Memory = {
   id: string;
   kind: "memory";
@@ -6,6 +74,7 @@ export type Memory = {
   keywords: string[];
   version: number;
   created_at: string;
+  metadata: Record<string, unknown>;
   correction_status?: string;
 };
 export type SearchHit = {
@@ -16,6 +85,7 @@ export type SearchHit = {
     stored_keyword: string;
     similarity: number;
   }>;
+  metadata?: Record<string, unknown>;
 };
 export type Page<T> = {items: T[]; limit: number; offset: number};
 export type BatchItem<T = unknown> = {
@@ -144,6 +214,21 @@ export class VibeMemoryClient {
     return this.request<Memory>(
       "/v1/memories",
       {method: "POST", body: JSON.stringify({content, keywords, kind: "fact", client_request_id})},
+      Boolean(client_request_id),
+      options,
+    );
+  }
+
+  createWithMetadata(
+    content: string,
+    keywords: string[],
+    metadata: Record<string, unknown>,
+    client_request_id?: string,
+    options: RequestOptions = {},
+  ) {
+    return this.request<Memory>(
+      "/v1/memories",
+      {method: "POST", body: JSON.stringify({content, keywords, kind: "fact", metadata, client_request_id})},
       Boolean(client_request_id),
       options,
     );

@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibememory.io/contracts/v1/decision-profile.json",
+  "title": "Vibe Memory Decision Profile 1",
+  "description": "Optional agent-supplied metadata. Shape conformance does not prove truth, authority, approval, or independent verification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "version", "state", "topic", "applies_to"],
+  "properties": {
+    "type": {"const": "decision"}, "version": {"const": 1},
+    "state": {"enum": ["proposed", "open", "decided", "rejected", "unknown"]},
+    "topic": {"type": "string", "minLength": 1, "maxLength": 300},
+    "option": {"type": "string", "minLength": 1, "maxLength": 300},
+    "applies_to": {"$ref": "#/$defs/scope"},
+    "reported_decider": {"type": "string", "minLength": 1, "maxLength": 300},
+    "decided_at": {"type": "string", "format": "date-time"},
+    "evidence": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/evidence"}},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "reconsider_when": {"type": "array", "maxItems": 20, "items": {"type": "string", "minLength": 1, "maxLength": 4000}}
+  },
+  "allOf": [
+    {"if": {"properties": {"state": {"enum": ["decided", "rejected"]}}, "required": ["state"]}, "then": {"required": ["reported_decider", "decided_at", "evidence"], "properties": {"evidence": {"minItems": 1}}}},
+    {"if": {"properties": {"state": {"const": "rejected"}}, "required": ["state"]}, "then": {"required": ["reason"]}}
+  ],
+  "$defs": {
+    "scope": {"type": "object", "additionalProperties": false, "required": ["scope"], "properties": {"scope": {"type": "string", "minLength": 1, "maxLength": 300}, "project": {"type": "string", "minLength": 1, "maxLength": 300}, "environment": {"type": "string", "minLength": 1, "maxLength": 300}}},
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["record_id", "version"], "properties": {"record_id": {"type": "string", "minLength": 1, "maxLength": 100}, "version": {"type": "integer", "minimum": 1}}}
+  }
+}

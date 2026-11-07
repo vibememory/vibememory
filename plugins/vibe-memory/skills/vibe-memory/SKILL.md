@@ -17,6 +17,8 @@ For non-trivial work where previous context may matter:
 4. Before a handoff, context compaction, or final response, save any meaningful unsaved delta as a compact session checkpoint. When a previous checkpoint exists, relate the new record to it with `relation_create` using `SUPERSEDES` and a concise reason.
 5. If Vibe Memory itself lacks a capability that blocks or repeatedly slows the workflow, check `feature_requests_list` for a duplicate and use `feature_request_submit` with the concrete use case and impact.
 
+For a handoff that must preserve whether a choice was only proposed/open or explicitly decided/rejected, put the optional Decision profile v1 in `metadata.vibe_memory_profile`. For a completion handoff, use Checkpoint profile v1 to separate claimed stage (`implemented`, `local_tests_passed`, `merged`, `deployed`, or `operationally_verified`) from observation kind (`author_reported`, `observed`, `reproduced`, `failed`, or `unavailable`). Profile validity proves shape only, never truth, authority, approval, deployment, or independent verification. The authenticated record creator remains distinct from a reported decider. Missing profiles are unknown, never automatically decided or verified. Vibe Memory never executes reproduction commands stored as data.
+
 An unavailable memory service must not block independent work. Never claim a read or write succeeded unless the tool returned success.
 
 ## Authoring records that can be found again

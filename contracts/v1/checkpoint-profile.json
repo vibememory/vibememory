@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibememory.io/contracts/v1/checkpoint-profile.json",
+  "title": "Vibe Memory Checkpoint Profile 1",
+  "description": "Optional agent-supplied checkpoint evidence. Shape conformance is not a truth badge or proof of deployment, independent verification, authority, or safety. Stored commands and links are data only and are never executed or visited by the service.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "version", "claimed_stage", "observation_kind", "target", "observed_at"],
+  "properties": {
+    "type": {"const": "checkpoint"}, "version": {"const": 1},
+    "claimed_stage": {"enum": ["unknown", "planned", "implemented", "local_tests_passed", "merged", "deployed", "operationally_verified"]},
+    "observation_kind": {"enum": ["author_reported", "observed", "reproduced", "failed", "unavailable"]},
+    "target": {"$ref": "#/$defs/scope"}, "observed_at": {"type": "string", "format": "date-time"},
+    "commit": {"type": "string", "minLength": 1, "maxLength": 200},
+    "artifact_digest": {"type": "string", "minLength": 1, "maxLength": 300},
+    "environment_identity": {"type": "string", "minLength": 1, "maxLength": 1000},
+    "lockfile_digest": {"type": "string", "minLength": 1, "maxLength": 300},
+    "reproduction": {"$ref": "#/$defs/reproduction"},
+    "reported_result": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "evidence": {"type": "array", "maxItems": 50, "items": {"$ref": "#/$defs/evidence"}},
+    "remaining_unknowns": {"type": "array", "maxItems": 30, "items": {"type": "string", "minLength": 1, "maxLength": 4000}}
+  },
+  "$defs": {
+    "scope": {"type": "object", "additionalProperties": false, "required": ["scope"], "properties": {"scope": {"type": "string", "minLength": 1, "maxLength": 300}, "project": {"type": "string", "minLength": 1, "maxLength": 300}, "environment": {"type": "string", "minLength": 1, "maxLength": 300}}},
+    "evidence": {"type": "object", "additionalProperties": false, "required": ["record_id", "version"], "properties": {"record_id": {"type": "string", "minLength": 1, "maxLength": 100}, "version": {"type": "integer", "minimum": 1}}},
+    "reproduction": {"type": "object", "additionalProperties": false, "required": ["command", "reported_result"], "properties": {"command": {"type": "string", "minLength": 1, "maxLength": 4000}, "reported_result": {"type": "string", "minLength": 1, "maxLength": 4000}}}
+  }
+}

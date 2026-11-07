@@ -44,7 +44,7 @@ def test_public_distribution_matches_sources_and_native_manifest(client):
     assert manifest["schema_version"] == 2
     assert set(manifest["files"]) == expected_files
     assert manifest["native_cli"]["repository"] == "https://github.com/vibememory/cli"
-    assert manifest["native_cli"]["version"] == "3.12.1"
+    assert manifest["native_cli"]["version"] == "3.13.0"
     assert set(manifest["native_cli"]["targets"]) == {
         "linux-x86_64",
         "macos-aarch64",

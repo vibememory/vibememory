@@ -7,15 +7,26 @@ export function needsLegacySkillManifest(userAgent = '') {
   return version[0] < 3 || (version[0] === 3 && version[1] < 11);
 }
 
+export function canonicalHttpsUrl(input) {
+  const url = new URL(input);
+  const needsHttps = url.protocol !== 'https:';
+  const needsCanonicalHost = url.hostname === 'www.vibememory.io';
+  if (!needsHttps && !needsCanonicalHost) return null;
+
+  url.protocol = 'https:';
+  if (needsCanonicalHost) url.hostname = 'vibememory.io';
+  return url.toString();
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.hostname === 'www.vibememory.io') {
-      url.hostname = 'vibememory.io';
+    const canonicalUrl = canonicalHttpsUrl(url);
+    if (canonicalUrl) {
       return new Response(null, {
         status: 308,
         headers: {
-          'Location': url.toString(),
+          'Location': canonicalUrl,
           'Cache-Control': 'public, max-age=86400',
           'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'
         }

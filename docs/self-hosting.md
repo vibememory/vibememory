@@ -82,7 +82,7 @@ Then run:
 docker compose -f compose.yaml -f compose.https.yaml up -d --build
 ```
 
-The included Caddy configuration terminates TLS and forwards requests to `app:8080`. The application's direct port remains bound to localhost by default. No Cloudflare login is involved.
+The included Caddy configuration terminates TLS, redirects public HTTP requests to HTTPS, and forwards secure requests to `app:8080`. The application's direct port remains bound to localhost by default. No Cloudflare login is involved. If you replace Caddy, configure the edge proxy to return one `301` or `308` redirect from every public HTTP URL to the same HTTPS host/path before exposing the deployment; HSTS does not protect a visitor's first plain-HTTP request.
 
 Run the local posture check after every deployment. It makes direct HTTP/DNS
 queries and sends no data to a scanner service:
@@ -91,8 +91,9 @@ queries and sends no data to a scanner service:
 python scripts/check_deployment.py https://memory.example.com
 ```
 
-It verifies HSTS, the `www` (or `--www-host`) response/redirect, absence of
-admin routes from public OpenAPI, and DMARC when `dig` is installed. Configure
+It verifies a no-follow HTTP-to-HTTPS redirect, HSTS, the `www` (or
+`--www-host`) canonical redirect, absence of admin routes from public OpenAPI,
+and DMARC when `dig` is installed. Configure
 the secondary hostname before enabling `includeSubDomains`. For mail DNS, start
 with a monitored `v=DMARC1; p=none` policy, then raise it to `quarantine` or
 `reject` after validating legitimate senders.

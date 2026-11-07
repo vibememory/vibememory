@@ -8,13 +8,24 @@ import subprocess
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 
 
-def fetch(url):
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def fetch(url, *, follow_redirects=True):
     request = Request(url, headers={"User-Agent": "vibe-memory-deployment-check/1"})
     try:
-        with urlopen(request, timeout=15) as response:
+        opener = None if follow_redirects else build_opener(_NoRedirect)
+        response_context = (
+            urlopen(request, timeout=15)
+            if opener is None
+            else opener.open(request, timeout=15)
+        )
+        with response_context as response:
             return response.status, dict(response.headers), response.read()
     except HTTPError as error:
         return error.code, dict(error.headers), error.read()
@@ -46,6 +57,21 @@ def main():
         parser.error("origin must be an HTTPS URL with a hostname")
 
     failed = False
+    http_url = urlunsplit(("http", parsed.netloc, parsed.path or "/", parsed.query, ""))
+    status, headers, _ = fetch(http_url, follow_redirects=False)
+    location = headers.get("Location", "")
+    redirect_target = urlsplit(location)
+    https_redirect_ok = (
+        status in {301, 302, 307, 308}
+        and redirect_target.scheme == "https"
+        and redirect_target.hostname == parsed.hostname
+    )
+    print(
+        ("PASS" if https_redirect_ok else "FAIL")
+        + f" HTTP to HTTPS {http_url} status={status} location={location!r}"
+    )
+    failed |= not https_redirect_ok
+
     status, headers, _ = fetch(origin + "/health")
     hsts = headers.get("Strict-Transport-Security", "")
     hsts_ok = status == 200 and "max-age=" in hsts.casefold()
@@ -64,9 +90,18 @@ def main():
 
     www_host = args.www_host or "www." + parsed.hostname
     www_url = urlunsplit((parsed.scheme, www_host, parsed.path or "/", "", ""))
-    status, _, _ = fetch(www_url)
-    www_ok = status in {200, 301, 302, 307, 308}
-    print(("PASS" if www_ok else "FAIL") + f" secondary host {www_url} status={status}")
+    status, headers, _ = fetch(www_url, follow_redirects=False)
+    location = headers.get("Location", "")
+    target = urlsplit(location)
+    www_ok = (
+        status in {301, 302, 307, 308}
+        and target.scheme == "https"
+        and target.hostname == parsed.hostname
+    )
+    print(
+        ("PASS" if www_ok else "FAIL")
+        + f" secondary host {www_url} status={status} location={location!r}"
+    )
     failed |= not www_ok
 
     record = dmarc(parsed.hostname)

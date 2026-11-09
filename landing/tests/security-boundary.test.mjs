@@ -28,6 +28,8 @@ test('browser document policy blocks clipboard reads without breaking same-origi
     headers,
     /Permissions-Policy: camera=\(\), microphone=\(\), geolocation=\(\), clipboard-read=\(\), clipboard-write=\(self\)/
   );
+  assert.match(headers, /script-src 'self' 'unsafe-inline'/);
+  assert.doesNotMatch(headers, /script-src[^\n]*https?:/);
 
   for (const asset of ['public/assets/app.js', 'public/assets/console.js']) {
     const source = read(asset);

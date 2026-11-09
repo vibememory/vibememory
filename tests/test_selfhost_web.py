@@ -223,11 +223,15 @@ def test_console_and_api_share_one_origin(settings):
         assert "manage-mcp-permissions" in console_script.text
         assert console.index(">CONNECT</p>") < console.index('data-view="mcp"')
         assert console.index('data-view="mcp"') < console.index('data-view="agents"')
-        assert console.index('data-view="agents"') < console.index(">MEMORIES</p>")
+        assert console.index('data-view="agents"') < console.index('data-view="rooms"')
+        assert console.index('data-view="rooms"') < console.index(">MEMORIES</p>")
         assert console.index(">MEMORIES</p>") < console.index(">MANAGE</p>")
         assert 'data-view="keys"' not in console
         assert "view === 'mcp'" in console_script.text
         assert "view === 'agents'" in console_script.text
+        assert "view === 'rooms'" in console_script.text
+        assert "/v1/agent-rooms" in console_script.text
+        assert "agent.room.message" in console_script.text
         assert "requestedView === 'keys' ? 'agents'" in console_script.text
         assert "const mcp = await api('/auth/mcp-connections');" in console_script.text
         assert "const result = await api('/auth/api-keys');" in console_script.text

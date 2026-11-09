@@ -371,6 +371,360 @@ class PostgresStore:
                 )
         return self.get_message(owner, agent_id, id)
 
+    @staticmethod
+    def _room(row):
+        result = dict(row)
+        result.pop("owner", None)
+        result.pop("request_payload", None)
+        for field in ("created_at", "updated_at", "archived_at"):
+            result[field] = iso(result[field]) if result.get(field) else None
+        result["member_count"] = int(result.get("member_count") or 0)
+        result["last_sequence"] = int(result.get("last_sequence") or 0)
+        result["last_read_sequence"] = int(result.get("last_read_sequence") or 0)
+        result["unread_count"] = int(result.get("unread_count") or 0)
+        return result
+
+    @staticmethod
+    def _room_member(row):
+        result = dict(row)
+        result.pop("owner", None)
+        for field in ("joined_at", "left_at"):
+            result[field] = iso(result[field]) if result.get(field) else None
+        result["last_read_sequence"] = int(result.get("last_read_sequence") or 0)
+        return result
+
+    @staticmethod
+    def _room_message(row):
+        result = dict(row)
+        result.pop("owner", None)
+        result.pop("request_payload", None)
+        result["created_at"] = iso(result["created_at"])
+        result["metadata"] = result.get("metadata") or {}
+        result["reply_to"] = result.get("reply_to") or None
+        result["client_request_id"] = result.get("client_request_id") or None
+        return result
+
+    @staticmethod
+    def _room_query(allow_owner):
+        membership = "TRUE" if allow_owner else "me.left_at IS NULL"
+        return f"""SELECT r.*,
+            (SELECT COUNT(*) FROM agent_room_members members
+             WHERE members.owner=r.owner AND members.room_id=r.id
+             AND members.left_at IS NULL) AS member_count,
+            (SELECT COALESCE(MAX(messages.sequence),0) FROM agent_room_messages messages
+             WHERE messages.owner=r.owner AND messages.room_id=r.id) AS last_sequence,
+            COALESCE(me.last_read_sequence,0) AS last_read_sequence,
+            (SELECT COUNT(*) FROM agent_room_messages unread
+             WHERE unread.owner=r.owner AND unread.room_id=r.id
+             AND unread.sequence>COALESCE(me.last_read_sequence,0)
+             AND unread.sender_agent_id<>%s) AS unread_count
+            FROM agent_rooms r
+            LEFT JOIN agent_room_members me ON me.owner=r.owner AND me.room_id=r.id
+                AND me.agent_id=%s
+            WHERE r.owner=%s AND r.archived_at IS NULL AND {membership}"""
+
+    def list_rooms(self, owner, agent_id, limit=50, offset=0, allow_owner=False):
+        with self._connection() as connection:
+            rows = connection.execute(
+                self._room_query(allow_owner)
+                + " ORDER BY r.updated_at DESC,r.id OFFSET %s LIMIT %s",
+                (agent_id, agent_id, owner, offset, limit),
+            ).fetchall()
+        return [self._room(row) for row in rows]
+
+    def get_room(self, owner, agent_id, id, allow_owner=False):
+        with self._connection() as connection:
+            row = connection.execute(
+                self._room_query(allow_owner) + " AND r.id=%s",
+                (agent_id, agent_id, owner, id),
+            ).fetchone()
+            if not row:
+                raise NotFound()
+            members = connection.execute(
+                """SELECT owner,room_id,agent_id,agent_name,role,joined_at,
+                last_read_sequence,left_at FROM agent_room_members
+                WHERE owner=%s AND room_id=%s AND left_at IS NULL
+                ORDER BY CASE role WHEN 'creator' THEN 0 ELSE 1 END,joined_at,agent_id""",
+                (owner, id),
+            ).fetchall()
+        room = self._room(row)
+        room["members"] = [self._room_member(member) for member in members]
+        return room
+
+    def create_room(self, owner, creator_agent_id, creator_name, data):
+        payload = data.model_dump(mode="json")
+        created = datetime.now(UTC)
+        member_ids = list(dict.fromkeys([creator_agent_id, *data.member_agent_ids]))
+        with self.transaction(), self._connection() as connection:
+            if data.client_request_id:
+                existing = connection.execute(
+                    """SELECT * FROM agent_rooms WHERE owner=%s AND created_by_agent_id=%s
+                    AND client_request_id=%s FOR UPDATE""",
+                    (owner, creator_agent_id, data.client_request_id),
+                ).fetchone()
+                if existing:
+                    if existing["request_payload"] != payload:
+                        raise DuplicateRequestConflict()
+                    return self.get_room(owner, creator_agent_id, existing["id"], True), False
+            agents = connection.execute(
+                """SELECT id,name FROM agents WHERE owner=%s AND active AND id=ANY(%s)""",
+                (owner, member_ids),
+            ).fetchall()
+            by_id = {agent["id"]: agent for agent in agents}
+            if set(by_id) != set(member_ids):
+                raise NotFound()
+            room_id = uid()
+            connection.execute(
+                """INSERT INTO agent_rooms(owner,id,name,description,created_by_agent_id,
+                created_by_name,client_request_id,request_payload,created_at,updated_at)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (
+                    owner,
+                    room_id,
+                    data.name,
+                    data.description,
+                    creator_agent_id,
+                    creator_name,
+                    data.client_request_id,
+                    Jsonb(payload),
+                    created,
+                    created,
+                ),
+            )
+            for member_id in member_ids:
+                connection.execute(
+                    """INSERT INTO agent_room_members(owner,room_id,agent_id,agent_name,role,
+                    joined_at) VALUES(%s,%s,%s,%s,%s,%s)""",
+                    (
+                        owner,
+                        room_id,
+                        member_id,
+                        by_id[member_id]["name"],
+                        "creator" if member_id == creator_agent_id else "member",
+                        created,
+                    ),
+                )
+        return self.get_room(owner, creator_agent_id, room_id, True), True
+
+    def update_room(self, owner, actor_agent_id, id, data, allow_owner=False):
+        stamp = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            room = connection.execute(
+                "SELECT * FROM agent_rooms WHERE owner=%s AND id=%s AND archived_at IS NULL FOR UPDATE",
+                (owner, id),
+            ).fetchone()
+            if not room or not (allow_owner or room["created_by_agent_id"] == actor_agent_id):
+                raise NotFound()
+            fields, values = [], []
+            if "name" in data.model_fields_set:
+                fields.append("name=%s")
+                values.append(data.name)
+            if "description" in data.model_fields_set:
+                fields.append("description=%s")
+                values.append(data.description)
+            values.extend([stamp, owner, id])
+            connection.execute(
+                f"UPDATE agent_rooms SET {','.join(fields)},updated_at=%s WHERE owner=%s AND id=%s",
+                tuple(values),
+            )
+        return self.get_room(owner, actor_agent_id, id, allow_owner)
+
+    def add_room_members(self, owner, actor_agent_id, id, agent_ids, allow_owner=False):
+        stamp = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            room = connection.execute(
+                "SELECT * FROM agent_rooms WHERE owner=%s AND id=%s AND archived_at IS NULL FOR UPDATE",
+                (owner, id),
+            ).fetchone()
+            if not room or not (allow_owner or room["created_by_agent_id"] == actor_agent_id):
+                raise NotFound()
+            agents = connection.execute(
+                "SELECT id,name FROM agents WHERE owner=%s AND active AND id=ANY(%s)",
+                (owner, agent_ids),
+            ).fetchall()
+            if {agent["id"] for agent in agents} != set(agent_ids):
+                raise NotFound()
+            for agent in agents:
+                connection.execute(
+                    """INSERT INTO agent_room_members(owner,room_id,agent_id,agent_name,role,joined_at)
+                    VALUES(%s,%s,%s,%s,'member',%s)
+                    ON CONFLICT(owner,room_id,agent_id) DO UPDATE SET
+                    agent_name=EXCLUDED.agent_name,left_at=NULL,joined_at=EXCLUDED.joined_at""",
+                    (owner, id, agent["id"], agent["name"], stamp),
+                )
+            connection.execute(
+                "UPDATE agent_rooms SET updated_at=%s WHERE owner=%s AND id=%s",
+                (stamp, owner, id),
+            )
+        return self.get_room(owner, actor_agent_id, id, allow_owner)
+
+    def remove_room_member(self, owner, actor_agent_id, id, agent_id, allow_owner=False):
+        stamp = datetime.now(UTC)
+        self_leaving = False
+        with self.transaction(), self._connection() as connection:
+            room = connection.execute(
+                "SELECT * FROM agent_rooms WHERE owner=%s AND id=%s AND archived_at IS NULL FOR UPDATE",
+                (owner, id),
+            ).fetchone()
+            if not room or agent_id == room["created_by_agent_id"]:
+                raise NotFound()
+            if not (
+                allow_owner
+                or room["created_by_agent_id"] == actor_agent_id
+                or actor_agent_id == agent_id
+            ):
+                raise NotFound()
+            self_leaving = actor_agent_id == agent_id and not allow_owner
+            changed = connection.execute(
+                """UPDATE agent_room_members SET left_at=%s WHERE owner=%s AND room_id=%s
+                AND agent_id=%s AND left_at IS NULL""",
+                (stamp, owner, id, agent_id),
+            ).rowcount
+            if not changed:
+                raise NotFound()
+            connection.execute(
+                "UPDATE agent_rooms SET updated_at=%s WHERE owner=%s AND id=%s",
+                (stamp, owner, id),
+            )
+        if self_leaving:
+            return {"id": id, "left": True}
+        return self.get_room(owner, actor_agent_id, id, allow_owner)
+
+    def send_room_message(
+        self, owner, sender_agent_id, sender_name, room_id, data, allow_owner=False
+    ):
+        payload = data.model_dump(mode="json")
+        created = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            room = connection.execute(
+                "SELECT * FROM agent_rooms WHERE owner=%s AND id=%s AND archived_at IS NULL FOR UPDATE",
+                (owner, room_id),
+            ).fetchone()
+            member = connection.execute(
+                """SELECT * FROM agent_room_members WHERE owner=%s AND room_id=%s
+                AND agent_id=%s AND left_at IS NULL""",
+                (owner, room_id, sender_agent_id),
+            ).fetchone()
+            if not room or (not member and not allow_owner):
+                raise NotFound()
+            if not member:
+                connection.execute(
+                    """INSERT INTO agent_room_members(owner,room_id,agent_id,agent_name,role,joined_at)
+                    VALUES(%s,%s,%s,%s,'member',%s)
+                    ON CONFLICT(owner,room_id,agent_id) DO UPDATE SET
+                    agent_name=EXCLUDED.agent_name,left_at=NULL,joined_at=EXCLUDED.joined_at""",
+                    (owner, room_id, sender_agent_id, sender_name, created),
+                )
+            if data.client_request_id:
+                existing = connection.execute(
+                    """SELECT * FROM agent_room_messages WHERE owner=%s AND sender_agent_id=%s
+                    AND client_request_id=%s FOR UPDATE""",
+                    (owner, sender_agent_id, data.client_request_id),
+                ).fetchone()
+                if existing:
+                    if existing["request_payload"] != payload:
+                        raise DuplicateRequestConflict()
+                    return self._room_message(existing), False
+            if data.reply_to:
+                parent = connection.execute(
+                    "SELECT 1 FROM agent_room_messages WHERE owner=%s AND room_id=%s AND id=%s",
+                    (owner, room_id, data.reply_to),
+                ).fetchone()
+                if not parent:
+                    raise NotFound()
+            message_id = uid()
+            row = connection.execute(
+                """INSERT INTO agent_room_messages(owner,id,room_id,sender_agent_id,
+                sender_name,body,metadata,reply_to,client_request_id,request_payload,created_at)
+                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING *""",
+                (
+                    owner,
+                    message_id,
+                    room_id,
+                    sender_agent_id,
+                    sender_name,
+                    data.body,
+                    Jsonb(data.metadata),
+                    data.reply_to,
+                    data.client_request_id,
+                    Jsonb(payload),
+                    created,
+                ),
+            ).fetchone()
+            connection.execute(
+                "UPDATE agent_rooms SET updated_at=%s WHERE owner=%s AND id=%s",
+                (created, owner, room_id),
+            )
+            connection.execute(
+                """UPDATE agent_room_members SET last_read_sequence=GREATEST(last_read_sequence,%s)
+                WHERE owner=%s AND room_id=%s AND agent_id=%s""",
+                (row["sequence"], owner, room_id, sender_agent_id),
+            )
+        return self._room_message(row), True
+
+    def room_messages(
+        self, owner, agent_id, room_id, after=0, limit=100, allow_owner=False, before=None
+    ):
+        self.get_room(owner, agent_id, room_id, allow_owner)
+        with self._connection() as connection:
+            if before is None:
+                rows = connection.execute(
+                    """SELECT * FROM agent_room_messages WHERE owner=%s AND room_id=%s
+                    AND sequence>%s ORDER BY sequence LIMIT %s""",
+                    (owner, room_id, after, limit),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """SELECT * FROM agent_room_messages WHERE owner=%s AND room_id=%s
+                    AND sequence<%s ORDER BY sequence DESC LIMIT %s""",
+                    (owner, room_id, before, limit),
+                ).fetchall()[::-1]
+        return [self._room_message(row) for row in rows]
+
+    def accessible_room_messages(self, owner, agent_id, after=0, limit=100, allow_owner=False):
+        membership = "TRUE" if allow_owner else "member.left_at IS NULL"
+        with self._connection() as connection:
+            rows = connection.execute(
+                f"""SELECT DISTINCT messages.* FROM agent_room_messages messages
+                JOIN agent_rooms room ON room.owner=messages.owner AND room.id=messages.room_id
+                LEFT JOIN agent_room_members member ON member.owner=messages.owner
+                    AND member.room_id=messages.room_id AND member.agent_id=%s
+                WHERE messages.owner=%s AND room.archived_at IS NULL
+                AND messages.sequence>%s AND {membership}
+                ORDER BY messages.sequence LIMIT %s""",
+                (agent_id, owner, after, limit),
+            ).fetchall()
+        return [self._room_message(row) for row in rows]
+
+    def mark_room_read(self, owner, agent_id, agent_name, room_id, sequence, allow_owner=False):
+        stamp = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            room = connection.execute(
+                "SELECT 1 FROM agent_rooms WHERE owner=%s AND id=%s AND archived_at IS NULL",
+                (owner, room_id),
+            ).fetchone()
+            member = connection.execute(
+                """SELECT 1 FROM agent_room_members WHERE owner=%s AND room_id=%s
+                AND agent_id=%s AND left_at IS NULL""",
+                (owner, room_id, agent_id),
+            ).fetchone()
+            if not room or (not member and not allow_owner):
+                raise NotFound()
+            maximum = connection.execute(
+                "SELECT COALESCE(MAX(sequence),0) AS value FROM agent_room_messages WHERE owner=%s AND room_id=%s",
+                (owner, room_id),
+            ).fetchone()["value"]
+            target = min(sequence, maximum)
+            connection.execute(
+                """INSERT INTO agent_room_members(owner,room_id,agent_id,agent_name,role,
+                joined_at,last_read_sequence) VALUES(%s,%s,%s,%s,'member',%s,%s)
+                ON CONFLICT(owner,room_id,agent_id) DO UPDATE SET
+                agent_name=EXCLUDED.agent_name,left_at=NULL,
+                last_read_sequence=GREATEST(agent_room_members.last_read_sequence,EXCLUDED.last_read_sequence)""",
+                (owner, room_id, agent_id, agent_name, stamp, target),
+            )
+        return self.get_room(owner, agent_id, room_id, allow_owner)
+
     def insert(
         self,
         owner,
@@ -423,13 +777,17 @@ class PostgresStore:
                     Jsonb(security["security_history"]),
                     creator_agent_id,
                     creator_agent_name,
-                    Jsonb([{
-                        "at": created,
-                        "version": 1,
-                        "operation": "created",
-                        "writer_agent_id": creator_agent_id,
-                        "writer_agent_name": creator_agent_name,
-                    }]),
+                    Jsonb(
+                        [
+                            {
+                                "at": created,
+                                "version": 1,
+                                "operation": "created",
+                                "writer_agent_id": creator_agent_id,
+                                "writer_agent_name": creator_agent_name,
+                            }
+                        ]
+                    ),
                 ),
             )
             self._index(owner, record_id, keywords, vectors)
@@ -460,7 +818,13 @@ class PostgresStore:
                 )
 
     def update_keywords(
-        self, owner, id, keywords, vectors, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+        self,
+        owner,
+        id,
+        keywords,
+        vectors,
+        writer_agent_id="unknown",
+        writer_agent_name="Unknown agent",
     ):
         if len(vectors) != len(keywords):
             raise ValueError("Embedding count does not match keyword count")
@@ -469,10 +833,16 @@ class PostgresStore:
             connection.execute(
                 "DELETE FROM keyword_embeddings WHERE owner=%s AND record_id=%s", (owner, id)
             )
-            history = [*record.get("writer_history", []), {
-                "at": now(), "version": record["version"] + 1, "operation": "keywords_updated",
-                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
-            }]
+            history = [
+                *record.get("writer_history", []),
+                {
+                    "at": now(),
+                    "version": record["version"] + 1,
+                    "operation": "keywords_updated",
+                    "writer_agent_id": writer_agent_id,
+                    "writer_agent_name": writer_agent_name,
+                },
+            ]
             connection.execute(
                 "UPDATE records SET keywords=%s,writer_history=%s,version=version+1 WHERE owner=%s AND id=%s",
                 (keywords, Jsonb(history), owner, id),
@@ -486,7 +856,13 @@ class PostgresStore:
         return self.get(owner, id)
 
     def update_record(
-        self, owner, id, data, vectors=None, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+        self,
+        owner,
+        id,
+        data,
+        vectors=None,
+        writer_agent_id="unknown",
+        writer_agent_name="Unknown agent",
     ):
         if data.keywords is not None and (vectors is None or len(vectors) != len(data.keywords)):
             raise ValueError("Embedding count does not match keyword count")
@@ -509,10 +885,16 @@ class PostgresStore:
                 or security["trust_level"] != previous["trust_level"]
                 or security["security_warnings"] != previous["security_warnings"]
             )
-            writer_history = [*previous.get("writer_history", []), {
-                "at": now(), "version": row["version"] + 1, "operation": "record_updated",
-                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
-            }]
+            writer_history = [
+                *previous.get("writer_history", []),
+                {
+                    "at": now(),
+                    "version": row["version"] + 1,
+                    "operation": "record_updated",
+                    "writer_agent_id": writer_agent_id,
+                    "writer_agent_name": writer_agent_name,
+                },
+            ]
             connection.execute(
                 """UPDATE records SET
                 content=COALESCE(%s,content),title=COALESCE(%s,title),
@@ -587,10 +969,16 @@ class PostgresStore:
                 raise Conflict()
             record = self._record(row)
             security = apply_security_update(record, data)
-            writer_history = [*record.get("writer_history", []), {
-                "at": now(), "version": row["version"] + 1, "operation": "security_updated",
-                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
-            }]
+            writer_history = [
+                *record.get("writer_history", []),
+                {
+                    "at": now(),
+                    "version": row["version"] + 1,
+                    "operation": "security_updated",
+                    "writer_agent_id": writer_agent_id,
+                    "writer_agent_name": writer_agent_name,
+                },
+            ]
             connection.execute(
                 """UPDATE records SET trust_level=%s,security_state=%s,provenance=%s,
                 content_hash=%s,security_warnings=%s,security_history=%s,
@@ -988,9 +1376,7 @@ class PostgresStore:
     def _attach_evidence_status(self, owner, edges):
         evidence_ids = list(
             dict.fromkeys(
-                reference["record_id"]
-                for edge in edges
-                for reference in edge.get("evidence", [])
+                reference["record_id"] for edge in edges for reference in edge.get("evidence", [])
             )
         )
         current = {}

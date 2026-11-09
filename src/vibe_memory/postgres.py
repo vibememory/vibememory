@@ -490,6 +490,67 @@ class PostgresDatabase:
         CREATE INDEX IF NOT EXISTS agent_message_sent_idx
             ON agent_messages(owner, sender_agent_id, sequence DESC);
 
+        CREATE TABLE IF NOT EXISTS agent_rooms (
+            owner TEXT NOT NULL,
+            id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            created_by_agent_id TEXT NOT NULL,
+            created_by_name TEXT NOT NULL,
+            client_request_id TEXT,
+            request_payload JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            archived_at TIMESTAMPTZ,
+            PRIMARY KEY(owner, id),
+            FOREIGN KEY(owner, created_by_agent_id) REFERENCES agents(owner, id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_room_idempotency_idx
+            ON agent_rooms(owner, created_by_agent_id, client_request_id)
+            WHERE client_request_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS agent_room_updated_idx
+            ON agent_rooms(owner, updated_at DESC, id);
+
+        CREATE TABLE IF NOT EXISTS agent_room_members (
+            owner TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('creator','member')),
+            joined_at TIMESTAMPTZ NOT NULL,
+            last_read_sequence BIGINT NOT NULL DEFAULT 0,
+            left_at TIMESTAMPTZ,
+            PRIMARY KEY(owner, room_id, agent_id),
+            FOREIGN KEY(owner, room_id) REFERENCES agent_rooms(owner, id),
+            FOREIGN KEY(owner, agent_id) REFERENCES agents(owner, id)
+        );
+        CREATE INDEX IF NOT EXISTS agent_room_member_lookup_idx
+            ON agent_room_members(owner, agent_id, room_id) WHERE left_at IS NULL;
+
+        CREATE TABLE IF NOT EXISTS agent_room_messages (
+            sequence BIGSERIAL UNIQUE NOT NULL,
+            owner TEXT NOT NULL,
+            id TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            sender_agent_id TEXT NOT NULL,
+            sender_name TEXT NOT NULL,
+            body TEXT NOT NULL,
+            metadata JSONB NOT NULL DEFAULT '{{}}',
+            reply_to TEXT,
+            client_request_id TEXT,
+            request_payload JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            PRIMARY KEY(owner, id),
+            FOREIGN KEY(owner, room_id) REFERENCES agent_rooms(owner, id),
+            FOREIGN KEY(owner, sender_agent_id) REFERENCES agents(owner, id),
+            FOREIGN KEY(owner, reply_to) REFERENCES agent_room_messages(owner, id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_room_message_idempotency_idx
+            ON agent_room_messages(owner, sender_agent_id, client_request_id)
+            WHERE client_request_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS agent_room_message_room_idx
+            ON agent_room_messages(owner, room_id, sequence);
+
         CREATE TABLE IF NOT EXISTS vault_secrets (
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             name TEXT NOT NULL,

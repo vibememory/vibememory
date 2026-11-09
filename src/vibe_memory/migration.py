@@ -107,6 +107,9 @@ DESTINATION_TABLES = (
     "feature_requests",
     "agents",
     "agent_messages",
+    "agent_rooms",
+    "agent_room_members",
+    "agent_room_messages",
     "vault_secrets",
 )
 
@@ -154,6 +157,9 @@ def read_legacy(data_dir: Path):
         feature_requests=[],
         agents=[],
         agent_messages=[],
+        agent_rooms=[],
+        agent_room_members=[],
+        agent_room_messages=[],
         meta={},
     )
     graph = data_dir / "graph"
@@ -274,6 +280,32 @@ def read_legacy(data_dir: Path):
                 ):
                     message[field] = message.get(field) or None
                 payload["agent_messages"].append(message)
+        if "AgentRoom" in graph_tables:
+            for row in _kuzu_rows(connection, "MATCH (r:AgentRoom) RETURN r"):
+                room = {key: value for key, value in row["r"].items() if not key.startswith("_")}
+                room["request_payload"] = json.loads(room.get("request_payload") or "{}")
+                room["client_request_id"] = room.get("client_request_id") or None
+                room["archived_at"] = room.get("archived_at") or None
+                payload["agent_rooms"].append(room)
+        if "AgentRoomMember" in graph_tables:
+            for row in _kuzu_rows(connection, "MATCH (m:AgentRoomMember) RETURN m"):
+                member = {
+                    key: value
+                    for key, value in row["m"].items()
+                    if not key.startswith("_") and key != "id"
+                }
+                member["left_at"] = member.get("left_at") or None
+                payload["agent_room_members"].append(member)
+        if "AgentRoomMessage" in graph_tables:
+            for row in _kuzu_rows(
+                connection, "MATCH (m:AgentRoomMessage) RETURN m ORDER BY m.sequence"
+            ):
+                message = {key: value for key, value in row["m"].items() if not key.startswith("_")}
+                message["metadata"] = json.loads(message.get("metadata") or "{}")
+                message["request_payload"] = json.loads(message.get("request_payload") or "{}")
+                message["reply_to"] = message.get("reply_to") or None
+                message["client_request_id"] = message.get("client_request_id") or None
+                payload["agent_room_messages"].append(message)
         if "BatchOperation" in graph_tables:
             for row in _kuzu_rows(connection, "MATCH (b:BatchOperation) RETURN b"):
                 operation = {
@@ -482,6 +514,72 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                             "last_seen_at",
                         )
                     ),
+                )
+            for room in payload["agent_rooms"]:
+                connection.execute(
+                    """INSERT INTO agent_rooms(
+                        owner,id,name,description,created_by_agent_id,created_by_name,
+                        client_request_id,request_payload,created_at,updated_at,archived_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        room["owner"],
+                        room["id"],
+                        room["name"],
+                        room["description"],
+                        room["created_by_agent_id"],
+                        room["created_by_name"],
+                        room["client_request_id"],
+                        Jsonb(room["request_payload"]),
+                        room["created_at"],
+                        room["updated_at"],
+                        room["archived_at"],
+                    ),
+                )
+            for member in payload["agent_room_members"]:
+                connection.execute(
+                    """INSERT INTO agent_room_members(
+                        owner,room_id,agent_id,agent_name,role,joined_at,
+                        last_read_sequence,left_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    tuple(
+                        member[key]
+                        for key in (
+                            "owner",
+                            "room_id",
+                            "agent_id",
+                            "agent_name",
+                            "role",
+                            "joined_at",
+                            "last_read_sequence",
+                            "left_at",
+                        )
+                    ),
+                )
+            for message in payload["agent_room_messages"]:
+                connection.execute(
+                    """INSERT INTO agent_room_messages(
+                        sequence,owner,id,room_id,sender_agent_id,sender_name,body,metadata,
+                        reply_to,client_request_id,request_payload,created_at
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        message["sequence"],
+                        message["owner"],
+                        message["id"],
+                        message["room_id"],
+                        message["sender_agent_id"],
+                        message["sender_name"],
+                        message["body"],
+                        Jsonb(message["metadata"]),
+                        message["reply_to"],
+                        message["client_request_id"],
+                        Jsonb(message["request_payload"]),
+                        message["created_at"],
+                    ),
+                )
+            if payload["agent_room_messages"]:
+                connection.execute(
+                    "SELECT setval(pg_get_serial_sequence('agent_room_messages','sequence'),%s,true)",
+                    (max(message["sequence"] for message in payload["agent_room_messages"]),),
                 )
             for message in payload["agent_messages"]:
                 connection.execute(

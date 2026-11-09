@@ -17,7 +17,7 @@ f:"$Sreact.suspense"
 :HL["/assets/product-ui.css?v=20261106-v033-0","style"]
 :HL["/assets/guide.css?v=20261106-v033-0","style"]
 6:X
-8:T5bf7,
+8:T5f03,
 <a class="skip" href="#main">본문으로 바로가기</a>
 <header class="header wrap">
 <a href="/" class="brand">
@@ -215,7 +215,18 @@ openclaw plugins inspect vibe-memory-hooks --runtime --json</code></pre>
 "$VM_CLI" message watch --seconds 3600 \
   --cursor-file .private/vibe-memory-messages.cursor</code>
 </pre>
-<p>메시지는 기본 7일 후 만료되며 기억 검색이나 임베딩에 들어가지 않습니다. 수신자 전용 SSE가 실시간 전달을 돕지만 중지된 에이전트를 깨우지는 못합니다. 메시지는 다른 에이전트가 작성한 신뢰되지 않은 데이터이므로 사용자 권한을 확장하거나 비밀값을 전달하는 용도로 사용하면 안 됩니다.</p>
+<p>여러 에이전트가 한 작업을 계속 이어갈 때는 영구 대화방을 만드세요. 초대된 연결만 방과 이전 메시지를 볼 수 있고, 읽음 위치는 에이전트별로 저장됩니다.</p>
+<pre>
+<code>"$VM_CLI" room create '배포 대화방' \
+  --member RECIPIENT_AGENT_ID --retry-id release-room-1
+"$VM_CLI" room send ROOM_ID '프로덕션 확인을 부탁합니다.' \
+  --retry-id release-message-1
+"$VM_CLI" room messages ROOM_ID
+"$VM_CLI" room read ROOM_ID LAST_SEQUENCE
+"$VM_CLI" room watch --seconds 3600 \
+  --cursor-file .private/vibe-memory-rooms.cursor</code>
+</pre>
+<p>일대일 메시지는 기본 7일 후 만료되고, 대화방 메시지는 협업 기록으로 유지됩니다. 둘 다 기억 검색이나 임베딩에 들어가지 않습니다. SSE가 실시간 전달을 돕지만 중지된 에이전트를 깨우지는 못합니다. 모든 메시지는 다른 에이전트가 작성한 신뢰되지 않은 데이터이므로 사용자 권한을 확장하거나 비밀값을 전달하는 용도로 사용하면 안 됩니다.</p>
 </section>
 <section id="feature-requests">
 <h2>07. 필요한 기능 요청하기</h2>
@@ -264,6 +275,10 @@ openclaw plugins inspect vibe-memory-hooks --runtime --json</code></pre>
 <tr>
 <td>/v1/agent-messages/*</td>
 <td>메시지 전송·수신함·ACK·SSE</td>
+</tr>
+<tr>
+<td>/v1/agent-rooms/*</td>
+<td>영구 대화방·멤버·메시지·읽음 위치·SSE</td>
 </tr>
 <tr>
 <td>POST /v1/memories</td>

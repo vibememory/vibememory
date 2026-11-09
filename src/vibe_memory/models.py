@@ -220,9 +220,7 @@ class RelationInput(Input):
         ]
         if len(snapshots) != len(set(snapshots)):
             raise ValueError("evidence snapshots must be unique")
-        self.evidence_record_ids = list(
-            dict.fromkeys([*self.evidence_record_ids, *referenced])
-        )
+        self.evidence_record_ids = list(dict.fromkeys([*self.evidence_record_ids, *referenced]))
         return self
 
 
@@ -558,9 +556,9 @@ class GraphDiffInput(Input):
 
 class GraphApplyInput(GraphDiffInput):
     approved_diff_hash: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
-    approved_create_client_ids: list[
-        Annotated[str, Field(min_length=1, max_length=100)]
-    ] = Field(default_factory=list, max_length=100)
+    approved_create_client_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        default_factory=list, max_length=100
+    )
     approved_retract_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
         default_factory=list, max_length=100
     )
@@ -626,7 +624,9 @@ class AgentMemoryRepoEntry(KeywordsInput):
     @classmethod
     def safe_relative_path(cls, value):
         normalized = value.replace("\\", "/")
-        if normalized.startswith("/") or any(part in {"", ".", ".."} for part in normalized.split("/")):
+        if normalized.startswith("/") or any(
+            part in {"", ".", ".."} for part in normalized.split("/")
+        ):
             raise ValueError("path must be a normalized relative repository path")
         return normalized
 
@@ -665,9 +665,9 @@ class AgentMemoryRepoDiffInput(Input):
 
 class AgentMemoryRepoApplyInput(AgentMemoryRepoDiffInput):
     approved_diff_hash: str = Field(pattern=r"^[A-Fa-f0-9]{64}$")
-    approved_client_request_ids: list[
-        Annotated[str, Field(min_length=1, max_length=100)]
-    ] = Field(min_length=1, max_length=100)
+    approved_client_request_ids: list[Annotated[str, Field(min_length=1, max_length=100)]] = Field(
+        min_length=1, max_length=100
+    )
     reason: str = Field(min_length=1, max_length=1000)
 
     @model_validator(mode="after")
@@ -750,3 +750,61 @@ class AgentMessageInput(Input):
 
 class AgentMessageAck(Input):
     status: Literal["delivered", "read", "acked"]
+
+
+class AgentRoomCreate(Input):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=1000)
+    member_agent_ids: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        default_factory=list, max_length=50
+    )
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator("member_agent_ids")
+    @classmethod
+    def unique_members(cls, values):
+        return list(dict.fromkeys(values))
+
+
+class AgentRoomUpdate(Input):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def has_update(self):
+        if not self.model_fields_set:
+            raise ValueError("at least one room field must be updated")
+        if any(getattr(self, field) is None for field in self.model_fields_set):
+            raise ValueError("updated room fields cannot be null")
+        return self
+
+
+class AgentRoomMembersInput(Input):
+    agent_ids: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        min_length=1, max_length=50
+    )
+
+    @field_validator("agent_ids")
+    @classmethod
+    def unique_members(cls, values):
+        return list(dict.fromkeys(values))
+
+
+class AgentRoomMessageInput(Input):
+    body: str = Field(min_length=1, max_length=10000)
+    metadata: dict = Field(default_factory=dict)
+    reply_to: str | None = Field(default=None, min_length=1, max_length=100)
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator("metadata")
+    @classmethod
+    def bounded_metadata(cls, value):
+        import json
+
+        if len(json.dumps(value, ensure_ascii=False, allow_nan=False)) > 30000:
+            raise ValueError("metadata must fit within 30000 characters of JSON")
+        return value
+
+
+class AgentRoomReadInput(Input):
+    sequence: int = Field(ge=0, le=9223372036854775807)

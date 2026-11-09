@@ -79,6 +79,19 @@ class Store:
             client_request_id STRING, request_payload STRING, status STRING,
             created_at STRING, expires_at STRING, delivered_at STRING, read_at STRING,
             acked_at STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS AgentRoom(
+            id STRING PRIMARY KEY, owner STRING, name STRING, description STRING,
+            created_by_agent_id STRING, created_by_name STRING, client_request_id STRING,
+            request_payload STRING, created_at STRING, updated_at STRING, archived_at STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS AgentRoomMember(
+            id STRING PRIMARY KEY, owner STRING, room_id STRING, agent_id STRING,
+            agent_name STRING, role STRING, joined_at STRING, last_read_sequence INT64,
+            left_at STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS AgentRoomMessage(
+            id STRING PRIMARY KEY, sequence INT64, owner STRING, room_id STRING,
+            sender_agent_id STRING, sender_name STRING, body STRING, metadata STRING,
+            reply_to STRING, client_request_id STRING, request_payload STRING,
+            created_at STRING)""")
         self.query("""CREATE NODE TABLE IF NOT EXISTS BatchOperation(
             id STRING PRIMARY KEY, owner STRING, agent_id STRING, operation STRING,
             client_request_id STRING, request_hash STRING, result STRING,
@@ -88,6 +101,10 @@ class Store:
         )
         self.message_sequence = (
             self.query("MATCH (m:AgentMessage) RETURN max(m.sequence) AS latest")[0]["latest"] or 0
+        )
+        self.room_message_sequence = (
+            self.query("MATCH (m:AgentRoomMessage) RETURN max(m.sequence) AS latest")[0]["latest"]
+            or 0
         )
         rows = self.query("MATCH (m:Meta {key: 'embedding_model'}) RETURN m.value AS value")
         if rows and rows[0]["value"] != model:
@@ -407,6 +424,444 @@ class Store:
                 )
         return self.get_message(owner, agent_id, id)
 
+    @staticmethod
+    def room_record(node):
+        result = {
+            key: value for key, value in node.items() if key not in {"owner", "request_payload"}
+        }
+        result["client_request_id"] = result.get("client_request_id") or None
+        result["archived_at"] = result.get("archived_at") or None
+        return result
+
+    @staticmethod
+    def room_member_record(node):
+        result = {key: value for key, value in node.items() if key not in {"owner", "id"}}
+        result["left_at"] = result.get("left_at") or None
+        return result
+
+    @staticmethod
+    def room_message_record(node):
+        result = {
+            key: value for key, value in node.items() if key not in {"owner", "request_payload"}
+        }
+        result["metadata"] = json.loads(result.get("metadata") or "{}")
+        result["reply_to"] = result.get("reply_to") or None
+        result["client_request_id"] = result.get("client_request_id") or None
+        return result
+
+    @staticmethod
+    def room_member_id(room_id, agent_id):
+        return hashlib.sha256(f"{room_id}\x1f{agent_id}".encode()).hexdigest()
+
+    def _room_visible(self, owner, agent_id, room_id, allow_owner=False):
+        rooms = self.query(
+            """MATCH (r:AgentRoom {owner: $owner, id: $id})
+            WHERE r.archived_at='' RETURN r""",
+            {"owner": owner, "id": room_id},
+        )
+        if not rooms:
+            return None
+        if allow_owner:
+            return rooms[0]["r"]
+        members = self.query(
+            """MATCH (m:AgentRoomMember {owner: $owner, room_id: $room_id,
+            agent_id: $agent_id}) WHERE m.left_at='' RETURN m.id AS id""",
+            {"owner": owner, "room_id": room_id, "agent_id": agent_id},
+        )
+        return rooms[0]["r"] if members else None
+
+    def get_room(self, owner, agent_id, id, allow_owner=False):
+        room_node = self._room_visible(owner, agent_id, id, allow_owner)
+        if not room_node:
+            raise NotFound()
+        members = self.query(
+            """MATCH (m:AgentRoomMember {owner: $owner, room_id: $room_id})
+            WHERE m.left_at='' RETURN m ORDER BY m.role,m.joined_at,m.agent_id""",
+            {"owner": owner, "room_id": id},
+        )
+        sequences = self.query(
+            """MATCH (m:AgentRoomMessage {owner: $owner, room_id: $room_id})
+            RETURN max(m.sequence) AS latest""",
+            {"owner": owner, "room_id": id},
+        )
+        own = next((row["m"] for row in members if row["m"]["agent_id"] == agent_id), None)
+        last_sequence = (sequences[0]["latest"] if sequences else 0) or 0
+        last_read = (own or {}).get("last_read_sequence", 0)
+        unread = self.query(
+            """MATCH (m:AgentRoomMessage {owner: $owner, room_id: $room_id})
+            WHERE m.sequence>$last_read AND m.sender_agent_id<>$agent_id
+            RETURN count(m) AS count""",
+            {
+                "owner": owner,
+                "room_id": id,
+                "last_read": last_read,
+                "agent_id": agent_id,
+            },
+        )
+        room = self.room_record(room_node)
+        room.update(
+            member_count=len(members),
+            members=[self.room_member_record(row["m"]) for row in members],
+            last_sequence=last_sequence,
+            last_read_sequence=last_read,
+            unread_count=(unread[0]["count"] if unread else 0),
+        )
+        return room
+
+    def list_rooms(self, owner, agent_id, limit=50, offset=0, allow_owner=False):
+        if allow_owner:
+            rows = self.query(
+                """MATCH (r:AgentRoom {owner: $owner}) WHERE r.archived_at=''
+                RETURN r ORDER BY r.updated_at DESC,r.id SKIP $offset LIMIT $limit""",
+                {"owner": owner, "offset": offset, "limit": limit},
+            )
+        else:
+            rows = self.query(
+                """MATCH (r:AgentRoom {owner: $owner}),
+                (member:AgentRoomMember {owner: $owner, agent_id: $agent_id})
+                WHERE member.room_id=r.id AND member.left_at='' AND r.archived_at=''
+                RETURN r ORDER BY r.updated_at DESC,r.id SKIP $offset LIMIT $limit""",
+                {"owner": owner, "agent_id": agent_id, "offset": offset, "limit": limit},
+            )
+        return [self.get_room(owner, agent_id, row["r"]["id"], allow_owner) for row in rows]
+
+    def create_room(self, owner, creator_agent_id, creator_name, data):
+        payload = data.model_dump(mode="json")
+        payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        member_ids = list(dict.fromkeys([creator_agent_id, *data.member_agent_ids]))
+        with self.transaction():
+            if data.client_request_id:
+                rows = self.query(
+                    """MATCH (r:AgentRoom {owner: $owner, created_by_agent_id: $agent_id,
+                    client_request_id: $request_id}) RETURN r""",
+                    {
+                        "owner": owner,
+                        "agent_id": creator_agent_id,
+                        "request_id": data.client_request_id,
+                    },
+                )
+                if rows:
+                    if rows[0]["r"]["request_payload"] != payload_json:
+                        raise DuplicateRequestConflict()
+                    return self.get_room(owner, creator_agent_id, rows[0]["r"]["id"], True), False
+            agents = {}
+            for member_id in member_ids:
+                rows = self.query(
+                    """MATCH (a:Agent {owner: $owner, id: $id})
+                    WHERE a.active=true RETURN a""",
+                    {"owner": owner, "id": member_id},
+                )
+                if not rows:
+                    raise NotFound()
+                agents[member_id] = rows[0]["a"]
+            room_id, stamp = uid(), now()
+            self.query(
+                """CREATE (:AgentRoom {id: $id, owner: $owner, name: $name,
+                description: $description, created_by_agent_id: $created_by_agent_id,
+                created_by_name: $created_by_name, client_request_id: $client_request_id,
+                request_payload: $request_payload, created_at: $created_at,
+                updated_at: $updated_at, archived_at: ''})""",
+                {
+                    "id": room_id,
+                    "owner": owner,
+                    "name": data.name,
+                    "description": data.description,
+                    "created_by_agent_id": creator_agent_id,
+                    "created_by_name": creator_name,
+                    "client_request_id": data.client_request_id or "",
+                    "request_payload": payload_json,
+                    "created_at": stamp,
+                    "updated_at": stamp,
+                },
+            )
+            for member_id in member_ids:
+                self.query(
+                    """CREATE (:AgentRoomMember {id: $id, owner: $owner,
+                    room_id: $room_id, agent_id: $agent_id, agent_name: $agent_name,
+                    role: $role, joined_at: $joined_at, last_read_sequence: 0,
+                    left_at: ''})""",
+                    {
+                        "id": self.room_member_id(room_id, member_id),
+                        "owner": owner,
+                        "room_id": room_id,
+                        "agent_id": member_id,
+                        "agent_name": agents[member_id]["name"],
+                        "role": "creator" if member_id == creator_agent_id else "member",
+                        "joined_at": stamp,
+                    },
+                )
+        return self.get_room(owner, creator_agent_id, room_id, True), True
+
+    def update_room(self, owner, actor_agent_id, id, data, allow_owner=False):
+        with self.transaction():
+            room = self._room_visible(owner, actor_agent_id, id, allow_owner)
+            if not room or not (allow_owner or room["created_by_agent_id"] == actor_agent_id):
+                raise NotFound()
+            name = data.name if "name" in data.model_fields_set else room["name"]
+            description = (
+                data.description if "description" in data.model_fields_set else room["description"]
+            )
+            self.query(
+                """MATCH (r:AgentRoom {owner: $owner, id: $id})
+                SET r.name=$name,r.description=$description,r.updated_at=$updated_at""",
+                {
+                    "owner": owner,
+                    "id": id,
+                    "name": name,
+                    "description": description,
+                    "updated_at": now(),
+                },
+            )
+        return self.get_room(owner, actor_agent_id, id, allow_owner)
+
+    def add_room_members(self, owner, actor_agent_id, id, agent_ids, allow_owner=False):
+        with self.transaction():
+            room = self._room_visible(owner, actor_agent_id, id, allow_owner)
+            if not room or not (allow_owner or room["created_by_agent_id"] == actor_agent_id):
+                raise NotFound()
+            stamp = now()
+            for agent_id in agent_ids:
+                agents = self.query(
+                    """MATCH (a:Agent {owner: $owner, id: $id})
+                    WHERE a.active=true RETURN a""",
+                    {"owner": owner, "id": agent_id},
+                )
+                if not agents:
+                    raise NotFound()
+                member_id = self.room_member_id(id, agent_id)
+                existing = self.query(
+                    "MATCH (m:AgentRoomMember {id: $id}) RETURN m",
+                    {"id": member_id},
+                )
+                if existing:
+                    self.query(
+                        """MATCH (m:AgentRoomMember {id: $id})
+                        SET m.agent_name=$name,m.left_at='',m.joined_at=$joined_at""",
+                        {"id": member_id, "name": agents[0]["a"]["name"], "joined_at": stamp},
+                    )
+                else:
+                    self.query(
+                        """CREATE (:AgentRoomMember {id: $id, owner: $owner,
+                        room_id: $room_id, agent_id: $agent_id, agent_name: $agent_name,
+                        role: 'member', joined_at: $joined_at, last_read_sequence: 0,
+                        left_at: ''})""",
+                        {
+                            "id": member_id,
+                            "owner": owner,
+                            "room_id": id,
+                            "agent_id": agent_id,
+                            "agent_name": agents[0]["a"]["name"],
+                            "joined_at": stamp,
+                        },
+                    )
+            self.query(
+                "MATCH (r:AgentRoom {owner: $owner,id: $id}) SET r.updated_at=$stamp",
+                {"owner": owner, "id": id, "stamp": stamp},
+            )
+        return self.get_room(owner, actor_agent_id, id, allow_owner)
+
+    def remove_room_member(self, owner, actor_agent_id, id, agent_id, allow_owner=False):
+        self_leaving = False
+        with self.transaction():
+            room = self._room_visible(owner, actor_agent_id, id, allow_owner)
+            if not room or agent_id == room["created_by_agent_id"]:
+                raise NotFound()
+            if not (
+                allow_owner
+                or room["created_by_agent_id"] == actor_agent_id
+                or actor_agent_id == agent_id
+            ):
+                raise NotFound()
+            self_leaving = actor_agent_id == agent_id and not allow_owner
+            members = self.query(
+                """MATCH (m:AgentRoomMember {owner: $owner,room_id: $room_id,
+                agent_id: $agent_id}) WHERE m.left_at='' RETURN m""",
+                {"owner": owner, "room_id": id, "agent_id": agent_id},
+            )
+            if not members:
+                raise NotFound()
+            stamp = now()
+            self.query(
+                """MATCH (m:AgentRoomMember {owner: $owner,room_id: $room_id,
+                agent_id: $agent_id}) SET m.left_at=$stamp""",
+                {"owner": owner, "room_id": id, "agent_id": agent_id, "stamp": stamp},
+            )
+            self.query(
+                "MATCH (r:AgentRoom {owner: $owner,id: $id}) SET r.updated_at=$stamp",
+                {"owner": owner, "id": id, "stamp": stamp},
+            )
+        if self_leaving:
+            return {"id": id, "left": True}
+        return self.get_room(owner, actor_agent_id, id, allow_owner)
+
+    def send_room_message(
+        self, owner, sender_agent_id, sender_name, room_id, data, allow_owner=False
+    ):
+        payload = data.model_dump(mode="json")
+        payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        with self.transaction():
+            room = self._room_visible(owner, sender_agent_id, room_id, allow_owner)
+            if not room:
+                raise NotFound()
+            member_id = self.room_member_id(room_id, sender_agent_id)
+            members = self.query(
+                """MATCH (m:AgentRoomMember {id: $id})
+                WHERE m.left_at='' RETURN m""",
+                {"id": member_id},
+            )
+            stamp = now()
+            if not members:
+                self.query(
+                    """CREATE (:AgentRoomMember {id: $id, owner: $owner,
+                    room_id: $room_id, agent_id: $agent_id, agent_name: $agent_name,
+                    role: 'member', joined_at: $joined_at, last_read_sequence: 0,
+                    left_at: ''})""",
+                    {
+                        "id": member_id,
+                        "owner": owner,
+                        "room_id": room_id,
+                        "agent_id": sender_agent_id,
+                        "agent_name": sender_name,
+                        "joined_at": stamp,
+                    },
+                )
+            if data.client_request_id:
+                rows = self.query(
+                    """MATCH (m:AgentRoomMessage {owner: $owner,
+                    sender_agent_id: $sender,client_request_id: $request_id}) RETURN m""",
+                    {
+                        "owner": owner,
+                        "sender": sender_agent_id,
+                        "request_id": data.client_request_id,
+                    },
+                )
+                if rows:
+                    if rows[0]["m"]["request_payload"] != payload_json:
+                        raise DuplicateRequestConflict()
+                    return self.room_message_record(rows[0]["m"]), False
+            if data.reply_to:
+                parent = self.query(
+                    """MATCH (m:AgentRoomMessage {owner: $owner,room_id: $room_id,
+                    id: $id}) RETURN m.id AS id""",
+                    {"owner": owner, "room_id": room_id, "id": data.reply_to},
+                )
+                if not parent:
+                    raise NotFound()
+            self.room_message_sequence += 1
+            record = {
+                "id": uid(),
+                "sequence": self.room_message_sequence,
+                "owner": owner,
+                "room_id": room_id,
+                "sender_agent_id": sender_agent_id,
+                "sender_name": sender_name,
+                "body": data.body,
+                "metadata": json.dumps(data.metadata, ensure_ascii=False),
+                "reply_to": data.reply_to or "",
+                "client_request_id": data.client_request_id or "",
+                "request_payload": payload_json,
+                "created_at": stamp,
+            }
+            self.query(
+                """CREATE (:AgentRoomMessage {id: $id, sequence: $sequence,
+                owner: $owner, room_id: $room_id, sender_agent_id: $sender_agent_id,
+                sender_name: $sender_name, body: $body, metadata: $metadata,
+                reply_to: $reply_to, client_request_id: $client_request_id,
+                request_payload: $request_payload, created_at: $created_at})""",
+                record,
+            )
+            self.query(
+                "MATCH (r:AgentRoom {owner: $owner,id: $id}) SET r.updated_at=$stamp",
+                {"owner": owner, "id": room_id, "stamp": stamp},
+            )
+            self.query(
+                """MATCH (m:AgentRoomMember {id: $id})
+                SET m.last_read_sequence=$sequence""",
+                {"id": member_id, "sequence": self.room_message_sequence},
+            )
+        return self.room_message_record(record), True
+
+    def room_messages(
+        self, owner, agent_id, room_id, after=0, limit=100, allow_owner=False, before=None
+    ):
+        if not self._room_visible(owner, agent_id, room_id, allow_owner):
+            raise NotFound()
+        if before is None:
+            rows = self.query(
+                """MATCH (m:AgentRoomMessage {owner: $owner,room_id: $room_id})
+                WHERE m.sequence>$after RETURN m ORDER BY m.sequence LIMIT $limit""",
+                {"owner": owner, "room_id": room_id, "after": after, "limit": limit},
+            )
+        else:
+            rows = self.query(
+                """MATCH (m:AgentRoomMessage {owner: $owner,room_id: $room_id})
+                WHERE m.sequence<$before RETURN m ORDER BY m.sequence DESC LIMIT $limit""",
+                {"owner": owner, "room_id": room_id, "before": before, "limit": limit},
+            )[::-1]
+        return [self.room_message_record(row["m"]) for row in rows]
+
+    def accessible_room_messages(self, owner, agent_id, after=0, limit=100, allow_owner=False):
+        if allow_owner:
+            rows = self.query(
+                """MATCH (m:AgentRoomMessage {owner: $owner}),
+                (r:AgentRoom {owner: $owner}) WHERE m.room_id=r.id
+                AND r.archived_at='' AND m.sequence>$after
+                RETURN m ORDER BY m.sequence LIMIT $limit""",
+                {"owner": owner, "after": after, "limit": limit},
+            )
+        else:
+            rows = self.query(
+                """MATCH (m:AgentRoomMessage {owner: $owner}),
+                (r:AgentRoom {owner: $owner}),
+                (member:AgentRoomMember {owner: $owner,agent_id: $agent_id})
+                WHERE m.room_id=r.id AND member.room_id=r.id AND member.left_at=''
+                AND r.archived_at='' AND m.sequence>$after
+                RETURN m ORDER BY m.sequence LIMIT $limit""",
+                {"owner": owner, "agent_id": agent_id, "after": after, "limit": limit},
+            )
+        return [self.room_message_record(row["m"]) for row in rows]
+
+    def mark_room_read(self, owner, agent_id, agent_name, room_id, sequence, allow_owner=False):
+        with self.transaction():
+            room = self._room_visible(owner, agent_id, room_id, allow_owner)
+            if not room:
+                raise NotFound()
+            maximum_rows = self.query(
+                """MATCH (m:AgentRoomMessage {owner: $owner,room_id: $room_id})
+                RETURN max(m.sequence) AS latest""",
+                {"owner": owner, "room_id": room_id},
+            )
+            target = min(sequence, (maximum_rows[0]["latest"] if maximum_rows else 0) or 0)
+            member_id = self.room_member_id(room_id, agent_id)
+            members = self.query(
+                "MATCH (m:AgentRoomMember {id: $id}) RETURN m",
+                {"id": member_id},
+            )
+            if members:
+                target = max(target, members[0]["m"]["last_read_sequence"])
+                self.query(
+                    """MATCH (m:AgentRoomMember {id: $id})
+                    SET m.agent_name=$agent_name,m.left_at='',m.last_read_sequence=$sequence""",
+                    {"id": member_id, "agent_name": agent_name, "sequence": target},
+                )
+            else:
+                self.query(
+                    """CREATE (:AgentRoomMember {id: $id, owner: $owner,
+                    room_id: $room_id, agent_id: $agent_id, agent_name: $agent_name,
+                    role: 'member', joined_at: $joined_at,
+                    last_read_sequence: $sequence, left_at: ''})""",
+                    {
+                        "id": member_id,
+                        "owner": owner,
+                        "room_id": room_id,
+                        "agent_id": agent_id,
+                        "agent_name": agent_name,
+                        "joined_at": now(),
+                        "sequence": target,
+                    },
+                )
+        return self.get_room(owner, agent_id, room_id, allow_owner)
+
     def close(self):
         self.conn.close()
         self.db.close()
@@ -586,11 +1041,18 @@ class Store:
                     security_history=json.dumps(security["security_history"], ensure_ascii=False),
                     creator_agent_id=creator_agent_id,
                     creator_agent_name=creator_agent_name,
-                    writer_history=json.dumps([{
-                        "at": created, "version": 1, "operation": "created",
-                        "writer_agent_id": creator_agent_id,
-                        "writer_agent_name": creator_agent_name,
-                    }], ensure_ascii=False),
+                    writer_history=json.dumps(
+                        [
+                            {
+                                "at": created,
+                                "version": 1,
+                                "operation": "created",
+                                "writer_agent_id": creator_agent_id,
+                                "writer_agent_name": creator_agent_name,
+                            }
+                        ],
+                        ensure_ascii=False,
+                    ),
                 )
             )
             self._index(owner, id, keywords, vectors)
@@ -637,7 +1099,13 @@ class Store:
             self._link(owner, id, parent_id, "KEYWORD_OF", "agent-supplied keyword")
 
     def update_keywords(
-        self, owner, id, keywords, vectors, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+        self,
+        owner,
+        id,
+        keywords,
+        vectors,
+        writer_agent_id="unknown",
+        writer_agent_name="Unknown agent",
     ):
         with self.transaction():
             record = self.get(owner, id)
@@ -649,12 +1117,24 @@ class Store:
                 """MATCH (n:Item {owner: $owner, id: $id})
                 SET n.keywords = $keywords, n.writer_history = $writer_history,
                 n.version = n.version + 1""",
-                {"owner": owner, "id": id, "keywords": keywords,
-                 "writer_history": json.dumps([*record.get("writer_history", []), {
-                    "at": now(), "version": record["version"] + 1,
-                    "operation": "keywords_updated", "writer_agent_id": writer_agent_id,
-                    "writer_agent_name": writer_agent_name,
-                 }], ensure_ascii=False)},
+                {
+                    "owner": owner,
+                    "id": id,
+                    "keywords": keywords,
+                    "writer_history": json.dumps(
+                        [
+                            *record.get("writer_history", []),
+                            {
+                                "at": now(),
+                                "version": record["version"] + 1,
+                                "operation": "keywords_updated",
+                                "writer_agent_id": writer_agent_id,
+                                "writer_agent_name": writer_agent_name,
+                            },
+                        ],
+                        ensure_ascii=False,
+                    ),
+                },
             )
             self._index(owner, id, keywords, vectors)
             self._event(
@@ -670,7 +1150,13 @@ class Store:
             return self.get(owner, id)
 
     def update_record(
-        self, owner, id, data, vectors=None, writer_agent_id="unknown", writer_agent_name="Unknown agent"
+        self,
+        owner,
+        id,
+        data,
+        vectors=None,
+        writer_agent_id="unknown",
+        writer_agent_name="Unknown agent",
     ):
         with self.transaction():
             record = self.get(owner, id)
@@ -703,10 +1189,19 @@ class Store:
                     ),
                 }
             )
-            fields["writer_history"] = json.dumps([*record.get("writer_history", []), {
-                "at": now(), "version": record["version"] + 1, "operation": "record_updated",
-                "writer_agent_id": writer_agent_id, "writer_agent_name": writer_agent_name,
-            }], ensure_ascii=False)
+            fields["writer_history"] = json.dumps(
+                [
+                    *record.get("writer_history", []),
+                    {
+                        "at": now(),
+                        "version": record["version"] + 1,
+                        "operation": "record_updated",
+                        "writer_agent_id": writer_agent_id,
+                        "writer_agent_name": writer_agent_name,
+                    },
+                ],
+                ensure_ascii=False,
+            )
             assignments = [f"n.{key} = ${key}" for key in fields]
             assignments.append("n.version = n.version + 1")
             self.query(
@@ -772,11 +1267,19 @@ class Store:
                     "security_history": json.dumps(
                         security["security_history"], ensure_ascii=False
                     ),
-                    "writer_history": json.dumps([*record.get("writer_history", []), {
-                        "at": now(), "version": record["version"] + 1,
-                        "operation": "security_updated", "writer_agent_id": writer_agent_id,
-                        "writer_agent_name": writer_agent_name,
-                    }], ensure_ascii=False),
+                    "writer_history": json.dumps(
+                        [
+                            *record.get("writer_history", []),
+                            {
+                                "at": now(),
+                                "version": record["version"] + 1,
+                                "operation": "security_updated",
+                                "writer_agent_id": writer_agent_id,
+                                "writer_agent_name": writer_agent_name,
+                            },
+                        ],
+                        ensure_ascii=False,
+                    ),
                 },
             )
             self._event(
@@ -1183,9 +1686,7 @@ class Store:
     def _attach_evidence_status(self, owner, edges):
         evidence_ids = list(
             dict.fromkeys(
-                reference["record_id"]
-                for edge in edges
-                for reference in edge.get("evidence", [])
+                reference["record_id"] for edge in edges for reference in edge.get("evidence", [])
             )
         )
         current = {}
@@ -1332,12 +1833,8 @@ class Store:
             row["extraction_method"] = row.get("extraction_method") or ""
             row["extraction_version"] = row.get("extraction_version") or ""
             row["correction_scope"] = row.get("correction_scope") or "unknown"
-            row["source_lifecycle"] = (
-                "archived" if row.pop("source_archived_at", "") else "active"
-            )
-            row["target_lifecycle"] = (
-                "archived" if row.pop("target_archived_at", "") else "active"
-            )
+            row["source_lifecycle"] = "archived" if row.pop("source_archived_at", "") else "active"
+            row["target_lifecycle"] = "archived" if row.pop("target_archived_at", "") else "active"
             result.append(row)
         return result
 

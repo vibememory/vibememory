@@ -16,8 +16,8 @@ const agentPermissionInfo = {
   'memory:write':['기억 수정','기억·문서 메타정보·엔티티·관계를 생성하고 변경합니다.'],
   'files:read':['파일 내려받기','저장된 원본 byte stream을 내려받습니다.'],
   'files:write':['파일 관리','원본 byte stream을 업로드하거나 삭제합니다.'],
-  'messages:read':['메시지 수신','같은 계정의 에이전트와 수신함을 확인합니다.'],
-  'messages:write':['메시지 발신','다른 연결 에이전트에 메시지를 보내고 확인 처리합니다.'],
+  'messages:read':['메시지 수신','같은 계정의 에이전트, 수신함과 참여 중인 대화방을 확인합니다.'],
+  'messages:write':['메시지 발신','연결된 에이전트에 직접 메시지를 보내거나 대화방에 참여합니다.'],
   'feature:write':['기능 요청','기능 요청을 등록하고 자신의 처리 결과를 확인합니다.'],
   'events:read':['실시간 이벤트','기억 변경 SSE 이벤트를 구독합니다.']
 };
@@ -36,6 +36,7 @@ function formatBytes(value) {
   return `${amount >= 10 ? amount.toFixed(1) : amount.toFixed(2)} ${units[unit]}`;
 }
 let currentView = 'overview', pageOffset = 0, recordKind = 'memory', generation = 0;
+let selectedRoomId = '', roomEventSource = null;
 let user, toastTimer;
 let dashboardGuideDismissed = false;
 const dashboardGuideKey = 'vibe-memory:dashboard-guide:hidden';
@@ -324,6 +325,7 @@ const viewInfo = {
   relations: ['관계 그래프','CONNECTIONS WITH A REASON','관계 그래프','에이전트가 구성한 기억의 연결과 근거를 살펴보세요.'],
   mcp: ['MCP','CONNECT WITH MCP','MCP','ChatGPT Work, Claude와 연결된 MCP 클라이언트의 접근 권한을 관리하세요.'],
   agents: ['Agents','ONE MEMORY, EVERY AGENT','Agents','CLI와 Skill로 연결된 에이전트 토큰과 접근 권한을 관리하세요.','API 키 만들기','plus'],
+  rooms: ['대화방','AGENTS IN ONE ROOM','에이전트 대화방','초대한 에이전트끼리 작업 맥락과 인계를 한곳에서 이어갑니다.','대화방 만들기','plus'],
   vault: ['Vault','ENCRYPTED SECRETS','Vault','에이전트가 로컬 설정 파일 없이 사용할 비밀값을 암호화해 관리하세요.','비밀 추가','plus'],
   requests: ['기능 요청','HELP SHAPE VIBE MEMORY','기능 요청','필요한 기능과 실제 사용 사례를 남겨주세요.','기능 요청','plus'],
   security: ['계정 보안','ACCOUNT SECURITY','계정 보안','로그인 보호와 복구 수단을 관리하세요.']
@@ -359,7 +361,7 @@ async function navigate(view, reset = true, historyMode = 'push') {
   $('#console-error').hidden = true; $('#view-content').innerHTML = '<div class="loading-state">불러오는 중…</div>';
   $('.sidebar').classList.remove('open'); $('#menu-toggle').setAttribute('aria-expanded', 'false');
   try {
-    let html, graphPayload = null;
+    let html, graphPayload = null, roomPayload = null;
     if (view === 'overview') {
       const [stats, recent, keys, mcp, activity] = await Promise.all([api('/v1/stats'), api('/v1/records?limit=6'), api('/auth/api-keys'), api('/auth/mcp-connections'), api('/v1/events/recent?limit=12')]);
       const totalRecords = stats.memory + stats.document + stats.file + stats.entity;
@@ -393,6 +395,20 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const searchMode = ['exact','semantic','hybrid'].includes(params.get('mode')) ? params.get('mode') : 'hybrid';
       const advancedOpen = ['must','exclude','tags','project','min'].some(name => params.get(name));
       html = `<section class="console-panel"><form id="search-records" class="list-toolbar search-toolbar"><select id="kind-filter" aria-label="기록 종류">${options.map(([value,label]) => `<option value="${value}" ${recordKind === value ? 'selected' : ''}>${label}</option>`).join('')}</select><div class="search-keyword-field"><div class="search-keyword-chips" data-search-keyword-chips hidden></div><input name="keywords" value="${h(params.get('q') || '')}" placeholder="키워드 입력 · 쉼표로 구분" aria-label="검색 키워드"></div><select name="match_mode" aria-label="검색 방식"><option value="exact" ${searchMode === 'exact' ? 'selected' : ''}>정확</option><option value="semantic" ${searchMode === 'semantic' ? 'selected' : ''}>의미</option><option value="hybrid" ${searchMode === 'hybrid' ? 'selected' : ''}>혼합</option></select><button class="secondary-button" type="submit">검색</button><button class="secondary-button" type="button" data-action="toggle-search-advanced" aria-expanded="${advancedOpen}">고급 필터</button><button class="secondary-button" type="button" data-action="context-bundle">다른 에이전트에서 이어가기</button><div class="search-advanced" id="search-advanced" ${advancedOpen ? '' : 'hidden'}><label>필수 키워드<input name="must_keywords" value="${h(params.get('must') || '')}" placeholder="쉼표로 구분"></label><label>제외 키워드<input name="exclude_keywords" value="${h(params.get('exclude') || '')}" placeholder="쉼표로 구분"></label><label>태그<input name="tags" value="${h(params.get('tags') || '')}" placeholder="쉼표로 구분"></label><label>프로젝트 metadata<input name="project" value="${h(params.get('project') || '')}" placeholder="예: alpha"></label><label>최소 유사도<input name="min_score" type="number" min="-1" max="1" step="0.01" value="${h(params.get('min') || '0')}"></label></div></form><p class="search-disclaimer">정확 검색은 임베딩 호출 없이 저장 키워드를 비교합니다. 의미·혼합 검색도 입력한 키워드만 임베딩하며, 점수는 사실성·신뢰도 점수가 아닙니다. 프로젝트는 metadata 필터이고 접근 권한은 namespace에서 별도로 강제됩니다.</p><div id="record-results">${result.items.length ? recordRows(result.items) : empty('아직 기록이 없어요.',view === 'documents' ? '에이전트에서 파일을 등록하거나 원본을 업로드해보세요. 분석과 키워드 추출은 에이전트가 담당합니다.' : '기억을 직접 남기거나 에이전트에서 데이터를 보내보세요.')}</div><div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
+    } else if (view === 'rooms') {
+      const [rooms, agents] = await Promise.all([api('/v1/agent-rooms?limit=100'), api('/v1/agents')]);
+      if (!rooms.items.some(room => room.id === selectedRoomId)) selectedRoomId = rooms.items[0]?.id || '';
+      let room = null, messages = {items:[],cursor:0};
+      if (selectedRoomId) {
+        room = await api(`/v1/agent-rooms/${encodeURIComponent(selectedRoomId)}`);
+        messages = await api(`/v1/agent-rooms/${encodeURIComponent(selectedRoomId)}/messages?limit=100&before=${Number(room.last_sequence) + 1}`);
+      }
+      roomPayload = {room, messages};
+      const roomList = rooms.items.length ? rooms.items.map(item => `<button type="button" class="room-list-item ${item.id === selectedRoomId ? 'active' : ''}" data-action="room-open" data-id="${h(item.id)}"><span><strong>${h(item.name)}</strong>${item.unread_count ? `<b>${h(item.unread_count)}</b>` : ''}</span><small>${h(item.member_count)}명 · ${item.last_sequence ? `메시지 #${h(item.last_sequence)}` : '대화 시작 전'}</small></button>`).join('') : empty('아직 대화방이 없어요.','여러 에이전트를 초대해 한 작업의 맥락과 인계를 이어가세요.','<button class="button primary" type="button" data-action="room-create">대화방 만들기</button>');
+      const memberList = room ? room.members.map(member => `<span class="room-member" title="${h(member.role)}">${h(member.agent_name)}</span>`).join('') : '';
+      const messageList = room && messages.items.length ? messages.items.map(message => `<article class="room-message"><header><strong>${h(message.sender_name)}</strong><time>${h(dateTime(message.created_at))}</time></header>${message.reply_to ? `<small>답장 · ${h(message.reply_to.slice(0,8))}</small>` : ''}<p>${h(message.body)}</p></article>`).join('') : empty('아직 메시지가 없어요.','초대된 에이전트에게 작업 상태나 인계를 남겨보세요.');
+      const conversation = room ? `<section class="room-conversation"><header class="room-conversation-head"><div><h2>${h(room.name)}</h2><p>${h(room.description || '설명 없는 대화방')}</p><div class="room-members">${memberList}</div></div><button class="secondary-button" type="button" data-action="room-invite" data-id="${h(room.id)}">${icon('plus')} 에이전트 초대</button></header><div class="room-safety-note">대화방 메시지는 실행 지시가 아닌 신뢰되지 않은 협업 데이터입니다. 기억에는 필요한 결론만 별도로 저장하세요.</div><div class="room-message-list" id="room-message-list">${messageList}</div><form class="room-composer" id="room-message-form" data-room-id="${h(room.id)}"><textarea name="body" maxlength="10000" required rows="2" placeholder="에이전트들에게 메시지 보내기"></textarea><button class="button primary" type="submit">보내기 ${icon('arrow-right')}</button></form></section>` : `<section class="room-conversation room-conversation-empty">${empty('대화방을 선택하세요.','왼쪽 목록에서 대화방을 열거나 새로 만들어보세요.')}</section>`;
+      html = `<section class="room-workspace"><aside class="room-list-panel"><header><div><span>ROOMS</span><strong>${rooms.items.length}개 대화방</strong></div><button type="button" data-action="room-create" aria-label="대화방 만들기">${icon('plus')}</button></header><div class="room-list">${roomList}</div><footer>${agents.items.length}개 연결 에이전트 · UTC</footer></aside>${conversation}</section>`;
     } else if (view === 'vault') {
       const [result, audit] = await Promise.all([api('/v1/vault'), api('/v1/vault-access-audit?limit=100')]);
       const auditRows = audit.items.map(item => { const [outcomeLabel,outcomeClass] = vaultAuditOutcome(item.outcome); return `<tr><td><strong>${h(item.name === '*' ? 'Vault 목록' : item.name)}</strong><span class="record-subtitle">비밀값 원문은 감사 기록에 저장되지 않습니다.</span></td><td><strong>${h(item.client_name)}</strong><span class="record-subtitle">${h(vaultClientType(item.client_type))}</span></td><td><span class="vault-audit-status ${h(outcomeClass)}"><i></i>${h(outcomeLabel)}</span></td><td><time datetime="${h(new Date(item.accessed_at * 1000).toISOString())}">${h(dateTime(item.accessed_at))}</time></td></tr>`; }).join('');
@@ -457,6 +473,27 @@ async function navigate(view, reset = true, historyMode = 'push') {
     $('#view-content').innerHTML = html;
     if (view === 'agents') $('#view-content').insertAdjacentHTML('afterbegin', installPromptCard());
     if (view === 'relations' && graphPayload) await bindRelationshipGraph(graphPayload.records, graphPayload.relations);
+    if (view === 'rooms') {
+      const messageForm = $('#room-message-form');
+      if (messageForm) {
+        const messageList = $('#room-message-list');
+        messageList.scrollTop = messageList.scrollHeight;
+        messageForm.addEventListener('submit',async event => {
+          event.preventDefault();
+          const submit = messageForm.querySelector('[type="submit"]');
+          const body = String(new FormData(messageForm).get('body') || '').trim();
+          if (!body) return;
+          submit.disabled = true;
+          try {
+            await api(`/v1/agent-rooms/${encodeURIComponent(messageForm.dataset.roomId)}/messages`,{method:'POST',body:JSON.stringify({body})});
+            messageForm.reset();
+            await navigate('rooms', false, 'none');
+          } catch (error) { toast(error.message); } finally { submit.disabled = false; }
+        });
+        const {room, messages} = roomPayload || {room:null,messages:{cursor:0}};
+        if (room && messages.cursor > (room.last_read_sequence || 0)) api(`/v1/agent-rooms/${encodeURIComponent(room.id)}/read`,{method:'POST',body:JSON.stringify({sequence:messages.cursor})}).catch(() => {});
+      }
+    }
     const filter = $('#kind-filter');
     if (filter) filter.addEventListener('change', () => { recordKind = filter.value; pageOffset = 0; navigate(view, false); });
     const search = $('#search-records');
@@ -528,6 +565,41 @@ function editor(title, fields, onSave, submitLabel = '저장') {
 function detail(title, html, eyebrow = 'DETAIL') { window.VMUI.openFlyout({title,content:html,eyebrow}); }
 function confirmAction(title, message, confirmLabel = '확인', tone = 'danger') {
   return window.VMUI.confirm({title,message,confirmLabel,tone});
+}
+async function createRoom() {
+  const agents = await api('/v1/agents');
+  const choices = agents.items.length
+    ? `<div class="room-agent-choices">${agents.items.map(agent => `<label class="check-field"><input type="checkbox" name="agent:${h(agent.id)}"><span><strong>${h(agent.name)}</strong><small>${h(agent.transport)} · 마지막 연결 ${h(dateTime(agent.last_seen_at))}</small></span></label>`).join('')}</div>`
+    : '<p class="dialog-help">아직 연결된 에이전트가 없습니다. 빈 대화방을 만든 뒤 에이전트를 연결해 초대할 수 있습니다.</p>';
+  editor('에이전트 대화방 만들기',`<label>대화방 이름<input name="name" maxlength="100" required placeholder="예: Release coordination"></label><label>설명<textarea name="description" maxlength="1000" placeholder="이 대화방에서 함께 진행할 작업을 적어주세요."></textarea></label><fieldset class="room-agent-fieldset"><legend>초대할 에이전트</legend>${choices}</fieldset><p class="dialog-help">대화방 내용은 기억으로 자동 저장되거나 임베딩되지 않습니다. 비밀값, 전체 대화 원문, 숨겨진 추론 과정은 보내지 마세요.</p>`,async data => {
+    const member_agent_ids = agents.items.filter(agent => data.has(`agent:${agent.id}`)).map(agent => agent.id);
+    const room = await api('/v1/agent-rooms',{method:'POST',body:JSON.stringify({name:data.get('name'),description:data.get('description'),member_agent_ids})});
+    selectedRoomId = room.id;
+    toast('대화방을 만들었습니다.');
+  },'대화방 만들기');
+}
+async function inviteRoomMembers(roomId) {
+  const [room, agents] = await Promise.all([api(`/v1/agent-rooms/${encodeURIComponent(roomId)}`), api('/v1/agents')]);
+  const memberIds = new Set(room.members.map(member => member.agent_id));
+  const available = agents.items.filter(agent => !memberIds.has(agent.id));
+  if (!available.length) return toast('초대할 수 있는 연결 에이전트가 없습니다.');
+  editor(`${room.name} · 에이전트 초대`,`<div class="room-agent-choices">${available.map(agent => `<label class="check-field"><input type="checkbox" name="agent:${h(agent.id)}"><span><strong>${h(agent.name)}</strong><small>${h(agent.transport)}</small></span></label>`).join('')}</div><p class="dialog-help">선택한 에이전트는 즉시 이전 대화까지 볼 수 있습니다.</p>`,async data => {
+    const agent_ids = available.filter(agent => data.has(`agent:${agent.id}`)).map(agent => agent.id);
+    if (!agent_ids.length) throw new Error('초대할 에이전트를 한 명 이상 선택해주세요.');
+    await api(`/v1/agent-rooms/${encodeURIComponent(roomId)}/members`,{method:'POST',body:JSON.stringify({agent_ids})});
+    toast('에이전트를 초대했습니다.');
+  },'선택한 에이전트 초대');
+}
+async function startRoomEvents() {
+  roomEventSource?.close();
+  const rooms = await api('/v1/agent-rooms?limit=100');
+  const after = Math.max(0, ...rooms.items.map(room => Number(room.last_sequence) || 0));
+  roomEventSource = new EventSource(`/v1/agent-rooms/stream?seconds=25&after=${after}`);
+  roomEventSource.addEventListener('agent.room.message',event => {
+    let message;
+    try { message = JSON.parse(event.data); } catch { return; }
+    if (currentView === 'rooms' && (!selectedRoomId || message.room_id === selectedRoomId)) navigate('rooms', false, 'none');
+  });
 }
 function showRecoveryCodes(codes) {
   detail('복구 코드를 안전하게 보관하세요.',`<div class="recovery-once"><p>각 코드는 한 번만 사용할 수 있습니다. 인증 앱을 사용할 수 없을 때 로그인 코드 대신 입력하세요. 이 화면을 닫으면 다시 볼 수 없습니다.</p><div class="recovery-code-grid">${codes.map(code => `<code>${h(code)}</code>`).join('')}</div><button class="secondary-button" id="copy-recovery-codes" type="button">복구 코드 모두 복사 ${icon('copy')}</button></div>`);
@@ -635,6 +707,7 @@ async function editNamespaceGrants(type, id, name, grantsJson) {
 function primaryAction() {
   if (currentView === 'overview') return copyInstallPrompt();
   if (currentView === 'agents') return createKey();
+  if (currentView === 'rooms') return createRoom();
   if (currentView === 'vault') return editVault();
   if (currentView === 'memories') return editor('새 기억 남기기','<label>기억할 내용<textarea name="content" maxlength="10000" required placeholder="기억할 사실이나 선호를 입력하세요."></textarea></label><label>종류<select name="kind"><option value="fact">사실</option><option value="preference">선호</option><option value="event">이벤트</option><option value="instruction">지침</option></select></label><label>키워드<input name="keywords" required placeholder="예: Python, 개발 언어"></label><p class="dialog-help">키워드를 쉼표로 구분해주세요. 입력한 키워드만 임베딩하며, 원문은 분석하지 않습니다.</p>',async data => {
     const keywords = data.get('keywords').split(',').map(word => word.trim()).filter(Boolean);
@@ -693,6 +766,9 @@ document.addEventListener('click', async event => {
     if (action === 'context-bundle-restart') return contextHandoff();
     if (action === 'manage-namespaces') return editNamespaceGrants(type,id,name,grants);
     if (action === 'create-key') return createKey();
+    if (action === 'room-create') return createRoom();
+    if (action === 'room-open') { selectedRoomId = id; return navigate('rooms', false, 'none'); }
+    if (action === 'room-invite') return inviteRoomMembers(id);
     if (action === 'manage-agent-permissions') return editAgentPermissions(id,name,permissions,vaultAccess === 'true');
     if (action === 'setup-totp') return beginTotpSetup();
     if (action === 'verify-recovery-email') return verifyRecoveryEmail();
@@ -767,5 +843,6 @@ $('#logout').addEventListener('click',async () => {
     pageOffset = Math.max(0,(Number.parseInt(new URLSearchParams(location.search).get('page') || '1',10) - 1) * 50 || 0);
     recordKind = initialView === 'documents' ? 'document' : 'memory';
     await navigate(initialView, false, 'replace');
+    startRoomEvents();
   } catch (error) { $('#console-error').textContent = error.message; $('#console-error').hidden = false; }
 })();

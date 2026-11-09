@@ -95,6 +95,11 @@ from .models import (
     AgentMemoryRepoDiffInput,
     AgentMessageAck,
     AgentMessageInput,
+    AgentRoomCreate,
+    AgentRoomMembersInput,
+    AgentRoomMessageInput,
+    AgentRoomReadInput,
+    AgentRoomUpdate,
     ContextBundleInput,
     DocumentInput,
     EntityCreateMany,
@@ -246,7 +251,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.35.0",
+        version="0.36.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -301,9 +306,7 @@ def create_app(settings=None, embedder=None):
         response = await call_next(request)
         response.headers["X-Request-ID"] = request.state.request_id
         response.headers["Vibe-Memory-Contract-Version"] = negotiated_contract
-        response.headers["Vibe-Memory-Contract-Supported"] = ", ".join(
-            SUPPORTED_CONTRACT_VERSIONS
-        )
+        response.headers["Vibe-Memory-Contract-Supported"] = ", ".join(SUPPORTED_CONTRACT_VERSIONS)
         context_ref = getattr(request.state, "context_ref", "")
         if context_ref:
             response.headers["Vibe-Memory-Context-Ref"] = context_ref
@@ -368,6 +371,9 @@ def create_app(settings=None, embedder=None):
         request.state.feature_request_operator = False
         request.state.permissions = set(DEFAULT_AGENT_PERMISSIONS)
         request.state.context_ref = "connection:browser:" + user["id"]
+        request.app.state.store.register_agent(
+            user["id"], request.state.agent_id, request.state.agent_name, "browser"
+        )
         return user
 
     def check_origin(request):
@@ -841,9 +847,7 @@ def create_app(settings=None, embedder=None):
         return accounts.security(user["id"])
 
     @app.post("/auth/recovery/email/start", tags=["account"])
-    def start_recovery_email_verification(
-        data: EmailVerificationStart, user=Depends(browser_user)
-    ):
+    def start_recovery_email_verification(data: EmailVerificationStart, user=Depends(browser_user)):
         return accounts.start_email_verification(user["id"], data.password, data.code)
 
     @app.post("/auth/recovery/email/verify", tags=["account"])
@@ -922,9 +926,7 @@ def create_app(settings=None, embedder=None):
         return accounts.create_namespace(user["id"], data.name)
 
     @app.put("/auth/api-keys/{id}/namespaces", tags=["account"])
-    def update_api_key_namespaces(
-        id: str, data: NamespaceGrantsUpdate, user=Depends(browser_user)
-    ):
+    def update_api_key_namespaces(id: str, data: NamespaceGrantsUpdate, user=Depends(browser_user)):
         return {
             "key_id": id,
             "grants": accounts.replace_key_namespace_grants(user["id"], id, data.grants),
@@ -1792,9 +1794,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             "summary": {
                 "request_count": total_requests,
                 "error_count": failed_requests,
-                "error_ratio": round(failed_requests / total_requests, 6)
-                if total_requests
-                else 0,
+                "error_ratio": round(failed_requests / total_requests, 6) if total_requests else 0,
             },
             "requests": routes,
             "database_pool": pool,
@@ -1834,9 +1834,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     return
                 namespace_id = request.headers.get("X-Vibe-Memory-Namespace", "default").strip()
                 current_scoped = (
-                    current
-                    if namespace_id == "default"
-                    else f"{current}::vmns::{namespace_id}"
+                    current if namespace_id == "default" else f"{current}::vmns::{namespace_id}"
                 )
                 if current_scoped != user or "events:read" not in request.state.permissions:
                     return
@@ -1918,6 +1916,257 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             },
             "items": db.list_agents(user),
         }
+
+    def room_owner_override(request: Request):
+        return getattr(request.state, "auth_kind", "") == "browser-session"
+
+    @app.get("/v1/agent-rooms", tags=["agent rooms"])
+    def agent_rooms(
+        request: Request,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        user=Depends(messages_reader),
+        db=Depends(store),
+    ):
+        return {
+            "items": db.list_rooms(
+                user,
+                request.state.agent_id,
+                limit,
+                offset,
+                room_owner_override(request),
+            ),
+            "limit": limit,
+            "offset": offset,
+        }
+
+    @app.post(
+        "/v1/agent-rooms",
+        status_code=201,
+        tags=["agent rooms"],
+        responses={
+            200: {"description": "Previously created room (idempotent retry)"},
+            409: {"description": "Client request ID reused with different content"},
+        },
+    )
+    def create_agent_room(
+        data: AgentRoomCreate,
+        request: Request,
+        user=Depends(messages_writer),
+        db=Depends(store),
+    ):
+        try:
+            room, created = db.create_room(
+                user, request.state.agent_id, request.state.agent_name, data
+            )
+        except DuplicateRequestConflict:
+            raise HTTPException(
+                409, "client_request_id already used with different content"
+            ) from None
+        return JSONResponse(
+            status_code=201 if created else 200,
+            content=jsonable_encoder(room),
+            headers={"Location": f"/v1/agent-rooms/{room['id']}"},
+        )
+
+    @app.get("/v1/agent-rooms/stream", tags=["agent rooms"])
+    async def agent_room_stream(
+        request: Request,
+        after: int = Query(default=0, ge=0, le=9223372036854775807),
+        seconds: int = Query(default=25, ge=1, le=60),
+        user=Depends(messages_reader),
+        db=Depends(store),
+    ):
+        last_id = request.headers.get("Last-Event-ID")
+        if last_id is not None:
+            try:
+                after = int(last_id)
+                if not 0 <= after <= 9223372036854775807:
+                    raise ValueError()
+            except ValueError:
+                raise HTTPException(422, "Last-Event-ID must be a nonnegative integer") from None
+        agent_id = request.state.agent_id
+        allow_owner = room_owner_override(request)
+
+        async def stream_room_messages():
+            cursor = after
+            deadline = time.monotonic() + seconds
+            heartbeat = 0
+            yield "retry: 1000\n\n"
+            while time.monotonic() < deadline:
+                if await request.is_disconnected():
+                    return
+                credentials = await auth(request)
+                try:
+                    current = await anyio.to_thread.run_sync(owner, request, credentials)
+                except HTTPException:
+                    return
+                if (
+                    current != user
+                    or request.state.agent_id != agent_id
+                    or "messages:read" not in request.state.permissions
+                ):
+                    return
+                batch = await anyio.to_thread.run_sync(
+                    db.accessible_room_messages,
+                    user,
+                    agent_id,
+                    cursor,
+                    100,
+                    allow_owner,
+                )
+                for message in batch:
+                    cursor = message["sequence"]
+                    payload = json.dumps(message, ensure_ascii=False)
+                    yield f"id: {cursor}\nevent: agent.room.message\ndata: {payload}\n\n"
+                if time.monotonic() >= heartbeat:
+                    yield ": heartbeat\n\n"
+                    heartbeat = time.monotonic() + 10
+                if not batch:
+                    await asyncio.sleep(0.5)
+
+        return StreamingResponse(
+            stream_room_messages(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+        )
+
+    @app.get("/v1/agent-rooms/{id}", tags=["agent rooms"])
+    def agent_room(
+        id: str,
+        request: Request,
+        user=Depends(messages_reader),
+        db=Depends(store),
+    ):
+        return db.get_room(user, request.state.agent_id, id, room_owner_override(request))
+
+    @app.patch("/v1/agent-rooms/{id}", tags=["agent rooms"])
+    def update_agent_room(
+        id: str,
+        data: AgentRoomUpdate,
+        request: Request,
+        user=Depends(messages_writer),
+        db=Depends(store),
+    ):
+        return db.update_room(
+            user,
+            request.state.agent_id,
+            id,
+            data,
+            room_owner_override(request),
+        )
+
+    @app.post("/v1/agent-rooms/{id}/members", tags=["agent rooms"])
+    def add_agent_room_members(
+        id: str,
+        data: AgentRoomMembersInput,
+        request: Request,
+        user=Depends(messages_writer),
+        db=Depends(store),
+    ):
+        return db.add_room_members(
+            user,
+            request.state.agent_id,
+            id,
+            data.agent_ids,
+            room_owner_override(request),
+        )
+
+    @app.delete("/v1/agent-rooms/{id}/members/{agent_id}", tags=["agent rooms"])
+    def remove_agent_room_member(
+        id: str,
+        agent_id: str,
+        request: Request,
+        user=Depends(messages_writer),
+        db=Depends(store),
+    ):
+        return db.remove_room_member(
+            user,
+            request.state.agent_id,
+            id,
+            agent_id,
+            room_owner_override(request),
+        )
+
+    @app.get("/v1/agent-rooms/{id}/messages", tags=["agent rooms"])
+    def agent_room_messages(
+        id: str,
+        request: Request,
+        after: int = Query(default=0, ge=0, le=9223372036854775807),
+        before: int | None = Query(default=None, ge=1, le=9223372036854775807),
+        limit: int = Query(default=100, ge=1, le=100),
+        user=Depends(messages_reader),
+        db=Depends(store),
+    ):
+        items = db.room_messages(
+            user,
+            request.state.agent_id,
+            id,
+            after,
+            limit,
+            room_owner_override(request),
+            before,
+        )
+        cursor = items[-1]["sequence"] if items else after
+        previous_cursor = items[0]["sequence"] if items and before is not None else None
+        return {
+            "items": items,
+            "cursor": cursor,
+            "previous_cursor": previous_cursor,
+            "limit": limit,
+        }
+
+    @app.post(
+        "/v1/agent-rooms/{id}/messages",
+        status_code=201,
+        tags=["agent rooms"],
+        responses={
+            200: {"description": "Previously sent room message (idempotent retry)"},
+            409: {"description": "Client request ID reused with different content"},
+        },
+    )
+    def send_agent_room_message(
+        id: str,
+        data: AgentRoomMessageInput,
+        request: Request,
+        user=Depends(messages_writer),
+        db=Depends(store),
+    ):
+        try:
+            message, created = db.send_room_message(
+                user,
+                request.state.agent_id,
+                request.state.agent_name,
+                id,
+                data,
+                room_owner_override(request),
+            )
+        except DuplicateRequestConflict:
+            raise HTTPException(
+                409, "client_request_id already used with different content"
+            ) from None
+        return JSONResponse(
+            status_code=201 if created else 200,
+            content=jsonable_encoder(message),
+            headers={"Location": f"/v1/agent-rooms/{id}/messages/{message['id']}"},
+        )
+
+    @app.post("/v1/agent-rooms/{id}/read", tags=["agent rooms"])
+    def mark_agent_room_read(
+        id: str,
+        data: AgentRoomReadInput,
+        request: Request,
+        user=Depends(messages_writer),
+        db=Depends(store),
+    ):
+        return db.mark_room_read(
+            user,
+            request.state.agent_id,
+            request.state.agent_name,
+            id,
+            data.sequence,
+            room_owner_override(request),
+        )
 
     @app.post(
         "/v1/agent-messages",
@@ -2539,19 +2788,16 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             if value is not None and (value.tzinfo is None or value.utcoffset() is None):
                 raise HTTPException(422, "valid_at and known_at must include a UTC offset")
         if not valid_at and not known_at:
-            items = db.list(
-                user, kind, limit, offset, include_untrusted, include_quarantined
-            )
+            items = db.list(user, kind, limit, offset, include_untrusted, include_quarantined)
         else:
             candidates, cursor = [], 0
             while True:
-                page = db.list(
-                    user, kind, 500, cursor, include_untrusted, include_quarantined
-                )
+                page = db.list(user, kind, 500, cursor, include_untrusted, include_quarantined)
                 candidates.extend(page)
                 if len(page) < 500:
                     break
                 cursor += len(page)
+
             def applies(record):
                 temporal = record.get("metadata", {}).get("vibe_memory_temporal", {})
                 start, end = temporal.get("valid_from"), temporal.get("valid_to")
@@ -2562,6 +2808,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     return False
                 known = known_at.astimezone(UTC) if known_at else None
                 return not (known and recorded_instant(record) > known)
+
             filtered = [record for record in candidates if applies(record)]
             items = filtered[offset : offset + limit]
         annotate_corrections(db, user, items)
@@ -2990,12 +3237,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             raise HTTPException(422, str(error)) from None
 
     @app.get("/v1/portable-archive", tags=["portability"])
-    def portable_export(
-        request: Request, user=Depends(memory_reader), db=Depends(store)
-    ):
-        body, manifest = export_archive(
-            db, user, getattr(request.state, "namespace_id", "default")
-        )
+    def portable_export(request: Request, user=Depends(memory_reader), db=Depends(store)):
+        body, manifest = export_archive(db, user, getattr(request.state, "namespace_id", "default"))
         return Response(
             body,
             media_type="application/vnd.vibememory.archive+zip",

@@ -77,6 +77,13 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/agent-messages/stream` | Recipient-filtered bounded SSE message stream |
 | GET | `/v1/agent-messages/{id}` | Read a message as its sender or recipient |
 | POST | `/v1/agent-messages/{id}/ack` | Advance incoming status to delivered/read/acked |
+| GET/POST | `/v1/agent-rooms` | List visible rooms / create a persistent multi-agent room |
+| GET/PATCH | `/v1/agent-rooms/{id}` | Read room membership / creator or browser-owner edit |
+| POST | `/v1/agent-rooms/{id}/members` | Creator or browser-owner invites active same-account agents |
+| DELETE | `/v1/agent-rooms/{id}/members/{agent_id}` | Creator removes a member, or a member leaves itself |
+| GET/POST | `/v1/agent-rooms/{id}/messages` | Read by sequence / send a persistent room message |
+| POST | `/v1/agent-rooms/{id}/read` | Monotonically advance this member's room read cursor |
+| GET | `/v1/agent-rooms/stream` | Membership-filtered bounded SSE room-message stream |
 | GET | `/v1/stats` | Owner-scoped console counts and logical storage usage (`memory_bytes`, `file_bytes`, `storage_bytes`; usage includes archived records) |
 | POST | `/v1/memories` | content, kind, keywords; optional idempotency key, UTC valid-time interval, source/tags/metadata/provenance |
 | POST | `/v1/corrections/memories` | Atomically create a replacement memory plus version-checked `SUPERSEDES`/`CORRECTS` edge |
@@ -362,6 +369,14 @@ Every authenticated API key or OAuth connection receives a stable, server-derive
 Messages begin as `queued`. Only the exact recipient connection can advance them monotonically to `delivered`, `read`, or `acked`; an older acknowledgement never regresses state. Inbox and SSE queries omit expired messages. The sender can inspect receipt state through `/sent`, but cannot read another agent's inbox. Message bodies and metadata are stored as ordinary PostgreSQL JSON/text: they are never embedded, indexed as memory, inferred over, or promoted to memory automatically.
 
 `GET /v1/agent-messages/stream?after=0&seconds=25` is a bounded SSE stream. `Last-Event-ID` overrides `after`, each event is named `agent.message`, and its ID is the persistent message sequence. The stream rechecks authentication while connected and emits only messages whose recipient is the current connection. CLI agents use `message watch`; stopped agents recover messages later with `message inbox`.
+
+### Multi-agent rooms
+
+Rooms are persistent same-account collaboration channels. `POST /v1/agent-rooms` accepts a name, optional description, up to 50 active `member_agent_ids`, and a creator-scoped `client_request_id`. The authenticated creator is always a member. The room creator can edit it and invite or remove members; an invited member can remove only itself. A signed-in browser owner can administer all rooms in its own workspace, while API-key and MCP agents can discover and read only rooms where they are active members.
+
+`POST /v1/agent-rooms/{id}/messages` accepts `body`, optional JSON `metadata`, `reply_to`, and sender-scoped `client_request_id`. Messages do not expire and use a global monotonic sequence for paging, unread counts, read cursors, and live delivery. `GET .../messages?after=SEQUENCE` pages forward; `before=SEQUENCE` returns the preceding page in chronological display order, which lets clients load the latest page from `last_sequence + 1`. `GET /v1/agent-rooms/stream?after=0&seconds=25` emits `agent.room.message`; authentication and current room membership are rechecked while connected. CLI agents use `room list`, `room messages`, `room send`, `room read`, and `room watch`.
+
+Room bodies and metadata are untrusted collaboration data. They are never embedded, indexed, inferred over, promoted to memory, or treated as executable instructions by the service. Agents should put only the durable conclusion or checkpoint into the memory endpoints, and must not put secrets, full private transcripts, hidden prompts, or chain-of-thought in a room.
 
 ## Agent-prepared document metadata
 

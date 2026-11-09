@@ -250,6 +250,15 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "message_get",
             "message_send",
             "message_ack",
+            "room_list",
+            "room_get",
+            "room_messages",
+            "room_create",
+            "room_update",
+            "room_members_add",
+            "room_member_remove",
+            "room_message_send",
+            "room_read",
         }.issubset(names)
         assert "vault_get" not in names and "file_upload" not in names
 
@@ -634,6 +643,50 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         )["result"]["structuredContent"]["message"]
         assert acknowledged["status"] == "acked"
 
+        room = mcp(
+            client,
+            credentials["access_token"],
+            91,
+            "tools/call",
+            {
+                "name": "room_create",
+                "arguments": {
+                    "name": "MCP coordination",
+                    "client_request_id": "mcp-room-1",
+                },
+            },
+        )["result"]["structuredContent"]["room"]
+        room_message = mcp(
+            client,
+            credentials["access_token"],
+            92,
+            "tools/call",
+            {
+                "name": "room_message_send",
+                "arguments": {
+                    "id": room["id"],
+                    "body": "Persistent room handoff",
+                    "client_request_id": "mcp-room-message-1",
+                },
+            },
+        )["result"]["structuredContent"]["message"]
+        room_messages = mcp(
+            client,
+            credentials["access_token"],
+            93,
+            "tools/call",
+            {"name": "room_messages", "arguments": {"id": room["id"]}},
+        )["result"]["structuredContent"]
+        assert room_messages["items"][0]["id"] == room_message["id"]
+        rooms = mcp(
+            client,
+            credentials["access_token"],
+            94,
+            "tools/call",
+            {"name": "room_list", "arguments": {}},
+        )["result"]["structuredContent"]
+        assert rooms["items"][0]["id"] == room["id"]
+
         connections = client.get("/auth/mcp-connections").json()
         assert connections["server_url"] == RESOURCE
         assert connections["items"][0]["client_name"] == "Claude"
@@ -943,17 +996,12 @@ def test_mcp_namespace_write_boundary_and_vault_grants_are_independent(settings)
             json={"value": "secret", "description": "independence test"},
         )
         registration = register(client, "Namespace MCP")
-        code, verifier = authorize(
-            client, registration, "memory:read memory:write vault:read"
-        )
+        code, verifier = authorize(client, registration, "memory:read memory:write vault:read")
         credentials = token(client, registration, code, verifier)
         connection = f"/auth/mcp-connections/{registration['client_id']}"
         grants = [{"namespace_id": namespace["id"], "can_read": True, "can_write": False}]
         assert client.put(connection + "/namespaces", json={"grants": grants}).status_code == 200
-        assert (
-            client.put(connection + "/vault", json={"names": ["API_TOKEN"]}).status_code
-            == 200
-        )
+        assert client.put(connection + "/vault", json={"names": ["API_TOKEN"]}).status_code == 200
         listed = client.get("/auth/mcp-connections").json()["items"][0]
         assert listed["namespace_grants"] == grants
 
@@ -976,8 +1024,11 @@ def test_mcp_namespace_write_boundary_and_vault_grants_are_independent(settings)
         assert denied["grants"] == [
             {"namespace_id": "default", "can_read": False, "can_write": False}
         ]
-        assert client.post(
-            "/mcp",
-            headers={"Authorization": "Bearer " + credentials["access_token"]},
-            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
-        ).status_code == 403
+        assert (
+            client.post(
+                "/mcp",
+                headers={"Authorization": "Bearer " + credentials["access_token"]},
+                json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+            ).status_code
+            == 403
+        )

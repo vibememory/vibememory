@@ -35,6 +35,36 @@ keywords. Before writing, recall the prior checkpoint; if an equivalent state is
 already stored, skip the write. Relate a newer checkpoint to the prior record with
 `SUPERSEDES` and a concise reason.
 
+## Selective graph recall
+
+Use existing relationships for decision reasons, change history, supporting
+evidence, several linked records, or an explicit request to inspect connections.
+Ordinary fact lookup starts with search and selected sources; do not add a
+graph-based ranking boost to every search.
+
+Search first and inspect 1–3 promising records. Anchor on a concrete decision,
+failure, or checkpoint instead of a broad project hub when possible, and retain
+relevant search evidence. Use `vibe-memory context-bundle FILE` with a private
+JSON payload such as
+`{"anchor_id":"SELECTED_RECORD_ID","depth":1,"limit":8,"byte_limit":8192,"projection":"minimal","include_content":false}`.
+These are starting budgets, adjustable to the task. Filter by relation types
+actually present and relevant to the question when possible. Inspect `returned`,
+`truncated`, and `next_cursor`; do not drain every page. Refine the anchor or
+relation filter if a hub exhausts the budget.
+
+Inspect direction, type, reason, and evidence for selected links. Minimal bundles
+omit reasons/provenance: request a bounded `standard` bundle with only selected
+endpoint `record_ids` and `depth:0` when those details matter. Fetch only useful
+additional bodies with `get`. Keep conflicting/partial corrections visible;
+connections, timestamps, and degree alone do not establish truth or authority.
+Use a second hop only for an identified missing piece of evidence. Stop when the
+needed context is found or no useful link remains. If links are missing or
+unhelpful, refine keywords/filters or modestly widen search within the same
+retrieval budget. An empty or partial graph is not proof of no relationship.
+Report unresolved gaps; graph recall does not authorize creating or repairing
+links. For example, a backend-switch record may connect a latency diagnosis and
+post-change measurements needed to explain the decision.
+
 ## Authoring records that can be found again
 
 Write compact conclusions, not diary entries. Put the stable subject and the retrieval words an agent is likely to know in `keywords`; keep identifiers, conditions, evidence, result, and the next unresolved action in the content. A useful record stands on its own after the conversation is gone.

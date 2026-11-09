@@ -74,7 +74,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.39.0"
+SERVER_VERSION = "0.39.1"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",

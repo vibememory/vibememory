@@ -24,6 +24,35 @@ An unavailable memory service must not block independent work. Never claim a rea
 
 Keep retrieval two-stage: `memory_search` uses a minimal bounded projection by default; inspect candidates, then call `record_get` for only the 1–3 records needed. Request standard metadata only when the task requires it.
 
+## Selective graph recall
+
+Use existing relationships when the question asks for decision reasons, change
+history, supporting evidence, or several linked records; also use them for an
+explicit request to inspect connections. Ordinary fact lookup starts with search
+and selected sources. Do not add a graph-based ranking boost to every search.
+
+Search first and inspect 1–3 promising records. Choose a concrete decision,
+failure, or checkpoint as the anchor instead of a broad project hub when possible.
+Retain relevant search evidence. Start `context_bundle_get` with `anchor_id`,
+`depth:1`, `limit:8`, `byte_limit:8192`, `projection:"minimal"`, and
+`include_content:false`; these are starting budgets, adjustable to the task.
+Use relation types actually present and relevant to the question as filters when
+possible. Inspect `returned`, `truncated`, and `next_cursor`; do not drain every
+page. Refine the anchor or relation filter if a hub exhausts the budget.
+
+Inspect direction, type, reason, and evidence for selected links. Minimal bundles
+omit reasons/provenance: request a bounded `standard` bundle with only selected
+endpoint `record_ids` and `depth:0` when those details matter. Fetch only useful
+additional bodies with `record_get`. Keep conflicting/partial corrections visible;
+connections, timestamps, and degree alone do not establish truth or authority.
+Use a second hop only for an identified missing piece of evidence. Stop when the
+needed context is found or no useful link remains. If links are missing or
+unhelpful, refine keywords/filters or modestly widen search within the same
+retrieval budget. An empty or partial graph is not proof of no relationship.
+Report unresolved gaps; graph recall does not authorize creating or repairing
+links. For example, a backend-switch record may connect a latency diagnosis and
+post-change measurements needed to explain the decision.
+
 ## Authoring records that can be found again
 
 Write compact conclusions, not diary entries. Put the stable subject and the retrieval words an agent is likely to know in `keywords`; keep identifiers, conditions, evidence, result, and the next unresolved action in the content. A useful record stands on its own after the conversation is gone.

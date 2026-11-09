@@ -245,6 +245,9 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "feature_requests_list",
             "feature_request_submit",
             "agents_list",
+            "audit_logs_list",
+            "audit_log_get",
+            "audit_log_create",
             "message_inbox",
             "message_sent",
             "message_get",
@@ -261,6 +264,31 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "room_read",
         }.issubset(names)
         assert "vault_get" not in names and "file_upload" not in names
+
+        uploaded_audit = mcp(
+            client,
+            credentials["access_token"],
+            200,
+            "tools/call",
+            {
+                "name": "audit_log_create",
+                "arguments": {
+                    "action": "mcp.connection.verify",
+                    "outcome": "success",
+                    "summary": "Verified the authenticated MCP connection.",
+                    "client_request_id": "mcp-audit-1",
+                },
+            },
+        )["result"]["structuredContent"]["audit_log"]
+        assert uploaded_audit["transport"] == "mcp"
+        listed_audits = mcp(
+            client,
+            credentials["access_token"],
+            201,
+            "tools/call",
+            {"name": "audit_logs_list", "arguments": {}},
+        )["result"]["structuredContent"]["items"]
+        assert [item["id"] for item in listed_audits] == [uploaded_audit["id"]]
 
         created = mcp(
             client,
@@ -375,10 +403,15 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "tools/call",
             {"name": "events_poll", "arguments": {"after": 0}},
         )["result"]["structuredContent"]
-        assert events["items"][0]["data"] == {
+        assert next(item for item in events["items"] if item["event"] == "memory.created")[
+            "data"
+        ] == {
             "record_id": created["id"],
             "kind": "memory",
         }
+        assert next(
+            item for item in events["items"] if item["event"] == "agent_audit_log.created"
+        )["data"]["audit_log_id"] == uploaded_audit["id"]
         auth_result = mcp(
             client,
             credentials["access_token"],

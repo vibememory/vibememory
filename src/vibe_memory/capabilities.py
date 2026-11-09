@@ -48,6 +48,8 @@ CAPABILITY_RULES = (
     ("room", "mark_read", "messages:write", "memory:write", True),
     ("event", "poll", "events:read", "memory:read", True),
     ("event", "stream", "events:read", None, True),
+    ("audit_log", "read", "audit:read", "memory:read", True),
+    ("audit_log", "create", "audit:write", "memory:write", True),
     ("feature_request", "read", "feature:write", "memory:read", True),
     ("feature_request", "submit", "feature:write", "feature:write", True),
     ("vault", "list", "vault:read", "vault:read", True),

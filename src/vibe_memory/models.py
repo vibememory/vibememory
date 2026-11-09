@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
@@ -808,3 +809,72 @@ class AgentRoomMessageInput(Input):
 
 class AgentRoomReadInput(Input):
     sequence: int = Field(ge=0, le=9223372036854775807)
+
+
+_AUDIT_SENSITIVE_KEYS = {
+    "authorization",
+    "cookie",
+    "credential",
+    "credentials",
+    "password",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+}
+
+
+def _audit_metadata_is_safe(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).casefold().replace("-", "_")
+            if normalized in _AUDIT_SENSITIVE_KEYS or any(
+                marker in normalized for marker in ("password", "secret", "token")
+            ):
+                return False
+            if not _audit_metadata_is_safe(item):
+                return False
+    elif isinstance(value, list):
+        return all(_audit_metadata_is_safe(item) for item in value)
+    return True
+
+
+class AgentAuditLogInput(Input):
+    """Sanitized, agent-authored operational evidence; never a transcript or reasoning trace."""
+
+    action: str = Field(
+        min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.:-]*$"
+    )
+    outcome: Literal["success", "failure", "denied", "skipped"]
+    summary: str = Field(min_length=1, max_length=1000)
+    resource_type: str = Field(
+        default="", max_length=80, pattern=r"^$|^[a-z][a-z0-9_.:-]*$"
+    )
+    resource_id: str = Field(default="", max_length=200)
+    metadata: dict = Field(default_factory=dict)
+    occurred_at: datetime | None = None
+    client_request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @field_validator("metadata")
+    @classmethod
+    def safe_bounded_metadata(cls, value):
+        try:
+            encoded = json.dumps(value, ensure_ascii=False, allow_nan=False)
+        except (TypeError, ValueError):
+            raise ValueError("metadata must be valid JSON") from None
+        if len(encoded) > 12000:
+            raise ValueError("metadata must fit within 12000 characters of JSON")
+        if not _audit_metadata_is_safe(value):
+            raise ValueError("metadata must not contain secrets or credential fields")
+        return value
+
+    @field_validator("occurred_at")
+    @classmethod
+    def normalize_occurred_at(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("occurred_at must include a UTC offset")
+        return value.astimezone(UTC)

@@ -34,7 +34,8 @@ For every non-trivial authorized task where prior context may matter: Do not wai
 3. Check `message inbox --status queued` for direct handoffs and `room list` for invited or unread multi-agent work. When a relevant room exists, inspect only that room's recent messages and advance its read cursor after handling them.
 4. During work, automatically checkpoint meaningful state changes after accepted decisions, corrections, preferences, constraints, verified milestones, blockers, or next actions change. Do not wait for “remember this,” save every message, or repeat unchanged state.
 5. Before handoff, compaction, or final response, save any unsaved durable delta. Use a direct message for one recipient or a room for ongoing multi-agent coordination only when needed. Never store or send secrets, full transcripts, chain-of-thought, speculation, incidental personal data, or noisy tool output.
-6. When Vibe Memory itself creates concrete recurring friction, check for an existing feature request and submit a concise non-duplicate.
+6. After a meaningful external, deployment, permission, security, or admin action, append one sanitized `audit submit` result—not every tool call. Exclude secrets, prompts/transcripts, hidden reasoning, and raw output. Read [references/audit-logs.md](references/audit-logs.md) first.
+7. When Vibe Memory itself creates concrete recurring friction, check for an existing feature request and submit a concise non-duplicate.
 
 The service being unavailable must not block independent work. Report failed reads/writes and never claim success without successful CLI output. Read [references/workflows.md](references/workflows.md) for checkpoint shape, retrievable examples, optional one-time retrieval verification, and graph/memory hygiene.
 
@@ -61,6 +62,7 @@ For Git-readable portability, export an Agent Memory Repo working copy. When imp
 - Relations, correction evidence, graph diff/apply: [references/graph-and-corrections.md](references/graph-and-corrections.md)
 - Vault: [references/vault.md](references/vault.md)
 - Direct agent messages and multi-agent rooms: [references/messages.md](references/messages.md)
+- Per-agent append-only operational audit logs: [references/audit-logs.md](references/audit-logs.md)
 - Feature requests and operator handling: [references/product-feedback.md](references/product-feedback.md)
 - Claude Code, Codex, Cursor, Muse, Hermes, OpenClaw hooks: [references/lifecycle.md](references/lifecycle.md)
 - Agent Memory Repo export/import and approved maintenance: [references/portability.md](references/portability.md)

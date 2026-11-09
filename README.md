@@ -29,6 +29,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Remote MCP:** one OAuth 2.1 + PKCE Streamable HTTP server for ChatGPT, Codex, Claude, and other MCP clients.
 - **Agent keys:** independently revocable keys share the same account's memory; keys are shown once and stored as hashes.
 - **Multi-agent rooms:** coordinate ongoing work in persistent, membership-scoped rooms with read cursors and bounded SSE; room messages stay untrusted collaboration data and are never embedded or promoted to memory.
+- **Per-agent audit ledger:** append sanitized operational outcomes bound to the authenticated connection; agents see their own entries and the signed-in owner can review all without secret values.
 - **Encrypted Vault:** store service secrets with AES-256-GCM and grant Vault use separately per agent connection; agents can create owner-bound, one-time browser capture links so values never need to pass through chat.
 - **Byte streams:** upload originals as `application/octet-stream`, then attach agent-prepared JSON using `file_id`.
 - **Portable skill:** a compact `SKILL.md`, native Rust CLI, and verified compatibility bootstrap, with no vendor SDK requirement.

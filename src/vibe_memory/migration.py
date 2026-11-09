@@ -106,6 +106,7 @@ DESTINATION_TABLES = (
     "change_events",
     "feature_requests",
     "agents",
+    "agent_audit_logs",
     "agent_messages",
     "agent_rooms",
     "agent_room_members",
@@ -156,6 +157,7 @@ def read_legacy(data_dir: Path):
         change_events=[],
         feature_requests=[],
         agents=[],
+        agent_audit_logs=[],
         agent_messages=[],
         agent_rooms=[],
         agent_room_members=[],
@@ -264,6 +266,17 @@ def read_legacy(data_dir: Path):
                 payload["agents"].append(
                     {key: value for key, value in row["a"].items() if not key.startswith("_")}
                 )
+        if "AgentAuditLog" in graph_tables:
+            for row in _kuzu_rows(
+                connection, "MATCH (a:AgentAuditLog) RETURN a ORDER BY a.sequence"
+            ):
+                record = {
+                    key: value for key, value in row["a"].items() if not key.startswith("_")
+                }
+                record["metadata"] = json.loads(record.get("metadata") or "{}")
+                record["request_payload"] = json.loads(record.get("request_payload") or "{}")
+                record["client_request_id"] = record.get("client_request_id") or None
+                payload["agent_audit_logs"].append(record)
         if "AgentMessage" in graph_tables:
             for row in _kuzu_rows(
                 connection, "MATCH (m:AgentMessage) RETURN m ORDER BY m.sequence"
@@ -514,6 +527,37 @@ def migrate_legacy(data_dir, database_url, model, dimension, pool_size=4):
                             "last_seen_at",
                         )
                     ),
+                )
+            for record in payload["agent_audit_logs"]:
+                connection.execute(
+                    """INSERT INTO agent_audit_logs(
+                        sequence,owner,id,agent_id,agent_name,transport,action,outcome,
+                        summary,resource_type,resource_id,metadata,occurred_at,received_at,
+                        client_request_id,request_payload
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        record["sequence"],
+                        record["owner"],
+                        record["id"],
+                        record["agent_id"],
+                        record["agent_name"],
+                        record["transport"],
+                        record["action"],
+                        record["outcome"],
+                        record["summary"],
+                        record["resource_type"],
+                        record["resource_id"],
+                        Jsonb(record["metadata"]),
+                        record["occurred_at"],
+                        record["received_at"],
+                        record["client_request_id"],
+                        Jsonb(record["request_payload"]),
+                    ),
+                )
+            if payload["agent_audit_logs"]:
+                connection.execute(
+                    "SELECT setval(pg_get_serial_sequence('agent_audit_logs','sequence'),%s,true)",
+                    (max(record["sequence"] for record in payload["agent_audit_logs"]),),
                 )
             for room in payload["agent_rooms"]:
                 connection.execute(

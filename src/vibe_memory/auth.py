@@ -42,6 +42,8 @@ AgentPermission = Literal[
     "messages:write",
     "feature:write",
     "events:read",
+    "audit:read",
+    "audit:write",
 ]
 DEFAULT_AGENT_PERMISSIONS: tuple[AgentPermission, ...] = (
     "memory:read",
@@ -52,6 +54,8 @@ DEFAULT_AGENT_PERMISSIONS: tuple[AgentPermission, ...] = (
     "messages:write",
     "feature:write",
     "events:read",
+    "audit:read",
+    "audit:write",
 )
 DEFAULT_AGENT_PERMISSIONS_JSON = json.dumps(
     DEFAULT_AGENT_PERMISSIONS, ensure_ascii=True, separators=(",", ":")
@@ -111,7 +115,7 @@ class KeyInput(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     vault_access: bool = False
     permissions: list[AgentPermission] = Field(
-        default_factory=lambda: list(DEFAULT_AGENT_PERMISSIONS), max_length=8
+        default_factory=lambda: list(DEFAULT_AGENT_PERMISSIONS), max_length=10
     )
 
     @field_validator("permissions")
@@ -133,7 +137,7 @@ class DeviceStartInput(BaseModel):
 class KeyAccessUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     vault_access: bool | None = None
-    permissions: list[AgentPermission] | None = Field(default=None, max_length=8)
+    permissions: list[AgentPermission] | None = Field(default=None, max_length=10)
 
     @field_validator("permissions")
     @classmethod
@@ -282,7 +286,7 @@ class AuthStore:
                     hash TEXT UNIQUE NOT NULL, name TEXT NOT NULL, prefix TEXT NOT NULL,
                     created_at INTEGER NOT NULL, vault_access INTEGER NOT NULL DEFAULT 0,
                     feature_request_operator INTEGER NOT NULL DEFAULT 0,
-                    permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read"]');
+                    permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read","audit:read","audit:write"]');
                 CREATE TABLE IF NOT EXISTS api_key_permission_events (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

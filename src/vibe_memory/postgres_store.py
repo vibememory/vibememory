@@ -217,6 +217,103 @@ class PostgresStore:
             )
 
     @staticmethod
+    def _audit_log(row):
+        result = dict(row)
+        result.pop("owner", None)
+        result.pop("request_payload", None)
+        result["occurred_at"] = iso(result["occurred_at"])
+        result["received_at"] = iso(result["received_at"])
+        result["metadata"] = result.get("metadata") or {}
+        return result
+
+    def add_agent_audit_log(self, owner, agent_id, agent_name, transport, data):
+        payload = data.model_dump(mode="json")
+        received_at = datetime.now(UTC)
+        with self.transaction(), self._connection() as connection:
+            if data.client_request_id:
+                existing = connection.execute(
+                    """SELECT * FROM agent_audit_logs WHERE owner=%s AND agent_id=%s
+                    AND client_request_id=%s FOR UPDATE""",
+                    (owner, agent_id, data.client_request_id),
+                ).fetchone()
+                if existing:
+                    if existing["request_payload"] != payload:
+                        raise DuplicateRequestConflict()
+                    return self._audit_log(existing), False
+            row = connection.execute(
+                """INSERT INTO agent_audit_logs(
+                    owner,id,agent_id,agent_name,transport,action,outcome,summary,
+                    resource_type,resource_id,metadata,occurred_at,received_at,
+                    client_request_id,request_payload
+                ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING *""",
+                (
+                    owner,
+                    uid(),
+                    agent_id,
+                    agent_name,
+                    transport,
+                    data.action,
+                    data.outcome,
+                    data.summary,
+                    data.resource_type,
+                    data.resource_id,
+                    Jsonb(data.metadata),
+                    data.occurred_at or received_at,
+                    received_at,
+                    data.client_request_id,
+                    Jsonb(payload),
+                ),
+            ).fetchone()
+            self._event(
+                owner,
+                "agent_audit_log.created",
+                {
+                    "audit_log_id": row["id"],
+                    "agent_id": agent_id,
+                    "action": data.action,
+                },
+            )
+        return self._audit_log(row), True
+
+    def list_agent_audit_logs(
+        self, owner, agent_id, limit=50, offset=0, allow_owner=False,
+        filter_agent_id="", action="", outcome=""
+    ):
+        filters, parameters = ["owner=%s"], [owner]
+        if not allow_owner:
+            filters.append("agent_id=%s")
+            parameters.append(agent_id)
+        elif filter_agent_id:
+            filters.append("agent_id=%s")
+            parameters.append(filter_agent_id)
+        if action:
+            filters.append("action=%s")
+            parameters.append(action)
+        if outcome:
+            filters.append("outcome=%s")
+            parameters.append(outcome)
+        parameters.extend((offset, limit))
+        with self._connection() as connection:
+            rows = connection.execute(
+                f"SELECT * FROM agent_audit_logs WHERE {' AND '.join(filters)} "
+                "ORDER BY sequence DESC OFFSET %s LIMIT %s",
+                tuple(parameters),
+            ).fetchall()
+        return [self._audit_log(row) for row in rows]
+
+    def get_agent_audit_log(self, owner, agent_id, id, allow_owner=False):
+        with self._connection() as connection:
+            row = connection.execute(
+                """SELECT * FROM agent_audit_logs WHERE owner=%s AND id=%s
+                AND (%s OR agent_id=%s)""",
+                (owner, id, allow_owner, agent_id),
+            ).fetchone()
+        if not row:
+            raise NotFound()
+        return self._audit_log(row)
+
+    @staticmethod
     def _message(row):
         result = dict(row)
         result.pop("owner", None)

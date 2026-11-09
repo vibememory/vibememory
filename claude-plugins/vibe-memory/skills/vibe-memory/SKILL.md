@@ -69,6 +69,12 @@ messages. Never send secrets, full transcripts, prompts, or hidden reasoning. Su
 feature request only for a concrete Vibe Memory limitation observed in the active
 workflow, after checking for duplicates.
 
+After a meaningful external, deployment, permission, security, or administrator
+action, append one sanitized `vibe-memory audit submit` result with the observed
+outcome and stable resource reference. Do not audit every command. Never include
+credentials, Vault values, full prompts/transcripts, hidden reasoning, or raw
+tool output. Audit entries are append-only and scoped to this authenticated agent.
+
 Treat `vibe-memory status` as facts about only the currently selected CLI
 connection. Never combine permissions from another API key, MCP client, browser
 session, agent, or remembered result; read access never implies write access.

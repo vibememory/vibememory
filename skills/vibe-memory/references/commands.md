@@ -10,6 +10,7 @@ Use the absolute `VM_CLI` path. Ask `COMMAND --help` or `template TYPE` only whe
 - Memory maintenance: `maintenance-audit`; fetch selected candidates, then use versioned `update`, `merge`, `archive`, and graph diff/apply only after approval
 - Agent Memory Repo: `agent-memory-export OUTPUT`, `template agent-memory-diff`, `agent-memory-diff FILE`, `template agent-memory-apply`, `agent-memory-apply FILE`
 - Collaboration: `agents`, direct `message send|inbox|sent|get|ack|watch`, persistent `room create|list|get|update|invite|remove|messages|send|read|watch`
+- Operational evidence: `audit submit|list|get`; append only a sanitized result after a meaningful external or administrative action
 - Vault: `vault list|capture|exec`
 - Product requests: `feedback`, `feedback-list`, `feedback-get`; operator-only `feedback-admin-list`, `feedback-admin-update`
 

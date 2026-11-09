@@ -91,6 +91,7 @@ from .files import FileStorage
 from .mailer import RecoveryMailDelivery
 from .mcp import LATEST_PROTOCOL, MCPHandler
 from .models import (
+    AgentAuditLogInput,
     AgentMemoryRepoApplyInput,
     AgentMemoryRepoDiffInput,
     AgentMessageAck,
@@ -251,7 +252,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.36.0",
+        version="0.37.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -573,6 +574,8 @@ def create_app(settings=None, embedder=None):
     files_writer = scoped_permission("files:write", True)
     messages_reader = permission_user("messages:read")
     messages_writer = permission_user("messages:write")
+    audit_reader = permission_user("audit:read")
+    audit_writer = permission_user("audit:write")
     feature_writer = permission_user("feature:write")
     events_reader = scoped_permission("events:read", False)
 
@@ -1916,6 +1919,86 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             },
             "items": db.list_agents(user),
         }
+
+    @app.post(
+        "/v1/agent-audit-logs",
+        status_code=201,
+        tags=["agent audit logs"],
+        responses={
+            200: {"description": "Previously accepted audit log (idempotent retry)"},
+            409: {"description": "Client request ID reused with different content"},
+        },
+    )
+    def create_agent_audit_log(
+        data: AgentAuditLogInput,
+        request: Request,
+        user=Depends(audit_writer),
+        db=Depends(store),
+    ):
+        transport = request.state.agent_transport
+        if transport != "browser":
+            transport = "cli" if CLI_USER_AGENT.match(request.headers.get("user-agent", "")) else "rest"
+        try:
+            record, created = db.add_agent_audit_log(
+                user,
+                request.state.agent_id,
+                request.state.agent_name,
+                transport,
+                data,
+            )
+        except DuplicateRequestConflict:
+            raise HTTPException(
+                409, "client_request_id already used with different content"
+            ) from None
+        return JSONResponse(
+            status_code=201 if created else 200,
+            content=jsonable_encoder(record),
+            headers={"Location": f"/v1/agent-audit-logs/{record['id']}"},
+        )
+
+    @app.get("/v1/agent-audit-logs", tags=["agent audit logs"])
+    def agent_audit_logs(
+        request: Request,
+        limit: int = Query(default=50, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+        agent_id: str = Query(default="", max_length=200),
+        action: str = Query(default="", max_length=120, pattern=r"^$|^[a-z][a-z0-9_.:-]*$"),
+        outcome: Literal["success", "failure", "denied", "skipped"] | None = None,
+        user=Depends(audit_reader),
+        db=Depends(store),
+    ):
+        owner_view = getattr(request.state, "auth_kind", "") == "browser-session"
+        items = db.list_agent_audit_logs(
+            user,
+            request.state.agent_id,
+            limit,
+            offset,
+            owner_view,
+            agent_id,
+            action,
+            outcome or "",
+        )
+        return {
+            "items": items,
+            "limit": limit,
+            "offset": offset,
+            "visibility": "owner" if owner_view else "self",
+            "time_basis": "UTC",
+        }
+
+    @app.get("/v1/agent-audit-logs/{id}", tags=["agent audit logs"])
+    def agent_audit_log(
+        id: str,
+        request: Request,
+        user=Depends(audit_reader),
+        db=Depends(store),
+    ):
+        return db.get_agent_audit_log(
+            user,
+            request.state.agent_id,
+            id,
+            getattr(request.state, "auth_kind", "") == "browser-session",
+        )
 
     def room_owner_override(request: Request):
         return getattr(request.state, "auth_kind", "") == "browser-session"

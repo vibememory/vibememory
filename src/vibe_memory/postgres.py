@@ -113,12 +113,12 @@ class PostgresDatabase:
             created_at BIGINT NOT NULL,
             vault_access BOOLEAN NOT NULL DEFAULT FALSE,
             feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE,
-            permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read"]'
+            permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read","audit:read","audit:write"]'
         );
         ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS
             feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS
-            permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read"]';
+            permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read","audit:read","audit:write"]';
         CREATE TABLE IF NOT EXISTS api_key_permission_events (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -455,6 +455,34 @@ class PostgresDatabase:
         );
         CREATE INDEX IF NOT EXISTS agents_owner_seen_idx
             ON agents(owner, last_seen_at DESC, id);
+
+        CREATE TABLE IF NOT EXISTS agent_audit_logs (
+            sequence BIGSERIAL UNIQUE NOT NULL,
+            owner TEXT NOT NULL,
+            id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            transport TEXT NOT NULL,
+            action TEXT NOT NULL,
+            outcome TEXT NOT NULL CHECK (outcome IN ('success','failure','denied','skipped')),
+            summary TEXT NOT NULL,
+            resource_type TEXT NOT NULL DEFAULT '',
+            resource_id TEXT NOT NULL DEFAULT '',
+            metadata JSONB NOT NULL DEFAULT '{{}}',
+            occurred_at TIMESTAMPTZ NOT NULL,
+            received_at TIMESTAMPTZ NOT NULL,
+            client_request_id TEXT,
+            request_payload JSONB NOT NULL,
+            PRIMARY KEY(owner, id),
+            FOREIGN KEY(owner, agent_id) REFERENCES agents(owner, id)
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_audit_log_idempotency_idx
+            ON agent_audit_logs(owner, agent_id, client_request_id)
+            WHERE client_request_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS agent_audit_log_owner_sequence_idx
+            ON agent_audit_logs(owner, sequence DESC);
+        CREATE INDEX IF NOT EXISTS agent_audit_log_agent_sequence_idx
+            ON agent_audit_logs(owner, agent_id, sequence DESC);
 
         CREATE TABLE IF NOT EXISTS agent_messages (
             sequence BIGSERIAL UNIQUE NOT NULL,

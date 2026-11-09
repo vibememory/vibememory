@@ -180,6 +180,19 @@ def test_issued_agent_key_permissions_can_be_added_and_revoked(web):
         == 403
     )
     assert web.get("/v1/agent-messages/inbox", headers=headers).status_code == 403
+    assert web.get("/v1/agent-audit-logs", headers=headers).status_code == 403
+    assert (
+        web.post(
+            "/v1/agent-audit-logs",
+            headers=headers,
+            json={
+                "action": "permission.check",
+                "outcome": "denied",
+                "summary": "Audit write permission is not present.",
+            },
+        ).status_code
+        == 403
+    )
     assert (
         web.post(
             "/v1/files?filename=denied.txt",
@@ -203,9 +216,23 @@ def test_issued_agent_key_permissions_can_be_added_and_revoked(web):
 
     changed = web.patch(
         "/auth/api-keys/" + key["id"],
-        json={"permissions": ["memory:read", "memory:write", "messages:read"]},
+        json={
+            "permissions": [
+                "memory:read",
+                "memory:write",
+                "messages:read",
+                "audit:read",
+                "audit:write",
+            ]
+        },
     ).json()
-    assert changed["permissions"] == ["memory:read", "memory:write", "messages:read"]
+    assert changed["permissions"] == [
+        "memory:read",
+        "memory:write",
+        "messages:read",
+        "audit:read",
+        "audit:write",
+    ]
     assert (
         web.post(
             "/v1/memories",
@@ -215,6 +242,19 @@ def test_issued_agent_key_permissions_can_be_added_and_revoked(web):
         == 201
     )
     assert web.get("/v1/agent-messages/inbox", headers=headers).status_code == 200
+    assert web.get("/v1/agent-audit-logs", headers=headers).status_code == 200
+    assert (
+        web.post(
+            "/v1/agent-audit-logs",
+            headers=headers,
+            json={
+                "action": "permission.check",
+                "outcome": "success",
+                "summary": "Audit permissions are active.",
+            },
+        ).status_code
+        == 201
+    )
 
     changed = web.patch(
         "/auth/api-keys/" + key["id"],
@@ -231,7 +271,42 @@ def test_issued_agent_key_permissions_can_be_added_and_revoked(web):
         "memory:read",
         "memory:write",
         "messages:read",
+        "audit:read",
+        "audit:write",
     ]
+
+
+def test_signed_in_owner_can_filter_all_agent_audit_logs(web):
+    signup(web)
+    first = web.post("/auth/api-keys", json={"name": "Release agent"}).json()
+    second = web.post("/auth/api-keys", json={"name": "Security agent"}).json()
+    for key, action, outcome in (
+        (first, "release.verify", "success"),
+        (second, "permission.update", "denied"),
+    ):
+        response = web.post(
+            "/v1/agent-audit-logs",
+            headers={"Authorization": "Bearer " + key["key"], "Origin": ""},
+            json={
+                "action": action,
+                "outcome": outcome,
+                "summary": f"Recorded {action} without sensitive values.",
+            },
+        )
+        assert response.status_code == 201, response.text
+
+    all_logs = web.get("/v1/agent-audit-logs").json()
+    assert all_logs["visibility"] == "owner"
+    assert {item["agent_name"] for item in all_logs["items"]} == {
+        "Release agent",
+        "Security agent",
+    }
+    filtered = web.get(
+        "/v1/agent-audit-logs",
+        params={"agent_id": "key:" + first["id"], "outcome": "success"},
+    ).json()["items"]
+    assert len(filtered) == 1
+    assert filtered[0]["action"] == "release.verify"
 
 
 def test_accounts_isolated_and_session_expiry(web, web_settings):

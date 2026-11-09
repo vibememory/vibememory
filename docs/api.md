@@ -12,7 +12,7 @@ Agent Memory Repo interoperability is a separate human-readable projection. `GET
 
 Browser signup/login uses `/auth/signup`, `/auth/login`, `/auth/me`, and `/auth/logout`. The session cookie is HttpOnly; mutations must include an Origin exactly matching `MEMORY_PUBLIC_ORIGIN`. Users can optionally enable RFC 6238 authenticator-app TOTP in **Console → Account security**. A password-valid login then returns a five-minute challenge instead of a session; `/auth/login/otp` accepts a non-replayed six-digit code or one-time recovery code before issuing the cookie. TOTP secrets are AES-256-GCM encrypted and recovery codes are stored only as hashes.
 
-Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. Each issued key has an editable permission set: `memory:read`, `memory:write`, `files:read`, `files:write`, `messages:read`, `messages:write`, `feature:write`, and `events:read`. Existing keys retain the formerly implicit full set. A signed-in owner can add or revoke permissions with `PATCH /auth/api-keys/{id}`; the same token observes the change immediately, and every change is recorded in the owner-scoped permission audit. `vault_access` remains a separate sensitive permission and defaults to false. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' keys and records return 404.
+Issue agent keys through the console (or an authenticated browser session at `POST /auth/api-keys`). Agent requests use `Authorization: Bearer <key>`; they do not use account passwords or browser cookies. Each issued key has an editable permission set: `memory:read`, `memory:write`, `files:read`, `files:write`, `messages:read`, `messages:write`, `feature:write`, `events:read`, `audit:read`, and `audit:write`. Existing keys retain their stored set and do not silently gain newly introduced grants. A signed-in owner can add or revoke permissions with `PATCH /auth/api-keys/{id}`; the same token observes the change immediately, and every change is recorded in the owner-scoped permission audit. `vault_access` remains a separate sensitive permission and defaults to false. `DELETE /auth/api-keys/{id}` revokes a key immediately. Other users' keys and records return 404.
 
 Official native CLI requests identify their version without exposing credentials.
 Protected service routes return `Vibe-Memory-Minimum-CLI`; a recognized older,
@@ -139,6 +139,9 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | GET | `/v1/vault` | Vault-scoped names, descriptions, and access metadata; never values |
 | GET | `/v1/vault/{name}` | Read one value with a Vault-scoped agent key or browser session |
 | GET | `/v1/vault-access-audit` | Browser-only recent Vault access audit with item name, authenticated agent/client, UTC time, and outcome; secret values are never included |
+| POST | `/v1/agent-audit-logs` | Append a sanitized operational result bound to the authenticated agent; supports per-agent idempotency |
+| GET | `/v1/agent-audit-logs` | Agents list only their own entries; signed-in owners list all and may filter by agent, action, or outcome |
+| GET | `/v1/agent-audit-logs/{id}` | Read one entry under the same agent/owner visibility rule; entries are append-only |
 | POST | `/v1/vault/captures` | Create an owner-bound, one-time browser capture URL with a Vault-scoped agent key |
 | GET | `/v1/vault/captures/{token}` | Inspect an unexpired capture as the signed-in owner; never returns a value |
 | PUT | `/v1/vault/captures/{token}` | Store a value from the signed-in browser and consume the link |

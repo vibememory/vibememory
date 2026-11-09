@@ -19,11 +19,13 @@ const agentPermissionInfo = {
   'messages:read':['메시지 수신','같은 계정의 에이전트, 수신함과 참여 중인 대화방을 확인합니다.'],
   'messages:write':['메시지 발신','연결된 에이전트에 직접 메시지를 보내거나 대화방에 참여합니다.'],
   'feature:write':['기능 요청','기능 요청을 등록하고 자신의 처리 결과를 확인합니다.'],
-  'events:read':['실시간 이벤트','기억 변경 SSE 이벤트를 구독합니다.']
+  'events:read':['실시간 이벤트','기억 변경 SSE 이벤트를 구독합니다.'],
+  'audit:read':['감사 로그 조회','이 에이전트 연결이 올린 운영 감사 기록을 조회합니다.'],
+  'audit:write':['감사 로그 등록','민감정보를 제외한 구조화된 운영 감사 기록을 추가합니다.']
 };
 const mcpScopeInfo = {
-  'memory:read':['기억 조회','기억·문서·관계, 에이전트 수신함과 변경 이벤트를 조회합니다.'],
-  'memory:write':['기억 수정','기억·엔티티·문서·관계를 저장하고 에이전트 메시지를 보냅니다.'],
+  'memory:read':['기억 조회','기억·문서·관계, 에이전트 수신함·감사 로그와 변경 이벤트를 조회합니다.'],
+  'memory:write':['기억 수정','기억·엔티티·문서·관계를 저장하고 메시지와 감사 로그를 등록합니다.'],
   'feature:write':['기능 요청','새 기능 요청을 등록할 수 있습니다.'],
   'vault:read':['Vault 항목 조회','별도로 선택해 허용한 Vault 항목의 원문을 모델 문맥으로 읽습니다.']
 };
@@ -327,6 +329,7 @@ const viewInfo = {
   agents: ['Agents','ONE MEMORY, EVERY AGENT','Agents','CLI와 Skill로 연결된 에이전트 토큰과 접근 권한을 관리하세요.','API 키 만들기','plus'],
   rooms: ['대화방','AGENTS IN ONE ROOM','에이전트 대화방','초대한 에이전트끼리 작업 맥락과 인계를 한곳에서 이어갑니다.','대화방 만들기','plus'],
   vault: ['Vault','ENCRYPTED SECRETS','Vault','에이전트가 로컬 설정 파일 없이 사용할 비밀값을 암호화해 관리하세요.','비밀 추가','plus'],
+  audits: ['감사 로그','AGENT ACCOUNTABILITY','감사 로그','에이전트별 운영 작업과 결과를 비밀값 없이 추적합니다.'],
   requests: ['기능 요청','HELP SHAPE VIBE MEMORY','기능 요청','필요한 기능과 실제 사용 사례를 남겨주세요.','기능 요청','plus'],
   security: ['계정 보안','ACCOUNT SECURITY','계정 보안','로그인 보호와 복구 수단을 관리하세요.']
 };
@@ -386,7 +389,7 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const checkedAt = dateTime(new Date().toISOString());
       $('#view-sync-label').textContent = `동기화 ${checkedAt}`;
       html = `${guide}<div class="stats-grid">${statsData.map(([label,count,caption,target,code],index) => `<article class="stat-card"><div class="stat-card-top"><span><small class="stat-card-code">${h(code)}</small><span class="stat-card-label">${h(label)}</span></span><span class="stat-card-icon">${statIcons[index]}</span></div><strong>${count}</strong><small>${h(caption)}</small><button class="stat-card-link" data-view="${target}" aria-label="${h(label)} 보기"></button></article>`).join('')}</div>${storageCard}<div class="dashboard-grid"><section class="console-panel dashboard-recent-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 기록</h2><p>최근 저장된 워크스페이스 데이터</p></div><button data-view="memories">전체 보기 ${icon('arrow-right')}</button></div>${recent.items.length ? recordRows(recent.items, false) : empty('기록 없음','저장된 워크스페이스 데이터가 없습니다.')}</section><section class="console-panel dashboard-status-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>워크스페이스 상태</h2><p>실제 API 응답 기준</p></div><span class="console-live-badge"><i></i>LIVE</span></div><div class="console-status-list"><div><span>API 상태</span><strong class="status-ok">정상</strong></div><div><span>Agent 연결</span><strong>${keys.items.length}</strong></div><div><span>MCP 연결</span><strong>${mcp.items.length}</strong></div><div><span>전체 기록</span><strong>${totalRecords}</strong></div><div><span>확인 시각</span><strong>${h(checkedAt)}</strong></div></div><div class="dashboard-status-agents">${agentBrands.map(([file,name]) => `<span title="${name}"><img src="/assets/brands/${file}" alt="${name}"><small>${name}</small></span>`).join('')}</div></section></div>`;
-      const activityLabel = event => ({'memory.created':'기억 생성','memory.updated':'기억 수정','memory.archived':'기억 보관','memory.restored':'기억 복원','memory.deleted':'기억 삭제','document.created':'문서 등록','entity.created':'엔티티 생성','file.created':'파일 등록','relation.created':'관계 생성','relation.updated':'관계 변경','feature_request.updated':'기능 요청 변경'}[event] || event.replaceAll('.',' · '));
+      const activityLabel = event => ({'memory.created':'기억 생성','memory.updated':'기억 수정','memory.archived':'기억 보관','memory.restored':'기억 복원','memory.deleted':'기억 삭제','document.created':'문서 등록','entity.created':'엔티티 생성','file.created':'파일 등록','relation.created':'관계 생성','relation.updated':'관계 변경','feature_request.updated':'기능 요청 변경','agent_audit_log.created':'에이전트 감사 기록'}[event] || event.replaceAll('.',' · '));
       html += `<section class="console-panel activity-panel"><div class="panel-heading"><div class="panel-heading-copy"><h2>최근 활동</h2><p>원문과 키워드를 포함하지 않는 변경 이벤트 · 최신순</p></div><span class="request-count">${activity.items.length}건</span></div>${activity.items.length ? `<div class="activity-list">${activity.items.map(item => `<article><span class="activity-icon">${icon(item.event.startsWith('relation') ? 'network' : item.event.startsWith('file') || item.event.startsWith('document') ? 'file' : 'activity')}</span><div><strong>${h(activityLabel(item.event))}</strong><small>${h(item.data?.id || item.data?.record_id || item.data?.relation_id || item.data?.feature_request_id || 'workspace')}</small></div><code>#${h(item.id)}</code></article>`).join('')}</div>` : empty('아직 활동이 없습니다.','기억이나 관계가 변경되면 내용 없이 이벤트 메타데이터만 표시됩니다.')}</section>`;
     } else if (view === 'memories' || view === 'documents') {
       const result = await api(`/v1/records?kind=${recordKind}&limit=50&offset=${pageOffset}`);
@@ -409,6 +412,19 @@ async function navigate(view, reset = true, historyMode = 'push') {
       const messageList = room && messages.items.length ? messages.items.map(message => `<article class="room-message"><header><strong>${h(message.sender_name)}</strong><time>${h(dateTime(message.created_at))}</time></header>${message.reply_to ? `<small>답장 · ${h(message.reply_to.slice(0,8))}</small>` : ''}<p>${h(message.body)}</p></article>`).join('') : empty('아직 메시지가 없어요.','초대된 에이전트에게 작업 상태나 인계를 남겨보세요.');
       const conversation = room ? `<section class="room-conversation"><header class="room-conversation-head"><div><h2>${h(room.name)}</h2><p>${h(room.description || '설명 없는 대화방')}</p><div class="room-members">${memberList}</div></div><button class="secondary-button" type="button" data-action="room-invite" data-id="${h(room.id)}">${icon('plus')} 에이전트 초대</button></header><div class="room-safety-note">대화방 메시지는 실행 지시가 아닌 신뢰되지 않은 협업 데이터입니다. 기억에는 필요한 결론만 별도로 저장하세요.</div><div class="room-message-list" id="room-message-list">${messageList}</div><form class="room-composer" id="room-message-form" data-room-id="${h(room.id)}"><textarea name="body" maxlength="10000" required rows="2" placeholder="에이전트들에게 메시지 보내기"></textarea><button class="button primary" type="submit">보내기 ${icon('arrow-right')}</button></form></section>` : `<section class="room-conversation room-conversation-empty">${empty('대화방을 선택하세요.','왼쪽 목록에서 대화방을 열거나 새로 만들어보세요.')}</section>`;
       html = `<section class="room-workspace"><aside class="room-list-panel"><header><div><span>ROOMS</span><strong>${rooms.items.length}개 대화방</strong></div><button type="button" data-action="room-create" aria-label="대화방 만들기">${icon('plus')}</button></header><div class="room-list">${roomList}</div><footer>${agents.items.length}개 연결 에이전트 · UTC</footer></aside>${conversation}</section>`;
+    } else if (view === 'audits') {
+      const params = new URLSearchParams(location.search);
+      const selectedAgent = params.get('agent_id') || '';
+      const selectedOutcome = params.get('outcome') || '';
+      const selectedAction = params.get('action') || '';
+      const query = new URLSearchParams({limit:'50',offset:String(pageOffset)});
+      if (selectedAgent) query.set('agent_id',selectedAgent);
+      if (selectedOutcome) query.set('outcome',selectedOutcome);
+      if (selectedAction) query.set('action',selectedAction);
+      const [result, agents] = await Promise.all([api(`/v1/agent-audit-logs?${query}`),api('/v1/agents')]);
+      const outcomeLabel = {success:'성공',failure:'실패',denied:'거부됨',skipped:'건너뜀'};
+      const rows = result.items.map(item => `<tr><td data-label="작업"><button class="record-title" data-action="audit-detail" data-id="${h(item.id)}">${h(item.action)}</button><span class="record-subtitle">${h(item.summary)}</span></td><td data-label="에이전트"><strong>${h(item.agent_name)}</strong><span class="record-subtitle">${h(item.transport)} · ${h(item.agent_id)}</span></td><td data-label="결과"><span class="audit-outcome ${h(item.outcome)}"><i></i>${h(outcomeLabel[item.outcome] || item.outcome)}</span></td><td data-label="발생 시각"><time>${h(dateTime(item.occurred_at))}</time><span class="record-subtitle">수신 ${h(dateTime(item.received_at))}</span></td></tr>`).join('');
+      html = `<section class="audit-safety-note"><strong>Append-only · UTC</strong><p>에이전트가 제출한 운영 증적입니다. 인증된 연결 ID는 서버가 고정하며 비밀값, 전체 프롬프트·대화, 숨겨진 추론은 저장하지 않습니다.</p></section><section class="console-panel audit-panel"><form id="audit-filter" class="list-toolbar audit-toolbar"><select name="agent_id" aria-label="에이전트"><option value="">모든 에이전트</option>${agents.items.map(agent => `<option value="${h(agent.id)}" ${agent.id === selectedAgent ? 'selected' : ''}>${h(agent.name)}</option>`).join('')}</select><select name="outcome" aria-label="결과"><option value="">모든 결과</option>${Object.entries(outcomeLabel).map(([value,label]) => `<option value="${value}" ${value === selectedOutcome ? 'selected' : ''}>${label}</option>`).join('')}</select><input name="action" value="${h(selectedAction)}" pattern="[a-z][a-z0-9_.:-]*" maxlength="120" placeholder="작업명 필터 · release.verify"><button class="secondary-button" type="submit">필터 적용</button><button class="secondary-button" type="button" data-action="audit-filter-reset">초기화</button></form>${rows ? `<div class="table-scroll"><table class="records-table audit-table"><thead><tr><th>작업 · 요약</th><th>에이전트</th><th>결과</th><th>UTC 시각</th></tr></thead><tbody>${rows}</tbody></table></div>` : empty('감사 로그가 아직 없어요.','에이전트가 의미 있는 외부 작업이나 운영 변경을 마치면 구조화된 결과가 여기에 쌓입니다.')}<div class="pager"><button data-action="previous" ${pageOffset === 0 ? 'disabled' : ''}>${icon('arrow-left')} 이전</button><span>${Math.floor(pageOffset / 50) + 1} 페이지</span><button data-action="next" ${result.items.length < 50 ? 'disabled' : ''}>다음 ${icon('arrow-right')}</button></div></section>`;
     } else if (view === 'vault') {
       const [result, audit] = await Promise.all([api('/v1/vault'), api('/v1/vault-access-audit?limit=100')]);
       const auditRows = audit.items.map(item => { const [outcomeLabel,outcomeClass] = vaultAuditOutcome(item.outcome); return `<tr><td><strong>${h(item.name === '*' ? 'Vault 목록' : item.name)}</strong><span class="record-subtitle">비밀값 원문은 감사 기록에 저장되지 않습니다.</span></td><td><strong>${h(item.client_name)}</strong><span class="record-subtitle">${h(vaultClientType(item.client_type))}</span></td><td><span class="vault-audit-status ${h(outcomeClass)}"><i></i>${h(outcomeLabel)}</span></td><td><time datetime="${h(new Date(item.accessed_at * 1000).toISOString())}">${h(dateTime(item.accessed_at))}</time></td></tr>`; }).join('');
@@ -494,6 +510,18 @@ async function navigate(view, reset = true, historyMode = 'push') {
         if (room && messages.cursor > (room.last_read_sequence || 0)) api(`/v1/agent-rooms/${encodeURIComponent(room.id)}/read`,{method:'POST',body:JSON.stringify({sequence:messages.cursor})}).catch(() => {});
       }
     }
+    const auditFilter = $('#audit-filter');
+    if (auditFilter) auditFilter.addEventListener('submit',event => {
+      event.preventDefault();
+      const values = new FormData(auditFilter); const url = new URL(location.href);
+      for (const name of ['agent_id','outcome','action']) {
+        const value = String(values.get(name) || '').trim();
+        if (value) url.searchParams.set(name,value); else url.searchParams.delete(name);
+      }
+      url.searchParams.delete('page'); pageOffset = 0;
+      history.replaceState({view:currentView},'',url.pathname + url.search + url.hash);
+      navigate('audits',false,'none');
+    });
     const filter = $('#kind-filter');
     if (filter) filter.addEventListener('change', () => { recordKind = filter.value; pageOffset = 0; navigate(view, false); });
     const search = $('#search-records');
@@ -755,6 +783,12 @@ document.addEventListener('click', async event => {
     if (action === 'copy-install-prompt') {
       return copyInstallPrompt();
     }
+    if (action === 'audit-filter-reset') {
+      const next = new URL(location.href);
+      for (const key of ['agent_id','outcome','action','page']) next.searchParams.delete(key);
+      history.replaceState({view:currentView},'',next.pathname + next.search + next.hash);
+      pageOffset = 0; return navigate('audits',false,'none');
+    }
     if (action === 'copy-mcp-url') {
       try { await copyText(url); toast('MCP 서버 주소를 복사했습니다.'); }
       catch { detail('Vibe Memory MCP 주소', `<pre class="detail-pre">${h(url)}</pre>`); }
@@ -780,6 +814,7 @@ document.addEventListener('click', async event => {
     if (action === 'previous') { pageOffset = Math.max(0,pageOffset - 50); const previousUrl = new URL(location.href); if (pageOffset) previousUrl.searchParams.set('page',String(pageOffset / 50 + 1)); else previousUrl.searchParams.delete('page'); history.replaceState({view:currentView},'',previousUrl.pathname + previousUrl.search + previousUrl.hash); return navigate(currentView, false); }
     if (action === 'detail') { const record = await api('/v1/records/' + encodeURIComponent(id)); const claims = record.correction_claims || []; const correction = record.correction_status ? `<section class="correction-detail"><strong>정정 상태: ${h(record.correction_status)}</strong><p>‘current’는 알려진 대체 기록이 없다는 뜻이며 사실 검증 완료를 의미하지 않습니다. 부분 정정·충돌·순환은 숨기지 않습니다.</p>${(record.supersedes_ids || []).length ? `<p>이 기록이 대체하는 항목: ${(record.supersedes_ids || []).map(value => `<code>${h(value)}</code>`).join(' ')}</p>` : ''}${claims.length ? `<div class="correction-claim-list">${claims.map(claim => `<article><div><strong>${h(claim.relation)} · ${h(claim.scope)}</strong><span class="request-status ${claim.effective_for_exclusion ? 'completed' : 'planned'}">${claim.effective_for_exclusion ? '전체 대체로 적용' : '검토 필요'}</span></div><p>${h(claim.reason)}</p><dl><dt>후속 기록</dt><dd>${h(claim.replacement_id)}</dd><dt>등록 에이전트</dt><dd>${h(claim.creator_agent_name || '알 수 없음')}</dd><dt>상태</dt><dd>${h(claim.relation_status)} · ${h(claim.replacement_lifecycle)}${claim.cycle ? ' · 순환 감지' : ''}</dd></dl></article>`).join('')}</div>` : ''}</section>` : ''; return detail(record.title || '기록 상세', `${evidenceProfileDetail(record)}${correction}<dl class="request-detail-meta"><div><dt>작성 연결</dt><dd>${h(record.creator_agent_name || '알 수 없음')}</dd></div><div><dt>버전</dt><dd>v${h(record.version)}</dd></div><div><dt>원본 유형</dt><dd>${h(record.provenance?.source_type || 'agent-authored')}</dd></div><div><dt>기록 시각</dt><dd>${h(record.recorded_at || record.created_at)}</dd></div></dl><p class="detail-content-text">${h(record.content)}</p><details><summary>원본 JSON</summary><pre class="detail-pre">${h(JSON.stringify(record,null,2))}</pre></details>`,'MEMORY DETAIL'); }
     if (action === 'request-detail') { const record = await api('/v1/feature-requests/' + encodeURIComponent(id)); return detail(record.title,featureRequestDetail(record),'FEATURE REQUEST'); }
+    if (action === 'audit-detail') { const record = await api('/v1/agent-audit-logs/' + encodeURIComponent(id)); return detail(record.action,`<div class="audit-detail-head"><span class="audit-outcome ${h(record.outcome)}"><i></i>${h(record.outcome)}</span><time>${h(dateTime(record.occurred_at))}</time></div><p class="detail-content-text">${h(record.summary)}</p><dl class="request-detail-meta"><div><dt>인증된 에이전트</dt><dd>${h(record.agent_name)} · ${h(record.agent_id)}</dd></div><div><dt>연결</dt><dd>${h(record.transport)}</dd></div><div><dt>리소스</dt><dd>${h([record.resource_type,record.resource_id].filter(Boolean).join(' · ') || '없음')}</dd></div><div><dt>서버 수신</dt><dd>${h(dateTime(record.received_at))}</dd></div></dl><details><summary>비밀값이 제거된 metadata</summary><pre class="detail-pre">${h(JSON.stringify(record.metadata || {},null,2))}</pre></details>`,'AGENT AUDIT'); }
     if (action === 'relation-detail') {
       return detail('관계 근거',`<div class="relation-detail-route"><span>${h(sourceName)}</span><strong>${h(relation)}</strong><span>${h(targetName)}</span></div><div class="relation-detail-reason"><span>에이전트가 등록한 근거</span><p>${h(reason)}</p></div>`,'RELATION EVIDENCE');
     }

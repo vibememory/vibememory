@@ -72,6 +72,12 @@ class Store:
         self.query("""CREATE NODE TABLE IF NOT EXISTS Agent(
             id STRING PRIMARY KEY, owner STRING, name STRING, transport STRING,
             active BOOLEAN, created_at STRING, last_seen_at STRING)""")
+        self.query("""CREATE NODE TABLE IF NOT EXISTS AgentAuditLog(
+            id STRING PRIMARY KEY, sequence INT64, owner STRING, agent_id STRING,
+            agent_name STRING, transport STRING, action STRING, outcome STRING,
+            summary STRING, resource_type STRING, resource_id STRING, metadata STRING,
+            occurred_at STRING, received_at STRING, client_request_id STRING,
+            request_payload STRING)""")
         self.query("""CREATE NODE TABLE IF NOT EXISTS AgentMessage(
             id STRING PRIMARY KEY, sequence INT64, owner STRING, sender_agent_id STRING,
             sender_name STRING, recipient_agent_id STRING, kind STRING, subject STRING,
@@ -101,6 +107,10 @@ class Store:
         )
         self.message_sequence = (
             self.query("MATCH (m:AgentMessage) RETURN max(m.sequence) AS latest")[0]["latest"] or 0
+        )
+        self.audit_log_sequence = (
+            self.query("MATCH (a:AgentAuditLog) RETURN max(a.sequence) AS latest")[0]["latest"]
+            or 0
         )
         self.room_message_sequence = (
             self.query("MATCH (m:AgentRoomMessage) RETURN max(m.sequence) AS latest")[0]["latest"]
@@ -262,6 +272,109 @@ class Store:
             "MATCH (a:Agent {owner: $owner, id: $id}) SET a.active=false",
             {"owner": owner, "id": agent_id},
         )
+
+    @staticmethod
+    def audit_log_record(node):
+        result = {
+            key: value for key, value in node.items() if key not in {"owner", "request_payload"}
+        }
+        result["metadata"] = json.loads(result.get("metadata") or "{}")
+        result["client_request_id"] = result.get("client_request_id") or None
+        return result
+
+    def add_agent_audit_log(self, owner, agent_id, agent_name, transport, data):
+        payload = data.model_dump(mode="json")
+        payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        with self.transaction():
+            if data.client_request_id:
+                rows = self.query(
+                    """MATCH (a:AgentAuditLog {owner: $owner, agent_id: $agent_id,
+                    client_request_id: $client_request_id}) RETURN a""",
+                    {
+                        "owner": owner,
+                        "agent_id": agent_id,
+                        "client_request_id": data.client_request_id,
+                    },
+                )
+                if rows:
+                    if rows[0]["a"]["request_payload"] != payload_json:
+                        raise DuplicateRequestConflict()
+                    return self.audit_log_record(rows[0]["a"]), False
+            received_at = now()
+            self.audit_log_sequence += 1
+            record = {
+                "id": uid(),
+                "sequence": self.audit_log_sequence,
+                "owner": owner,
+                "agent_id": agent_id,
+                "agent_name": agent_name,
+                "transport": transport,
+                "action": data.action,
+                "outcome": data.outcome,
+                "summary": data.summary,
+                "resource_type": data.resource_type,
+                "resource_id": data.resource_id,
+                "metadata": json.dumps(data.metadata, ensure_ascii=False),
+                "occurred_at": data.occurred_at.isoformat() if data.occurred_at else received_at,
+                "received_at": received_at,
+                "client_request_id": data.client_request_id or "",
+                "request_payload": payload_json,
+            }
+            self.query(
+                """CREATE (:AgentAuditLog {id: $id, sequence: $sequence, owner: $owner,
+                agent_id: $agent_id, agent_name: $agent_name, transport: $transport,
+                action: $action, outcome: $outcome, summary: $summary,
+                resource_type: $resource_type, resource_id: $resource_id, metadata: $metadata,
+                occurred_at: $occurred_at, received_at: $received_at,
+                client_request_id: $client_request_id, request_payload: $request_payload})""",
+                record,
+            )
+            self._event(
+                owner,
+                "agent_audit_log.created",
+                {
+                    "audit_log_id": record["id"],
+                    "agent_id": agent_id,
+                    "action": data.action,
+                },
+            )
+        return self.audit_log_record(record), True
+
+    def list_agent_audit_logs(
+        self, owner, agent_id, limit=50, offset=0, allow_owner=False,
+        filter_agent_id="", action="", outcome=""
+    ):
+        clauses = []
+        parameters = {"owner": owner, "limit": limit, "offset": offset}
+        if not allow_owner:
+            clauses.append("a.agent_id=$viewer_agent_id")
+            parameters["viewer_agent_id"] = agent_id
+        elif filter_agent_id:
+            clauses.append("a.agent_id=$filter_agent_id")
+            parameters["filter_agent_id"] = filter_agent_id
+        if action:
+            clauses.append("a.action=$action")
+            parameters["action"] = action
+        if outcome:
+            clauses.append("a.outcome=$outcome")
+            parameters["outcome"] = outcome
+        where = " WHERE " + " AND ".join(clauses) if clauses else ""
+        rows = self.query(
+            "MATCH (a:AgentAuditLog {owner: $owner})" + where
+            + " RETURN a ORDER BY a.sequence DESC SKIP $offset LIMIT $limit",
+            parameters,
+        )
+        return [self.audit_log_record(row["a"]) for row in rows]
+
+    def get_agent_audit_log(self, owner, agent_id, id, allow_owner=False):
+        rows = self.query(
+            """MATCH (a:AgentAuditLog {owner: $owner, id: $id})
+            WHERE $allow_owner OR a.agent_id=$agent_id RETURN a""",
+            {"owner": owner, "id": id, "agent_id": agent_id, "allow_owner": allow_owner},
+        )
+        if not rows:
+            raise NotFound()
+        return self.audit_log_record(rows[0]["a"])
 
     @staticmethod
     def message_record(node):

@@ -22,6 +22,10 @@ For a handoff that must preserve whether a choice was only proposed/open or expl
 
 An unavailable memory service must not block independent work. Never claim a read or write succeeded unless the tool returned success.
 
+## Failure reporting
+
+Do not answer only that a connection or operation “failed.” In the user's language, state the exact failed stage, sanitized error or structured reason code, what completed, what did not complete or was not attempted, and the smallest next action. Mark the cause `confirmed` only when returned evidence identifies it; otherwise call it `likely` with evidence or `unknown`. Keep transport availability, OAuth connection, effective permission, resource grant, and the requested data operation separate. For example, a connection failure means the memory write was not attempted; it is not evidence that the account lacks write permission. Never expose credentials, cookies, token values, Vault values, or raw resource bodies in diagnostics, and never claim a retry will work unless the blocker changed.
+
 Keep retrieval two-stage: `memory_search` uses a minimal bounded projection by default; inspect candidates, then call `record_get` for only the 1–3 records needed. Request standard metadata only when the task requires it.
 
 ## Selective graph recall

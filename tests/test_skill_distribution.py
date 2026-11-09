@@ -251,6 +251,36 @@ def test_all_skill_variants_teach_retrievable_record_authoring():
         assert "Do not add verification calls to every save" in skill
 
 
+def test_all_skill_variants_require_causal_failure_reporting():
+    skill_paths = [
+        ROOT / "skills/vibe-memory/SKILL.md",
+        ROOT / "claude-plugins/vibe-memory/skills/vibe-memory/SKILL.md",
+        ROOT / "plugins/vibe-memory/skills/vibe-memory/SKILL.md",
+    ]
+    for path in skill_paths:
+        skill = skill_bundle(path)
+        assert "Failure reporting" in skill
+        assert "failed stage" in skill.lower()
+        assert "not attempted" in skill.lower()
+        assert "confirmed" in skill
+        assert "unknown" in skill
+        assert "smallest" in skill
+        assert "next" in skill.lower()
+        assert "action" in skill.lower()
+        assert "retry will work unless the blocker changed" in skill.lower()
+
+
+def test_cli_skill_explains_browser_login_and_bootstrap_boundaries():
+    skill = skill_bundle(ROOT / "skills/vibe-memory/SKILL.md")
+    assert "execute the flow instead of merely reciting commands" in skill
+    assert "`login` attempts to open the default browser" in skill
+    assert "`--no-browser` explicitly disables that behavior" in skill
+    assert "A bootstrap failure means login and browser approval were not attempted" in skill
+    assert "release-assets.githubusercontent.com" in skill
+    assert "objects.githubusercontent.com" in skill
+    assert "the exact blocked hostname is unknown" in skill
+
+
 def test_bootstrap_rejects_tampering_and_untrusted_configuration(tmp_path, monkeypatch):
     installed = tmp_path / "installed"
     (installed / "scripts").mkdir(parents=True)

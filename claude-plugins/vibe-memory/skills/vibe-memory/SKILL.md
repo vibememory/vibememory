@@ -22,10 +22,25 @@ The plugin lifecycle hooks provide three guardrails:
   following `SessionStart(source=compact)` reminder asks for any still-unsaved
   durable delta.
 
-If the CLI is not connected, run `vibe-memory login --vault-access --name
+If the CLI is not connected, execute `vibe-memory login --vault-access --name
 "Claude Code"`, show the browser approval URL, and wait for the user to approve.
+The default command attempts to open the browser; `--no-browser` explicitly
+disables that behavior and is only a fallback when browser launch is unavailable.
 Never request or reveal an API key in chat. Independent work continues when Vibe
 Memory is unavailable.
+
+## Failure reporting
+
+Do not answer only that installation, connection, or an operation “failed.” In
+the user's language, state the exact failed stage, sanitized error evidence, what
+completed, what did not complete or was not attempted, and the smallest next
+action. Mark the cause `confirmed` only when returned evidence identifies it;
+otherwise call it `likely` with evidence or `unknown`. Keep Skill installation,
+CLI bootstrap/update, status, login-link issuance, browser launch, approval,
+token exchange, effective permission, and the requested data operation separate.
+A bootstrap failure means login and browser approval were not attempted. Never
+expose credentials, tokens, cookies, Vault values, or raw resource bodies, and
+never claim a retry will work unless the blocker changed.
 
 For substantial work, recall before planning. Keep the default minimal bounded
 projection and fetch only 1–3 selected records with `get`. Save a compact session checkpoint

@@ -37,7 +37,7 @@ For every non-trivial authorized task where prior context may matter: Do not wai
 6. After a meaningful external, deployment, permission, security, or admin action, append one sanitized `audit submit` result—not every tool call. Exclude secrets, prompts/transcripts, hidden reasoning, and raw output. Read [references/audit-logs.md](references/audit-logs.md) first.
 7. When Vibe Memory itself creates concrete recurring friction, check for an existing feature request and submit a concise non-duplicate.
 
-The service being unavailable must not block independent work. Report failed reads/writes and never claim success without successful CLI output. Read [references/workflows.md](references/workflows.md) for checkpoint shape, retrievable examples, optional one-time retrieval verification, and graph/memory hygiene.
+The service being unavailable must not block independent work. On bootstrap, status, login, browser-approval, or permission failure, report the exact stage, safe error evidence, completed and not-attempted stages, and next action; label an unproven cause `unknown`. Never claim success without successful CLI output. Read [references/installation.md](references/installation.md) for failure reporting and [references/workflows.md](references/workflows.md) for checkpoint and hygiene details.
 
 When a handoff must preserve a decision, completion claim, or reproducible failed attempt, use the optional Decision, Checkpoint, or Failure Reproduction profile. Read [references/profiles.md](references/profiles.md) first. Never infer a missing profile as decided or verified.
 
@@ -65,6 +65,4 @@ For Git-readable portability, export an Agent Memory Repo working copy. When imp
 - Per-agent append-only operational audit logs: [references/audit-logs.md](references/audit-logs.md)
 - Feature requests and operator handling: [references/product-feedback.md](references/product-feedback.md)
 - Claude Code, Codex, Cursor, Muse, Hermes, OpenClaw hooks: [references/lifecycle.md](references/lifecycle.md)
-- Agent Memory Repo export/import and approved maintenance: [references/portability.md](references/portability.md)
-
 Do not preload every reference. After `sync`, the manifest verifies this file, the bootstrap, and all references; reread this file and only references needed for the task.

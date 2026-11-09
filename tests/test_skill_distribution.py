@@ -225,6 +225,12 @@ def test_all_skill_variants_offer_repeatable_memory_hygiene():
         assert "the agent may offer again" in skill
         assert "Avoid immediate repeated prompts" in skill
         assert "ordinary proactive recall and checkpointing" in skill
+        assert "graph maintenance checkpoint" in skill
+        assert "older than 30 days" in skill
+        assert "durable records or relationships changed after it" in skill
+        assert "Time alone is not a maintenance signal" in skill
+        assert "UTC completion time" in skill
+        assert "do not store raw audit output" in skill.lower()
 
 
 def test_all_skill_variants_teach_retrievable_record_authoring():

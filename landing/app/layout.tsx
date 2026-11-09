@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { I18nHydrator } from "@/components/I18nHydrator";
 
-const assetVersion = "20261109-v039-3";
+const assetVersion = "20261109-v039-4";
 
 const siteDescription =
   "Claude Code, Codex, Cursor 등 여러 AI 에이전트가 기억과 관계를 공유하도록 연결하는 오픈소스 메모리 레이어입니다. MCP, Skill, Rust CLI와 self-hosting을 지원합니다.";
@@ -92,6 +93,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <script src={`/assets/theme-init.js?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/fonts/noto-sans-jp.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/fonts/noto-sans-sc.css?v=${assetVersion}`} />
+        <link rel="stylesheet" href={`/assets/fonts/noto-sans-thai.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/style.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/i18n.css?v=${assetVersion}`} />
         <link rel="stylesheet" href={`/assets/console-fixes.css?v=${assetVersion}`} />
@@ -101,7 +103,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
         <script src={`/assets/i18n.js?v=${assetVersion}`} defer />
         <script src={`/assets/install-prompt.js?v=${assetVersion}`} defer />
       </head>
-      <body>{children}</body>
+      <body>{children}<I18nHydrator /></body>
     </html>
   );
 }

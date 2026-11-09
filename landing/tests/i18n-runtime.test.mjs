@@ -70,6 +70,9 @@ test('all seven locales translate core and newly added UI labels', () => {
   assert.equal(window.vmTranslateText('아직 메시지가 없어요.'), 'Chưa có tin nhắn.');
   window.vmSetLocale('th');
   assert.equal(window.vmTranslateText('라이트 모드로 전환'), 'เปลี่ยนเป็นโหมดสว่าง');
+  assert.equal(window.vmTranslateText('일반 채팅 가이드'), 'คู่มือแชตทั่วไป');
+  window.vmSetLocale('en');
+  assert.equal(window.vmTranslateText('연결 화면 열기'), 'Open connection screen');
   assert.equal(window.vmSetLocale('unsupported'), false);
 });
 

@@ -65,6 +65,8 @@ eval(initSource);
 const source = fs.readFileSync(new URL('../public/assets/theme.js', import.meta.url), 'utf8');
 eval(source);
 documentListeners.get('DOMContentLoaded')();
+window.vmReactHydrated = true;
+windowListeners.get('vm-react-hydrated')();
 
 test('the blocking initializer follows the system theme before mounting a toggle', () => {
   assert.equal(document.documentElement.dataset.theme, 'dark');

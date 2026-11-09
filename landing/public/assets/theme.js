@@ -88,7 +88,7 @@
     if (event.key === storageKey) applyTheme(valid.has(event.newValue) ? event.newValue : systemTheme());
   });
   document.addEventListener('DOMContentLoaded', () => {
-    mountToggle();
-    window.addEventListener('load', mountToggle, {once:true});
+    if (window.vmReactHydrated) mountToggle();
+    else window.addEventListener('vm-react-hydrated', mountToggle, {once:true});
   });
 })();

@@ -10,6 +10,9 @@ License: MIT
 
 - Connection guide: https://vibememory.io/guide
 - Product-specific harness guides: https://vibememory.io/guide/harnesses
+- General chat guides: https://vibememory.io/guide/chat
+- ChatGPT chat guide: https://vibememory.io/guide/chatgpt
+- Claude chat guide: https://vibememory.io/guide/claude
 - Claude Code guide: https://vibememory.io/guide/claude-code
 - OpenAI Codex guide: https://vibememory.io/guide/codex
 - Cursor guide: https://vibememory.io/guide/cursor

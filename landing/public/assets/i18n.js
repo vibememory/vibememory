@@ -9,6 +9,9 @@
     '/connect': {ko:'에이전트 연결 — Vibe Memory',en:'Connect agent — Vibe Memory',zh:'连接智能体 — Vibe Memory',ja:'エージェント接続 — Vibe Memory',es:'Conectar agente — Vibe Memory',vi:'Kết nối tác nhân — Vibe Memory',th:'เชื่อมต่อเอเจนต์ — Vibe Memory'},
     '/console': {ko:'워크스페이스 — Vibe Memory',en:'Workspace — Vibe Memory',zh:'工作区 — Vibe Memory',ja:'ワークスペース — Vibe Memory',es:'Espacio de trabajo — Vibe Memory',vi:'Không gian làm việc — Vibe Memory',th:'พื้นที่ทำงาน — Vibe Memory'},
     '/guide': {ko:'연결 가이드 — Vibe Memory',en:'Connection guide — Vibe Memory',zh:'连接指南 — Vibe Memory',ja:'接続ガイド — Vibe Memory',es:'Guía de conexión — Vibe Memory',vi:'Hướng dẫn kết nối — Vibe Memory',th:'คู่มือการเชื่อมต่อ — Vibe Memory'},
+    '/guide/chat': {ko:'ChatGPT·Claude 일반 채팅 가이드 — Vibe Memory',en:'ChatGPT and Claude chat guides — Vibe Memory',zh:'ChatGPT 与 Claude 普通聊天指南 — Vibe Memory',ja:'ChatGPT・Claude一般チャットガイド — Vibe Memory',es:'Guías de chat para ChatGPT y Claude — Vibe Memory',vi:'Hướng dẫn chat ChatGPT và Claude — Vibe Memory',th:'คู่มือแชต ChatGPT และ Claude — Vibe Memory'},
+    '/guide/chatgpt': {ko:'ChatGPT 일반 채팅 연결 가이드 — Vibe Memory',en:'ChatGPT chat connection guide — Vibe Memory',zh:'ChatGPT 普通聊天连接指南 — Vibe Memory',ja:'ChatGPT一般チャット接続ガイド — Vibe Memory',es:'Guía de conexión para ChatGPT — Vibe Memory',vi:'Hướng dẫn kết nối ChatGPT — Vibe Memory',th:'คู่มือเชื่อมต่อ ChatGPT — Vibe Memory'},
+    '/guide/claude': {ko:'Claude 일반 채팅 연결 가이드 — Vibe Memory',en:'Claude chat connection guide — Vibe Memory',zh:'Claude 普通聊天连接指南 — Vibe Memory',ja:'Claude一般チャット接続ガイド — Vibe Memory',es:'Guía de conexión para Claude — Vibe Memory',vi:'Hướng dẫn kết nối Claude — Vibe Memory',th:'คู่มือเชื่อมต่อ Claude — Vibe Memory'},
     '/guide/harnesses': {ko:'제품별 에이전트 연결 가이드 — Vibe Memory',en:'Product-specific agent guides — Vibe Memory',zh:'按产品分类的智能体连接指南 — Vibe Memory',ja:'製品別エージェント接続ガイド — Vibe Memory',es:'Guías por producto — Vibe Memory',vi:'Hướng dẫn theo sản phẩm — Vibe Memory',th:'คู่มือแยกตามผลิตภัณฑ์ — Vibe Memory'},
     '/admin': {ko:'관리자 — Vibe Memory',en:'Admin — Vibe Memory',zh:'管理控制台 — Vibe Memory',ja:'管理コンソール — Vibe Memory',es:'Administración — Vibe Memory',vi:'Quản trị — Vibe Memory',th:'ผู้ดูแล — Vibe Memory'},
     '/capture': {ko:'Vault 보안 입력 — Vibe Memory',en:'Secure Vault input — Vibe Memory',zh:'Vault 安全输入 — Vibe Memory',ja:'Vault安全入力 — Vibe Memory',es:'Entrada segura de Vault — Vibe Memory',vi:'Nhập Vault an toàn — Vibe Memory',th:'ป้อนข้อมูล Vault อย่างปลอดภัย — Vibe Memory'},
@@ -1287,7 +1290,92 @@
     ['before_agent_finalize를 발생시키지 않는 하네스 경로에서는 마지막 체크포인트 패스를 강제할 수 없습니다.','Harness paths that do not emit before_agent_finalize cannot force the final checkpoint pass.','不会触发 before_agent_finalize 的框架路径无法强制执行最后一次检查点。','before_agent_finalizeを発生させない経路では最終チェックポイントを強制できません。','Las rutas que no emiten before_agent_finalize no pueden forzar el checkpoint final.','Đường dẫn không phát before_agent_finalize không thể ép checkpoint cuối.','เส้นทางที่ไม่ส่ง before_agent_finalize ไม่สามารถบังคับ checkpoint สุดท้ายได้'],
     ['다른 제품 가이드','Other product guides','其他产品指南','他の製品ガイド','Otras guías','Hướng dẫn sản phẩm khác','คู่มือผลิตภัณฑ์อื่น']
   ];
-  for (const row of [...extraRows, ...coreSupplementRows, ...handoffStoryRows, ...guideSupplementRows, ...harnessGuideRows]) {
+  const chatGuideRows = [
+    ['일반 채팅 가이드','General chat guide','普通聊天指南','一般チャットガイド','Guía de chat','Hướng dẫn chat','คู่มือแชตทั่วไป'],
+    ['일반 채팅','General chat','普通聊天','一般チャット','Chat general','Chat thông thường','แชตทั่วไป'],
+    ['코딩 하네스 가이드','Coding harness guides','编码框架指南','コーディングハーネスガイド','Guías para agentes de código','Hướng dẫn tác nhân code','คู่มือฮาร์เนสเขียนโค้ด'],
+    ['코딩 모드가 아니어도,','Even outside coding mode,','即使不在编码模式，','コーディングモードでなくても、','Incluso fuera del modo de código,','Ngay cả ngoài chế độ code,','แม้ไม่อยู่ในโหมดเขียนโค้ด'],
+    ['기억을 이어가세요.','keep your memory connected.','也让记忆持续相连。','記憶をつなげましょう。','mantén la memoria conectada.','hãy giữ ký ức liền mạch.','ให้ความทรงจำเชื่อมต่อกัน'],
+    ['터미널과 Hook 없이 ChatGPT 또는 Claude의 일반 대화에서 원격 MCP로 기억을 찾고 저장하는 방법을 안내합니다.','Learn to recall and save memory through remote MCP in regular ChatGPT or Claude conversations, without a terminal or Hooks.','无需终端或 Hook，在 ChatGPT 或 Claude 普通对话中通过远程 MCP 查找并保存记忆。','ターミナルやHookなしで、ChatGPTまたはClaudeの一般会話からリモートMCPで記憶を検索・保存します。','Consulta y guarda memoria por MCP remoto en chats normales de ChatGPT o Claude, sin terminal ni Hooks.','Tìm và lưu ký ức qua MCP từ xa trong chat ChatGPT hoặc Claude, không cần terminal hay Hook.','ค้นและบันทึกความจำผ่าน MCP ระยะไกลในแชต ChatGPT หรือ Claude โดยไม่ใช้เทอร์มินัลหรือ Hook'],
+    ['일반 채팅에는 세션 Hook이 없습니다.','General chat has no session Hooks.','普通聊天没有会话 Hook。','一般チャットにはセッションHookがありません。','El chat general no tiene Hooks de sesión.','Chat thông thường không có Hook phiên.','แชตทั่วไปไม่มี Hook ของเซสชัน'],
+    ['설치한 Plugin 또는 Connector를 대화에서 활성화하고, 시작 프롬프트로 필요한 순간에 기억을 검색·저장하도록 유도합니다.','Activate the installed Plugin or Connector in the conversation, then use the starter prompt to recall and save memory when useful.','在对话中启用已安装的 Plugin 或 Connector，并用起始提示词引导其在需要时查询和保存记忆。','インストールしたPluginまたはConnectorを会話で有効にし、開始プロンプトで必要なときに記憶を検索・保存させます。','Activa el Plugin o Connector y usa el prompt inicial para recuperar y guardar memoria cuando sea útil.','Bật Plugin hoặc Connector trong cuộc trò chuyện và dùng prompt khởi đầu để tìm, lưu ký ức khi cần.','เปิด Plugin หรือ Connector ในบทสนทนา แล้วใช้พรอมต์เริ่มต้นเพื่อค้นและบันทึกเมื่อจำเป็น'],
+    ['일반 채팅 가이드 열기','Open chat guide','打开聊天指南','チャットガイドを開く','Abrir guía de chat','Mở hướng dẫn chat','เปิดคู่มือแชต'],
+    ['사용 화면','Available surfaces','可用界面','利用可能な画面','Superficies disponibles','Nền tảng hỗ trợ','พื้นที่ใช้งาน'],
+    ['연결 형태','Connection type','连接类型','接続方式','Tipo de conexión','Kiểu kết nối','รูปแบบการเชื่อมต่อ'],
+    ['로컬 설치','Local install','本地安装','ローカルインストール','Instalación local','Cài đặt local','ติดตั้งในเครื่อง'],
+    ['필요 없음','Not required','无需','不要','No necesaria','Không cần','ไม่จำเป็น'],
+    ['자동 Hook','Automatic Hooks','自动 Hook','自動Hook','Hooks automáticos','Hook tự động','Hook อัตโนมัติ'],
+    ['일반 채팅 미지원','Not available in general chat','普通聊天不支持','一般チャット非対応','No disponible en chat','Không hỗ trợ trong chat','ไม่รองรับในแชตทั่วไป'],
+    ['연결 화면 열기','Open connection screen','打开连接页面','接続画面を開く','Abrir conexión','Mở màn hình kết nối','เปิดหน้าการเชื่อมต่อ'],
+    ['시작 프롬프트 복사','Copy starter prompt','复制起始提示词','開始プロンプトをコピー','Copiar prompt inicial','Sao chép prompt khởi đầu','คัดลอกพรอมต์เริ่มต้น'],
+    ['시작 프롬프트를 복사했습니다','Starter prompt copied','已复制起始提示词','開始プロンプトをコピーしました','Prompt inicial copiado','Đã sao chép prompt','คัดลอกพรอมต์แล้ว'],
+    ['MCP 주소 복사','Copy MCP address','复制 MCP 地址','MCPアドレスをコピー','Copiar dirección MCP','Sao chép địa chỉ MCP','คัดลอกที่อยู่ MCP'],
+    ['복사됨','Copied','已复制','コピー済み','Copiado','Đã sao chép','คัดลอกแล้ว'],
+    ['터미널 없이, 대화 화면에서 연결합니다.','Connect directly from the conversation screen—no terminal needed.','无需终端，直接从对话页面连接。','ターミナルを使わず会話画面から接続します。','Conecta desde la conversación, sin terminal.','Kết nối ngay trong màn hình chat, không cần terminal.','เชื่อมต่อจากหน้าสนทนาโดยไม่ต้องใช้เทอร์มินัล'],
+    ['API 키를 복사하지 않고 웹 로그인과 OAuth 승인으로 연결합니다.','Connect through web sign-in and OAuth consent without copying an API key.','通过网页登录与 OAuth 授权连接，无需复制 API 密钥。','APIキーをコピーせず、WebログインとOAuth承認で接続します。','Conecta con inicio web y OAuth sin copiar claves API.','Kết nối qua đăng nhập web và OAuth, không sao chép API key.','เชื่อมด้วยการล็อกอินเว็บและ OAuth โดยไม่คัดลอก API key'],
+    ['가능한 것과 자동화되지 않는 것','What works and what is not automated','可用功能与未自动化部分','できることと自動化されないこと','Qué funciona y qué no se automatiza','Những gì làm được và không tự động','สิ่งที่ทำได้และสิ่งที่ไม่อัตโนมัติ'],
+    ['일반 채팅에서 가능','Available in general chat','普通聊天可用','一般チャットで可能','Disponible en chat','Dùng được trong chat','ใช้ได้ในแชตทั่วไป'],
+    ['일반 채팅의 제한','General chat limitations','普通聊天限制','一般チャットの制限','Límites del chat','Giới hạn chat','ข้อจำกัดของแชตทั่วไป'],
+    ['첫 대화에서 이렇게 요청하세요.','Use this request in the first conversation.','在首次对话中这样请求。','最初の会話でこう依頼してください。','Usa esta petición en el primer chat.','Dùng yêu cầu này ở cuộc trò chuyện đầu tiên.','ใช้คำขอนี้ในการสนทนาครั้งแรก'],
+    ['Hook이 없는 일반 채팅에서도 기억 조회와 체크포인트 저장을 자연스럽게 유도하는 시작 지침입니다.','This starter instruction encourages recall and checkpoint saves in general chat without Hooks.','该起始指令可在没有 Hook 的普通聊天中自然引导记忆查询与检查点保存。','Hookのない一般チャットでも記憶検索とチェックポイント保存を促す開始指示です。','Esta instrucción guía la consulta y el guardado de checkpoints sin Hooks.','Chỉ dẫn này giúp tìm ký ức và lưu checkpoint trong chat không có Hook.','คำสั่งเริ่มต้นนี้ช่วยค้นความจำและบันทึก checkpoint ในแชตที่ไม่มี Hook'],
+    ['연결 검증 문장','Connection verification prompts','连接验证语句','接続確認文','Frases de verificación','Câu xác minh kết nối','ประโยคตรวจสอบการเชื่อมต่อ'],
+    ['권한은 연결별로 검토하고 철회하세요.','Review and revoke permissions per connection.','请逐个连接审查并撤销权限。','接続ごとに権限を確認・取り消してください。','Revisa y revoca permisos por conexión.','Xem và thu hồi quyền theo từng kết nối.','ตรวจสอบและถอนสิทธิ์แยกตามการเชื่อมต่อ'],
+    ['연결 제거','Remove connection','移除连接','接続を削除','Eliminar conexión','Gỡ kết nối','ลบการเชื่อมต่อ'],
+    ['코딩 에이전트가 필요하다면','If you need a coding agent','如果需要编码智能体','コーディングエージェントが必要なら','Si necesitas un agente de código','Nếu cần tác nhân code','หากต้องการเอเจนต์เขียนโค้ด'],
+    ['ChatGPT·Claude 일반 채팅 가이드','ChatGPT and Claude chat guide','ChatGPT 与 Claude 普通聊天指南','ChatGPT・Claude一般チャットガイド','Guía de chat para ChatGPT y Claude','Hướng dẫn chat ChatGPT và Claude','คู่มือแชต ChatGPT และ Claude'],
+    ['ChatGPT 일반 채팅 가이드','ChatGPT general chat guide','ChatGPT 普通聊天指南','ChatGPT一般チャットガイド','Guía de chat de ChatGPT','Hướng dẫn chat ChatGPT','คู่มือแชต ChatGPT'],
+    ['Claude 일반 채팅 가이드','Claude general chat guide','Claude 普通聊天指南','Claude一般チャットガイド','Guía de chat de Claude','Hướng dẫn chat Claude','คู่มือแชต Claude'],
+    ['일반 Chat과 Work에서 Vibe Memory Plugin을 설치하고, 새 대화에서 기억 도구를 직접 선택해 사용합니다.','Install the Vibe Memory Plugin in Chat and Work, then select its memory tools in a new conversation.','在 Chat 与 Work 中安装 Vibe Memory Plugin，并在新对话中选择记忆工具。','ChatとWorkにVibe Memory Pluginを導入し、新しい会話で記憶ツールを選びます。','Instala el Plugin en Chat y Work y selecciónalo en una conversación nueva.','Cài Plugin trong Chat và Work, rồi chọn công cụ ký ức ở cuộc trò chuyện mới.','ติดตั้ง Plugin ใน Chat และ Work แล้วเลือกเครื่องมือความจำในบทสนทนาใหม่'],
+    ['Claude의 Plugins 또는 Customize 화면에서 Vibe Memory를 원격 커넥터로 추가하고, 사용할 대화에서 연결을 활성화합니다.','Add Vibe Memory as a remote connector from Claude Plugins or Customize, then enable it in the conversation.','在 Claude 的 Plugins 或 Customize 中添加远程连接器，并在对话中启用。','ClaudeのPluginsまたはCustomizeでリモートConnectorを追加し、会話で有効にします。','Añade Vibe Memory como conector remoto y actívalo en la conversación.','Thêm Vibe Memory làm connector từ xa và bật trong cuộc trò chuyện.','เพิ่ม Vibe Memory เป็น connector ระยะไกลและเปิดใช้ในบทสนทนา'],
+    ['Plugin 설치','Install the Plugin','安装 Plugin','Pluginをインストール','Instalar el Plugin','Cài Plugin','ติดตั้ง Plugin'],
+    ['웹에서 권한 승인','Approve permissions on the web','在网页批准权限','Webで権限を承認','Aprobar permisos en la web','Phê duyệt quyền trên web','อนุมัติสิทธิ์บนเว็บ'],
+    ['새 Chat 또는 Work 시작','Start a new Chat or Work','开始新的 Chat 或 Work','新しいChatまたはWorkを開始','Iniciar un Chat o Work nuevo','Bắt đầu Chat hoặc Work mới','เริ่ม Chat หรือ Work ใหม่'],
+    ['첫 요청으로 동작 확인','Verify with the first request','用首次请求验证','最初のリクエストで確認','Verificar con la primera petición','Xác minh bằng yêu cầu đầu tiên','ตรวจด้วยคำขอแรก'],
+    ['Connector 추가','Add the Connector','添加 Connector','Connectorを追加','Añadir el Connector','Thêm Connector','เพิ่ม Connector'],
+    ['인증 방식과 권한 확인','Review authentication and permissions','检查认证方式与权限','認証方式と権限を確認','Revisar autenticación y permisos','Kiểm tra xác thực và quyền','ตรวจการยืนยันตัวตนและสิทธิ์'],
+    ['대화에서 Connector 활성화','Enable the Connector in chat','在对话中启用 Connector','会話でConnectorを有効化','Activar el Connector en el chat','Bật Connector trong chat','เปิด Connector ในแชต'],
+    ['Codex 자동화 가이드','Codex automation guide','Codex 自动化指南','Codex自動化ガイド','Guía de automatización de Codex','Hướng dẫn tự động hóa Codex','คู่มือ Codex อัตโนมัติ'],
+    ['Claude Code 자동화 가이드','Claude Code automation guide','Claude Code 自动化指南','Claude Code自動化ガイド','Guía de automatización de Claude Code','Hướng dẫn tự động hóa Claude Code','คู่มือ Claude Code อัตโนมัติ'],
+    ['Vibe Memory Plugin 페이지를 열어 설치합니다. 직접 연결할 때는 Plugins의 Add custom MCP server에 Vibe Memory MCP 주소를 입력합니다.','Open the Vibe Memory Plugin page and install it. For a manual setup, enter the Vibe Memory MCP URL under Add custom MCP server in Plugins.','打开 Vibe Memory Plugin 页面并安装。手动连接时，在 Plugins 的 Add custom MCP server 中输入 MCP 地址。','Vibe Memory Pluginページからインストールします。手動接続ではPluginsのAdd custom MCP serverにMCPアドレスを入力します。','Abre la página del Plugin e instálalo. Para conexión manual, añade la URL MCP en Add custom MCP server.','Mở trang Plugin và cài đặt. Nếu kết nối thủ công, nhập địa chỉ MCP trong Add custom MCP server.','เปิดหน้า Plugin และติดตั้ง หากเชื่อมเองให้ใส่ URL MCP ใน Add custom MCP server'],
+    ['Vibe Memory 로그인 화면에서 계정과 요청 권한을 확인합니다. API 키나 비밀번호를 대화에 붙여넣지 않습니다.','Review the account and requested permissions on the Vibe Memory sign-in screen. Never paste API keys or passwords into chat.','在 Vibe Memory 登录页面检查账户与请求权限。不要在聊天中粘贴 API 密钥或密码。','Vibe Memoryのログイン画面でアカウントと要求権限を確認し、APIキーやパスワードを貼り付けません。','Revisa la cuenta y los permisos solicitados. No pegues claves ni contraseñas en el chat.','Kiểm tra tài khoản và quyền yêu cầu. Không dán API key hoặc mật khẩu vào chat.','ตรวจบัญชีและสิทธิ์ที่ขอ อย่าวาง API key หรือรหัสผ่านในแชต'],
+    ['설치 후 새 대화를 시작하고 입력창에서 @를 입력해 Vibe Memory를 선택합니다. 기존 대화에는 새 Plugin이 바로 나타나지 않을 수 있습니다.','After installation, start a new conversation, type @, and select Vibe Memory. A newly installed Plugin may not appear in an existing chat.','安装后新建对话，输入 @ 并选择 Vibe Memory。新 Plugin 可能不会立即出现在旧对话中。','導入後に新しい会話を始め、@でVibe Memoryを選びます。既存会話にはすぐ表示されない場合があります。','Tras instalarlo, abre un chat nuevo, escribe @ y elige Vibe Memory. Puede no aparecer en chats existentes.','Sau khi cài, mở cuộc trò chuyện mới, gõ @ và chọn Vibe Memory. Plugin có thể chưa hiện trong chat cũ.','หลังติดตั้งให้เปิดแชตใหม่ พิมพ์ @ และเลือก Vibe Memory ปลั๊กอินอาจไม่ปรากฏในแชตเดิม'],
+    ['아래 시작 프롬프트를 붙여넣고 최근 기억 검색과 대화 체크포인트 저장을 각각 실행해 도구 호출을 확인합니다.','Paste the starter prompt below, then verify the tool by recalling recent memory and saving a conversation checkpoint.','粘贴下方起始提示词，分别执行近期记忆查询与对话检查点保存。','下の開始プロンプトを貼り、最近の記憶検索と会話チェックポイント保存を実行します。','Pega el prompt inicial y prueba una consulta reciente y un checkpoint.','Dán prompt bên dưới, rồi thử tìm ký ức gần đây và lưu checkpoint.','วางพรอมต์เริ่มต้น แล้วทดสอบค้นความจำล่าสุดและบันทึก checkpoint'],
+    ['Plugins의 Connectors 필터 또는 기존 Customize → Connectors에서 Add custom connector를 선택하고 Vibe Memory MCP 주소를 입력합니다.','From the Connectors filter in Plugins or Customize → Connectors, choose Add custom connector and enter the Vibe Memory MCP URL.','在 Plugins 的 Connectors 筛选器或 Customize → Connectors 中选择 Add custom connector，并输入 MCP 地址。','PluginsのConnectorsまたはCustomize → ConnectorsでAdd custom connectorを選び、MCPアドレスを入力します。','En Plugins o Customize → Connectors, elige Add custom connector e introduce la URL MCP.','Trong Plugins hoặc Customize → Connectors, chọn Add custom connector và nhập URL MCP.','ใน Plugins หรือ Customize → Connectors เลือก Add custom connector แล้วใส่ URL MCP'],
+    ['감지된 OAuth 설정을 확인하고 웹에서 Vibe Memory 로그인을 완료합니다. Team과 Enterprise에서는 조직 관리자가 먼저 커넥터를 허용해야 할 수 있습니다.','Review the detected OAuth setup and complete Vibe Memory sign-in on the web. Team and Enterprise may require an owner to allow the connector first.','确认检测到的 OAuth 设置并完成网页登录。Team 与 Enterprise 可能需要组织管理员先允许该连接器。','検出されたOAuth設定を確認し、Webでログインします。TeamとEnterpriseでは管理者の許可が必要な場合があります。','Revisa OAuth e inicia sesión en la web. En Team y Enterprise quizá deba autorizarlo un administrador.','Kiểm tra OAuth và đăng nhập trên web. Team và Enterprise có thể cần quản trị viên cho phép trước.','ตรวจ OAuth และล็อกอินบนเว็บ Team และ Enterprise อาจต้องให้ผู้ดูแลอนุญาตก่อน'],
+    ['새 대화의 + 메뉴 또는 Plugins 메뉴에서 Vibe Memory를 켭니다. 커넥터는 대화별로 비활성화할 수 있습니다.','Enable Vibe Memory from the + or Plugins menu in a new conversation. You can disable the connector per conversation.','在新对话的 + 或 Plugins 菜单中启用 Vibe Memory。可按对话禁用连接器。','新しい会話の+またはPluginsメニューで有効にします。Connectorは会話ごとに無効化できます。','Activa Vibe Memory desde + o Plugins. Puedes desactivarlo por conversación.','Bật Vibe Memory từ menu + hoặc Plugins. Có thể tắt theo từng cuộc trò chuyện.','เปิด Vibe Memory จากเมนู + หรือ Plugins และปิดได้แยกตามบทสนทนา'],
+    ['아래 시작 프롬프트를 붙여넣고 검색과 저장을 각각 실행합니다. 도구 승인 화면에서는 이름과 입력값을 확인합니다.','Paste the starter prompt and run one recall and one save. Review the tool name and inputs on the approval screen.','粘贴起始提示词并分别执行查询与保存。在工具批准页面检查名称和输入值。','開始プロンプトを貼り、検索と保存を実行します。承認画面でツール名と入力を確認します。','Pega el prompt y ejecuta una consulta y un guardado. Revisa nombre y entradas al aprobar.','Dán prompt, thử tìm và lưu. Kiểm tra tên công cụ và dữ liệu nhập khi phê duyệt.','วางพรอมต์ แล้วทดสอบค้นและบันทึก ตรวจชื่อเครื่องมือและข้อมูลก่อนอนุมัติ'],
+    ['기억·엔티티·관계 검색과 조회','Search and retrieve memories, entities, and relationships','搜索并查询记忆、实体和关系','記憶・エンティティ・関係を検索・取得','Buscar memorias, entidades y relaciones','Tìm ký ức, thực thể và quan hệ','ค้นความจำ เอนทิตี และความสัมพันธ์'],
+    ['중요한 대화 맥락과 사용자 정정 저장','Save important context and user corrections','保存重要对话上下文与用户更正','重要な会話文脈とユーザー訂正を保存','Guardar contexto y correcciones importantes','Lưu ngữ cảnh và chỉnh sửa quan trọng','บันทึกบริบทและการแก้ไขที่สำคัญ'],
+    ['문서 메타정보와 에이전트 메시지 사용','Use document metadata and agent messages','使用文档元数据与智能体消息','文書メタデータとエージェントメッセージを利用','Usar metadatos y mensajes de agentes','Dùng metadata tài liệu và tin nhắn tác nhân','ใช้เมทาดาทาเอกสารและข้อความเอเจนต์'],
+    ['Chat과 Work에서 같은 Vibe Memory 계정 사용','Use the same Vibe Memory account in Chat and Work','在 Chat 与 Work 使用同一账户','ChatとWorkで同じアカウントを使用','Usar la misma cuenta en Chat y Work','Dùng cùng tài khoản trong Chat và Work','ใช้บัญชีเดียวกันใน Chat และ Work'],
+    ['일반 Chat은 로컬 command Hook을 실행하지 않음','General Chat does not run local command Hooks','普通 Chat 不执行本地命令 Hook','一般Chatはローカルcommand Hookを実行しません','Chat no ejecuta Hooks locales','Chat không chạy command Hook local','Chat ไม่รัน command Hook ในเครื่อง'],
+    ['로컬 Codex의 config.toml과 CLI 상태를 읽지 않음','Does not read local Codex config.toml or CLI state','不读取本地 Codex config.toml 或 CLI 状态','ローカルCodexのconfig.tomlやCLI状態を読みません','No lee config.toml ni el estado del CLI local','Không đọc config.toml hoặc trạng thái CLI local','ไม่อ่าน config.toml หรือสถานะ CLI ในเครื่อง'],
+    ['세션 시작·종료 체크포인트는 대화 지침과 도구 호출로 수행','Session checkpoints depend on conversation instructions and tool calls','会话检查点依靠对话指令与工具调用','開始・終了チェックポイントは会話指示とツール呼び出しで行います','Los checkpoints dependen de instrucciones y herramientas','Checkpoint phiên dùng chỉ dẫn và lời gọi công cụ','checkpoint เซสชันใช้คำสั่งและการเรียกเครื่องมือ'],
+    ['워크스페이스 정책에 따라 Plugin 또는 도구가 제한될 수 있음','Workspace policy may restrict the Plugin or tools','工作区策略可能限制 Plugin 或工具','ワークスペースポリシーでPluginやツールが制限される場合があります','La política del espacio puede limitar el Plugin o sus herramientas','Chính sách workspace có thể hạn chế Plugin hoặc công cụ','นโยบาย workspace อาจจำกัด Plugin หรือเครื่องมือ'],
+    ['Claude Chat에서 기억·엔티티·관계 검색과 저장','Search and save memories, entities, and relationships in Claude Chat','在 Claude Chat 中查询并保存记忆、实体和关系','Claude Chatで記憶・エンティティ・関係を検索・保存','Buscar y guardar memorias, entidades y relaciones en Claude','Tìm và lưu ký ức, thực thể, quan hệ trong Claude','ค้นและบันทึกความจำ เอนทิตี และความสัมพันธ์ใน Claude'],
+    ['웹·모바일·Desktop에서 같은 원격 Connector 사용','Use the same remote Connector on web, mobile, and Desktop','在网页、移动端与 Desktop 使用同一远程 Connector','Web・モバイル・Desktopで同じConnectorを利用','Usar el mismo Connector en web, móvil y Desktop','Dùng cùng Connector trên web, mobile và Desktop','ใช้ Connector เดียวกันบนเว็บ มือถือ และ Desktop'],
+    ['대화별 Connector 활성화와 도구별 승인','Enable per conversation and approve each tool','按对话启用 Connector，并逐工具批准','会話ごとの有効化とツールごとの承認','Activar por conversación y aprobar cada herramienta','Bật theo cuộc trò chuyện và duyệt từng công cụ','เปิดแยกตามบทสนทนาและอนุมัติแต่ละเครื่องมือ'],
+    ['문서 메타정보, 메시지, 기능 요청 도구 사용','Use document metadata, messaging, and feature-request tools','使用文档元数据、消息与功能请求工具','文書メタデータ、メッセージ、機能リクエストを利用','Usar metadatos, mensajes y solicitudes','Dùng metadata, tin nhắn và yêu cầu tính năng','ใช้เมทาดาทา ข้อความ และคำขอฟีเจอร์'],
+    ['일반 Chat에서는 Claude Code의 로컬 Hook을 실행하지 않음','General Chat does not run Claude Code local Hooks','普通 Chat 不执行 Claude Code 本地 Hook','一般ChatではClaude CodeのローカルHookを実行しません','Chat no ejecuta Hooks locales de Claude Code','Chat không chạy Hook local của Claude Code','Chat ไม่รัน Hook ในเครื่องของ Claude Code'],
+    ['로컬 Desktop Extension과 원격 Connector는 서로 다른 연결 방식','Desktop Extensions and remote Connectors are different connection types','本地 Desktop Extension 与远程 Connector 是不同连接方式','Desktop ExtensionとリモートConnectorは別の接続方式です','Desktop Extension y Connector remoto son conexiones distintas','Desktop Extension và Connector từ xa là hai kiểu khác nhau','Desktop Extension และ Connector ระยะไกลเป็นคนละแบบ'],
+    ['조직 정책과 플랜에 따라 커넥터 추가 권한이 제한될 수 있음','Plan and organization policy may restrict adding connectors','套餐与组织策略可能限制添加连接器','プランや組織ポリシーで追加権限が制限される場合があります','El plan y la política pueden limitar conectores','Gói và chính sách tổ chức có thể hạn chế connector','แพ็กเกจและนโยบายองค์กรอาจจำกัดการเพิ่ม connector'],
+    ['Vibe Memory에서 최근 프로젝트 기억 3개를 찾아 제목과 근거 ID만 보여줘.','Find three recent project memories in Vibe Memory and show only their titles and evidence IDs.','在 Vibe Memory 中查找 3 条近期项目记忆，只显示标题与依据 ID。','Vibe Memoryで最近のプロジェクト記憶を3件探し、タイトルと根拠IDだけ表示してください。','Busca tres memorias recientes y muestra solo título e ID de evidencia.','Tìm 3 ký ức dự án gần đây, chỉ hiện tiêu đề và ID bằng chứng.','ค้นความจำโปรเจกต์ล่าสุด 3 รายการและแสดงเฉพาะชื่อกับ evidence ID'],
+    ['이 대화의 핵심 결정 하나를 키워드와 함께 Vibe Memory에 체크포인트로 저장해줘.','Save one key decision from this conversation to Vibe Memory as a checkpoint with keywords.','将本次对话的一项关键决定连同关键词保存为检查点。','この会話の重要な決定を1つ、キーワード付きでチェックポイント保存してください。','Guarda una decisión clave como checkpoint con palabras clave.','Lưu một quyết định chính làm checkpoint kèm từ khóa.','บันทึกการตัดสินใจสำคัญหนึ่งข้อเป็น checkpoint พร้อมคีย์เวิร์ด'],
+    ['Vibe Memory Connector로 최근 프로젝트 기억 3개를 찾아 제목과 근거 ID만 보여줘.','Use the Vibe Memory Connector to find three recent project memories and show only titles and evidence IDs.','使用 Vibe Memory Connector 查找 3 条近期项目记忆，只显示标题与依据 ID。','Vibe Memory Connectorで最近の記憶を3件探し、タイトルと根拠IDだけ表示してください。','Usa el Connector para buscar tres memorias y muestra título e ID.','Dùng Connector tìm 3 ký ức gần đây, chỉ hiện tiêu đề và ID.','ใช้ Connector ค้นความจำล่าสุด 3 รายการและแสดงชื่อกับ ID'],
+    ['ChatGPT Plugins에서 Vibe Memory를 열고 연결 또는 Plugin을 제거합니다.','Open Vibe Memory in ChatGPT Plugins and remove the connection or Plugin.','在 ChatGPT Plugins 中打开 Vibe Memory，并移除连接或 Plugin。','ChatGPT PluginsでVibe Memoryを開き、接続またはPluginを削除します。','Abre Vibe Memory en Plugins y elimina la conexión o Plugin.','Mở Vibe Memory trong Plugins và gỡ kết nối hoặc Plugin.','เปิด Vibe Memory ใน Plugins แล้วลบการเชื่อมต่อหรือ Plugin'],
+    ['Claude의 Plugins 또는 Customize → Connectors에서 Vibe Memory 연결을 제거합니다.','Remove Vibe Memory from Claude Plugins or Customize → Connectors.','在 Claude Plugins 或 Customize → Connectors 中移除 Vibe Memory。','ClaudeのPluginsまたはCustomize → Connectorsから削除します。','Elimina Vibe Memory desde Plugins o Customize → Connectors.','Gỡ Vibe Memory trong Plugins hoặc Customize → Connectors.','ลบ Vibe Memory จาก Plugins หรือ Customize → Connectors'],
+    ['Vibe Memory 콘솔의 MCP 연결에서 해당 연결을 철회합니다.','Revoke the connection under MCP connections in the Vibe Memory console.','在 Vibe Memory 控制台的 MCP 连接中撤销该连接。','Vibe MemoryコンソールのMCP接続から取り消します。','Revoca la conexión en Conexiones MCP de la consola.','Thu hồi trong mục kết nối MCP của console.','ถอนการเชื่อมต่อใน MCP connections ของคอนโซล'],
+    ['Vibe Memory는 저장·조회와 권한 관리를 담당합니다. 답변 생성, 키워드 추출, 엔티티·관계 판단은 ','Vibe Memory handles storage, retrieval, and permissions. Answering, keyword extraction, and entity or relationship decisions are performed by ','Vibe Memory 负责存储、查询与权限管理。回答生成、关键词提取以及实体关系判断由','Vibe Memoryは保存・取得・権限管理を担当します。回答生成、キーワード抽出、エンティティ・関係判断は','Vibe Memory gestiona almacenamiento, consulta y permisos. Las respuestas, palabras y relaciones las decide ','Vibe Memory quản lý lưu trữ, truy xuất và quyền. Việc trả lời, trích từ khóa và xác định quan hệ do ','Vibe Memory จัดการการจัดเก็บ การค้น และสิทธิ์ ส่วนการตอบ การสกัดคีย์เวิร์ด และการตัดสินความสัมพันธ์ทำโดย '],
+    ['이 수행합니다. Vault는 별도 승인된 항목만 조회할 수 있습니다.','. Vault can retrieve only separately approved items.','执行。Vault 只能查询单独批准的项目。','が行います。Vaultは個別承認された項目だけ取得できます。','. Vault solo consulta elementos aprobados por separado.',' thực hiện. Vault chỉ đọc mục được phê duyệt riêng.',' Vault อ่านได้เฉพาะรายการที่อนุมัติแยกต่างหาก'],
+    ['이 대화에서는 Vibe Memory를 적극 사용해줘. 답변 전에 관련 기억이 도움이 되면 핵심 키워드만 추출해 검색하고, 사용자 정정·결정·선호·다음 작업처럼 나중에도 유용한 맥락은 답변 후 간결하게 저장해. 서버가 추론한다고 가정하지 말고 네가 엔티티와 관계를 판단해 구조화해. 매 메시지마다 기계적으로 호출하지 말고 실제 연속성에 도움이 될 때 사용해.','Use Vibe Memory proactively in this conversation. Before answering, search with a few key terms when prior context helps. After answering, save concise durable context such as corrections, decisions, preferences, and next actions. Structure entities and relationships yourself; do not assume the server infers them. Use it when it improves continuity, not mechanically on every message.','请在本次对话中主动使用 Vibe Memory。回答前在历史上下文有帮助时用少量关键词搜索；回答后简洁保存更正、决定、偏好与后续任务。请自行判断并结构化实体和关系，不要假设服务器会推断。仅在有助于连续性时使用。','この会話ではVibe Memoryを積極的に使ってください。過去の文脈が役立つ場合は少数のキーワードで検索し、訂正・決定・好み・次の作業を簡潔に保存します。エンティティと関係は自分で構造化し、毎回機械的に呼ばないでください。','Usa Vibe Memory de forma proactiva. Busca con pocas palabras cuando el contexto ayude y guarda correcciones, decisiones, preferencias y próximos pasos. Estructura tú las entidades y relaciones; úsalo cuando mejore la continuidad, no en cada mensaje.','Hãy chủ động dùng Vibe Memory. Tìm bằng vài từ khóa khi ngữ cảnh cũ hữu ích và lưu ngắn gọn chỉnh sửa, quyết định, sở thích, việc tiếp theo. Tự cấu trúc thực thể và quan hệ; chỉ dùng khi giúp duy trì ngữ cảnh.','ใช้ Vibe Memory เชิงรุก ค้นด้วยคีย์เวิร์ดไม่กี่คำเมื่อบริบทเดิมมีประโยชน์ และบันทึกการแก้ไข การตัดสินใจ ความชอบ และงานถัดไปอย่างกระชับ จัดโครงสร้างเอนทิตีและความสัมพันธ์เอง และใช้เมื่อช่วยให้บริบทต่อเนื่อง'],
+    ['이 대화에서는 Vibe Memory Connector를 적극 사용해줘. 답변 전에 관련 기억이 도움이 되면 핵심 키워드만 추출해 검색하고, 사용자 정정·결정·선호·다음 작업처럼 나중에도 유용한 맥락은 답변 후 간결하게 저장해. 서버가 추론한다고 가정하지 말고 네가 엔티티와 관계를 판단해 구조화해. 매 메시지마다 기계적으로 호출하지 말고 실제 연속성에 도움이 될 때 사용해.','Use the Vibe Memory Connector proactively. Search with a few key terms when prior context helps, then save concise corrections, decisions, preferences, and next actions. Structure entities and relationships yourself. Use it when it improves continuity, not mechanically on every message.','请主动使用 Vibe Memory Connector。在历史上下文有帮助时用少量关键词搜索，并简洁保存更正、决定、偏好与后续任务。请自行结构化实体和关系，仅在有助于连续性时使用。','Vibe Memory Connectorを積極的に使い、文脈が役立つときだけ少数のキーワードで検索し、訂正・決定・好み・次の作業を保存してください。エンティティと関係は自分で構造化します。','Usa el Connector de forma proactiva. Busca con pocas palabras cuando ayude y guarda correcciones, decisiones, preferencias y próximos pasos. Estructura tú las relaciones y úsalo solo cuando mejore la continuidad.','Hãy chủ động dùng Connector. Tìm bằng vài từ khóa khi cần và lưu chỉnh sửa, quyết định, sở thích, việc tiếp theo. Tự cấu trúc quan hệ và chỉ dùng khi giúp liên tục ngữ cảnh.','ใช้ Connector เชิงรุก ค้นด้วยคีย์เวิร์ดไม่กี่คำเมื่อจำเป็น บันทึกการแก้ไข การตัดสินใจ ความชอบ และงานถัดไป จัดโครงสร้างความสัมพันธ์เองและใช้เมื่อช่วยให้บริบทต่อเนื่อง'],
+    ['세션 자동 체크포인트는 대화 지침과 도구 호출로 수행','Automatic session checkpoints depend on conversation instructions and tool calls','自动会话检查点依靠对话指令与工具调用','自動セッションチェックポイントは会話指示とツール呼び出しで行います','Los checkpoints automáticos dependen de instrucciones y herramientas','Checkpoint tự động dùng chỉ dẫn và lời gọi công cụ','checkpoint อัตโนมัติใช้คำสั่งและการเรียกเครื่องมือ'],
+    ['Vibe Memory는 저장·조회와 권한 관리를 담당합니다. 답변 생성, 키워드 추출, 엔티티·관계 판단은 ChatGPT가 수행합니다. Vault는 별도 승인된 항목만 조회할 수 있습니다.','Vibe Memory handles storage, retrieval, and permissions. ChatGPT generates answers, extracts keywords, and decides entities and relationships. Vault can retrieve only separately approved items.','Vibe Memory 负责存储、查询与权限管理。ChatGPT 生成回答、提取关键词并判断实体关系。Vault 只能查询单独批准的项目。','Vibe Memoryは保存・取得・権限管理を担当し、回答生成、キーワード抽出、エンティティ・関係判断はChatGPTが行います。Vaultは個別承認項目だけ取得できます。','Vibe Memory gestiona almacenamiento, consulta y permisos. ChatGPT responde, extrae palabras y decide relaciones. Vault solo consulta elementos aprobados.','Vibe Memory quản lý lưu trữ, truy xuất và quyền. ChatGPT trả lời, trích từ khóa và xác định quan hệ. Vault chỉ đọc mục được duyệt.','Vibe Memory จัดการการจัดเก็บ การค้น และสิทธิ์ ส่วน ChatGPT ตอบ สกัดคีย์เวิร์ด และตัดสินความสัมพันธ์ Vault อ่านเฉพาะรายการที่อนุมัติ'],
+    ['Vibe Memory는 저장·조회와 권한 관리를 담당합니다. 답변 생성, 키워드 추출, 엔티티·관계 판단은 Claude가 수행합니다. Vault는 별도 승인된 항목만 조회할 수 있습니다.','Vibe Memory handles storage, retrieval, and permissions. Claude generates answers, extracts keywords, and decides entities and relationships. Vault can retrieve only separately approved items.','Vibe Memory 负责存储、查询与权限管理。Claude 生成回答、提取关键词并判断实体关系。Vault 只能查询单独批准的项目。','Vibe Memoryは保存・取得・権限管理を担当し、回答生成、キーワード抽出、エンティティ・関係判断はClaudeが行います。Vaultは個別承認項目だけ取得できます。','Vibe Memory gestiona almacenamiento, consulta y permisos. Claude responde, extrae palabras y decide relaciones. Vault solo consulta elementos aprobados.','Vibe Memory quản lý lưu trữ, truy xuất và quyền. Claude trả lời, trích từ khóa và xác định quan hệ. Vault chỉ đọc mục được duyệt.','Vibe Memory จัดการการจัดเก็บ การค้น และสิทธิ์ ส่วน Claude ตอบ สกัดคีย์เวิร์ด และตัดสินความสัมพันธ์ Vault อ่านเฉพาะรายการที่อนุมัติ'],
+    ['ChatGPT 일반 채팅 연결 가이드 | Vibe Memory','ChatGPT chat connection guide — Vibe Memory','ChatGPT 普通聊天连接指南 — Vibe Memory','ChatGPT一般チャット接続ガイド — Vibe Memory','Guía de conexión para ChatGPT — Vibe Memory','Hướng dẫn kết nối ChatGPT — Vibe Memory','คู่มือเชื่อมต่อ ChatGPT — Vibe Memory'],
+    ['Claude 일반 채팅 연결 가이드 | Vibe Memory','Claude chat connection guide — Vibe Memory','Claude 普通聊天连接指南 — Vibe Memory','Claude一般チャット接続ガイド — Vibe Memory','Guía de conexión para Claude — Vibe Memory','Hướng dẫn kết nối Claude — Vibe Memory','คู่มือเชื่อมต่อ Claude — Vibe Memory']
+  ];
+  for (const row of [...extraRows, ...coreSupplementRows, ...handoffStoryRows, ...guideSupplementRows, ...harnessGuideRows, ...chatGuideRows]) {
     if (row.length !== supported.length) throw new Error(`Incomplete locale row: ${row[0]}`);
     translations.set(row[0], Object.fromEntries(supported.map((code, index) => [code, row[index]])));
   }
@@ -1686,6 +1774,15 @@
     }
   }
 
+  function applyPageTitle() {
+    const path = location.pathname.replace(/\.html$/, '') || '/';
+    if (pageTitles[path]) document.title = pageTitles[path][locale];
+    else if (harnessPageNames[path]) {
+      const guideLabel = translations.get('연결 가이드')?.[locale] || 'Connection guide';
+      document.title = `${harnessPageNames[path]} ${guideLabel} — Vibe Memory`;
+    }
+  }
+
   function apply(root = document.body) {
     if (!root) return;
     applyGuideContent();
@@ -1698,11 +1795,7 @@
     }
     document.documentElement.lang = localeTags[locale].split('-')[0];
     const path = location.pathname.replace(/\.html$/, '') || '/';
-    if (pageTitles[path]) document.title = pageTitles[path][locale];
-    else if (harnessPageNames[path]) {
-      const guideLabel = translations.get('연결 가이드')?.[locale] || 'Connection guide';
-      document.title = `${harnessPageNames[path]} ${guideLabel} — Vibe Memory`;
-    }
+    applyPageTitle();
     const metadata = pageMetadata[path];
     if (metadata) {
       const description = document.querySelector?.('meta[name="description"]');
@@ -1758,23 +1851,31 @@
   window.confirm = message => nativeConfirm(translateText(String(message)));
 
   document.addEventListener('DOMContentLoaded', () => {
-    mountSwitcher(); apply();
-    window.addEventListener('load', () => { mountSwitcher(); apply(); }, {once:true});
-    const scrollToHashTarget = () => {
-      const hashTarget = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
-      if (hashTarget) hashTarget.scrollIntoView({block:'start'});
-    };
-    if (location.hash) {
-      requestAnimationFrame(() => requestAnimationFrame(scrollToHashTarget));
-      window.addEventListener('load', scrollToHashTarget, {once:true});
-      setTimeout(scrollToHashTarget, 250);
-    }
-    new MutationObserver(mutations => {
-      for (const mutation of mutations) {
-        if (mutation.type === 'characterData') translateNode(mutation.target);
-        if (mutation.type === 'attributes') translateElement(mutation.target);
-        for (const node of mutation.addedNodes) apply(node);
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+      mountSwitcher(); apply();
+      setTimeout(applyPageTitle, 250);
+      const scrollToHashTarget = () => {
+        const hashTarget = location.hash ? document.getElementById(decodeURIComponent(location.hash.slice(1))) : null;
+        if (hashTarget) hashTarget.scrollIntoView({block:'start'});
+      };
+      if (location.hash) {
+        scrollToHashTarget();
+        setTimeout(scrollToHashTarget, 250);
       }
-    }).observe(document.body, {subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','aria-label','title']});
+      new MutationObserver(mutations => {
+        for (const mutation of mutations) {
+          if (mutation.type === 'characterData') translateNode(mutation.target);
+          if (mutation.type === 'attributes') translateElement(mutation.target);
+          for (const node of mutation.addedNodes) apply(node);
+        }
+      }).observe(document.body, {subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','aria-label','title']});
+      }));
+    };
+    if (window.vmReactHydrated) start();
+    else window.addEventListener('vm-react-hydrated', start, {once:true});
   });
 })();

@@ -190,20 +190,21 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261109-v039-3"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261109-v039-3"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261109-v039-3"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261109-v039-3"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261109-v039-3"' in landing
-        assert '<script src="/assets/theme.js?v=20261109-v039-3" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261109-v039-3" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261109-v039-3" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261109-v039-3" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261109-v039-3" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261109-v039-3" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261109-v039-3" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261109-v039-3" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261109-v039-3" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261109-v039-4"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261109-v039-4"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261109-v039-4"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-thai.css?v=20261109-v039-4"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261109-v039-4"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261109-v039-4"' in landing
+        assert '<script src="/assets/theme.js?v=20261109-v039-4" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261109-v039-4" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261109-v039-4" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261109-v039-4" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261109-v039-4" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261109-v039-4" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261109-v039-4" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261109-v039-4" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261109-v039-4" defer="">' in admin
         assert 'class="admin-overview-grid"' in admin
         assert "function renderOverview()" in admin_script.text
         assert "/v1/admin/feature-requests?limit=5&offset=0" in admin_script.text
@@ -266,9 +267,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261109-v039-3' in connect
-        assert '/assets/theme.css?v=20261109-v039-3' in connect
-        assert '/assets/product-ui.css?v=20261109-v039-3' in connect
+        assert '/assets/ui-kit.css?v=20261109-v039-4' in connect
+        assert '/assets/theme.css?v=20261109-v039-4' in connect
+        assert '/assets/product-ui.css?v=20261109-v039-4' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text

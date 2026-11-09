@@ -20,12 +20,17 @@ def test_surface_support_matrix_separates_product_runtime_capabilities():
     assert set(openai) == {"chatgpt-chat", "chatgpt-work", "codex-local"}
     assert openai["chatgpt-chat"]["capabilities"]["hooks"] == "unsupported"
     assert openai["chatgpt-work"]["capabilities"]["hooks"] == "limited"
+    assert openai["chatgpt-chat"]["connection_url"] == "/guide/chatgpt"
+    assert openai["chatgpt-work"]["connection_url"] == "/guide/chatgpt"
     assert all(status == "supported" for status in openai["codex-local"]["capabilities"].values())
 
     anthropic = {surface["id"]: surface for surface in providers["anthropic"]["surfaces"]}
     assert set(anthropic) == {"claude-chat", "claude-desktop", "claude-cowork", "claude-code"}
     assert anthropic["claude-chat"]["capabilities"]["hooks"] == "unsupported"
     assert anthropic["claude-desktop"]["capabilities"]["local_runtime"] == "supported"
+    assert anthropic["claude-chat"]["connection_url"] == "/guide/claude"
+    assert anthropic["claude-desktop"]["connection_url"] == "/guide/claude"
+    assert anthropic["claude-cowork"]["connection_url"] == "/guide/claude"
     assert all(status == "supported" for status in anthropic["claude-code"]["capabilities"].values())
 
     allowed = {"supported", "limited", "unsupported"}

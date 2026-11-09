@@ -1,0 +1,3 @@
+@font-face{font-family:"Noto Sans Thai";font-style:normal;font-display:swap;font-weight:400;src:url(/assets/fonts/noto-sans-thai-thai-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Noto Sans Thai";font-style:normal;font-display:swap;font-weight:700;src:url(/assets/fonts/noto-sans-thai-thai-700-normal.woff2) format("woff2")}
+html:lang(th){--sans:"Noto Sans Thai",VibeSans,Arial,sans-serif}

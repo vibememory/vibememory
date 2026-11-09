@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "verified_at": "2026-11-09T00:00:00Z",
+  "verified_at": "2026-11-09T09:35:00Z",
   "time_basis": "UTC",
   "capabilities": [
     { "id": "remote_mcp", "label": "원격 MCP" },
@@ -19,21 +19,21 @@
           "name": "ChatGPT Chat",
           "recommended_for": "빠른 대화와 수동 기억 관리",
           "connection": "Vibe Memory Plugin",
-          "connection_url": "https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec",
+          "connection_url": "/guide/chatgpt",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "supported",
             "hooks": "unsupported",
             "local_runtime": "unsupported"
           },
-          "note": "대화 중 Skill이 기억 조회와 저장을 유도하지만, 세션 시작·종료 Hook은 실행하지 않습니다."
+          "note": "설치한 Plugin을 새 대화에서 선택해 기억을 조회·저장할 수 있지만, 로컬 세션 시작·종료 Hook은 실행하지 않습니다."
         },
         {
           "id": "chatgpt-work",
           "name": "ChatGPT Work",
           "recommended_for": "여러 단계의 업무와 결과물",
           "connection": "Vibe Memory Plugin",
-          "connection_url": "https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec",
+          "connection_url": "/guide/chatgpt",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "supported",
@@ -61,28 +61,28 @@
     {
       "id": "anthropic",
       "name": "Anthropic",
-      "source_url": "https://support.claude.com/en/articles/13837440-use-plugins-in-claude",
+      "source_url": "https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp",
       "surfaces": [
         {
           "id": "claude-chat",
           "name": "Claude Chat · Mobile",
           "recommended_for": "어디서나 대화형 기억 사용",
           "connection": "원격 MCP Connector",
-          "connection_url": "https://claude.ai/customize/connectors",
+          "connection_url": "/guide/claude",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "limited",
             "hooks": "unsupported",
             "local_runtime": "unsupported"
           },
-          "note": "원격 MCP는 사용할 수 있습니다. Plugin Skill은 유료 플랜에서 제공되며 Hook과 로컬 MCP는 Chat에서 실행되지 않습니다."
+          "note": "원격 Connector를 대화별로 활성화해 사용할 수 있습니다. Free 플랜은 커스텀 Connector 한 개로 제한되며 Hook과 로컬 MCP는 Chat에서 실행되지 않습니다."
         },
         {
           "id": "claude-desktop",
           "name": "Claude Desktop Chat",
           "recommended_for": "대화와 로컬 MCP 확장",
           "connection": "Connector / Desktop Extension",
-          "connection_url": "https://claude.ai/customize/connectors",
+          "connection_url": "/guide/claude",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "limited",
@@ -96,7 +96,7 @@
           "name": "Claude Cowork",
           "recommended_for": "로컬 자료를 포함한 장기 업무",
           "connection": "Vibe Memory Plugin",
-          "connection_url": "https://claude.ai/customize/plugins",
+          "connection_url": "/guide/claude",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "supported",

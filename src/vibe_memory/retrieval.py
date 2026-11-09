@@ -1,9 +1,75 @@
+import json
 from datetime import datetime
 
 from .corrections import annotate_corrections
 from .embeddings import cosine
 from .security import record_is_retrievable
 from .temporal import recorded_instant
+
+MINIMAL_SEARCH_FIELDS = (
+    "id",
+    "kind",
+    "title",
+    "keywords",
+    "trust_level",
+    "security_state",
+    "matched_keywords",
+    "score",
+    "correction_status",
+    "correction_graph_complete",
+)
+
+
+def _wire_size(value):
+    return len(
+        json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    )
+
+
+def _with_response_size(value):
+    value["response_bytes"] = 0
+    for _ in range(8):
+        size = _wire_size(value)
+        if value["response_bytes"] == size:
+            break
+        value["response_bytes"] = size
+    return value
+
+
+def _project_search_hit(hit, projection):
+    if projection == "standard":
+        return hit
+    return {key: hit.get(key) for key in MINIMAL_SEARCH_FIELDS}
+
+
+def _bounded_search_response(result, request):
+    candidates = [
+        _project_search_hit(hit, request.projection) for hit in result.pop("hits", [])
+    ]
+
+    def response(hits):
+        payload = {
+            **result,
+            "projection": request.projection,
+            "byte_limit": request.byte_limit,
+            "selected_hits": len(candidates),
+            "returned": len(hits),
+            "truncated": len(hits) < len(candidates),
+            "hits": hits,
+        }
+        return _with_response_size(payload)
+
+    hits = []
+    for hit in candidates:
+        candidate = response([*hits, hit])
+        if candidate["response_bytes"] <= request.byte_limit:
+            hits.append(hit)
+        else:
+            break
+    payload = response(hits)
+    if payload["response_bytes"] > request.byte_limit:
+        raise ValueError("byte_limit is too small for the search response envelope")
+    return payload
 
 
 def record_matches_filters(record, stored_keywords, request):
@@ -70,7 +136,7 @@ def retrieve(store, embedder, owner, request):
                 "known_at": request.known_at.isoformat() if request.known_at else None,
                 "completeness": "current_versions_only",
             }
-        return result
+        return _bounded_search_response(result, request)
     candidates = store.candidates(owner, request.scope, request.tags)
     records = {}
     for keyword, parent in candidates:
@@ -138,4 +204,4 @@ def retrieve(store, embedder, owner, request):
             "known_at": request.known_at.isoformat() if request.known_at else None,
             "completeness": "current_versions_only",
         }
-    return result
+    return _bounded_search_response(result, request)

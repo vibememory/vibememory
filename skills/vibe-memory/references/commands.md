@@ -3,7 +3,7 @@
 Use the absolute `VM_CLI` path. Ask `COMMAND --help` or `template TYPE` only when needed.
 
 - Connection/distribution: `status`, `login`, `logout`, `network-plan`, `check-update`, `sync`
-- Retrieval: `recall`, `get`, `list`, `graph`, `relations`, `context-bundle`, `events`, `watch`, `quarantine`, `trash`
+- Retrieval: `recall` (minimal/16 KiB by default), then `get` only selected IDs; `list`, `graph`, `relations`, `context-bundle`, `events`, `watch`, `quarantine`, `trash`
 - Creation: `remember`, `entity`, `document`, `upload`, `relate`, `from-json`
 - Versioned maintenance: `keywords`, `update`, `security`, `archive`, `restore`, `merge`, `relation-status`, `relation-scope`; `forget` only with explicit irreversible authority
 - Deterministic graph repair: `graph-audit`, `template graph-diff`, `graph-diff`, `template graph-apply`, `graph-apply`

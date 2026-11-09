@@ -89,6 +89,28 @@ def test_python_sdk_structured_error_cancellation_and_pages():
     client.list = list_page
     assert [page["offset"] for page in client.iter_records(limit=2)] == [0, 2]
 
+    captured = []
+
+    def capture(path, method="GET", payload=None, retry=False, **kwargs):
+        captured.append((path, payload))
+        return payload
+
+    client._request = capture
+    client.search(["project"])
+    assert captured[-1] == (
+        "/v1/search",
+        {
+            "keywords": ["project"],
+            "match_mode": "hybrid",
+            "projection": "minimal",
+            "byte_limit": 16384,
+            "limit": 8,
+        },
+    )
+    client.context_bundle(record_ids=["record-1"])
+    assert captured[-1][1]["projection"] == "minimal"
+    assert captured[-1][1]["byte_limit"] == 32768
+
 
 def test_sdk_package_versions_and_typescript_contract():
     python_package = tomllib.loads(
@@ -111,5 +133,7 @@ def test_sdk_package_versions_and_typescript_contract():
         "checkpointProfileMetadata",
         "failureReproductionProfileMetadata",
         "createWithMetadata",
+        "SearchResponse",
+        "SearchRetrievalOptions",
     ):
         assert exported in typescript_source

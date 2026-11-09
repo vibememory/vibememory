@@ -137,11 +137,26 @@ class VibeMemoryClient:
             "/v1/records/" + urllib.parse.quote(record_id, safe=""), cancelled=cancelled
         )
 
-    def search(self, keywords, match_mode="hybrid", *, cancelled=None):
+    def search(
+        self,
+        keywords,
+        match_mode="hybrid",
+        *,
+        projection="minimal",
+        byte_limit=16384,
+        limit=8,
+        cancelled=None,
+    ):
         return self._request(
             "/v1/search",
             "POST",
-            {"keywords": keywords, "match_mode": match_mode},
+            {
+                "keywords": keywords,
+                "match_mode": match_mode,
+                "projection": projection,
+                "byte_limit": byte_limit,
+                "limit": limit,
+            },
             True,
             cancelled=cancelled,
         )
@@ -228,6 +243,8 @@ class VibeMemoryClient:
         )
 
     def context_bundle(self, *, cancelled=None, **selectors):
+        selectors.setdefault("projection", "minimal")
+        selectors.setdefault("byte_limit", 32768)
         return self._request(
             "/v1/context-bundle", "POST", selectors, True, cancelled=cancelled
         )

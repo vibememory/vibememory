@@ -1,4 +1,10 @@
 export type SearchMode = "exact" | "semantic" | "hybrid";
+export type RetrievalProjection = "minimal" | "standard";
+export type SearchRetrievalOptions = {
+  projection?: RetrievalProjection;
+  byte_limit?: number;
+  limit?: number;
+};
 export type ProfileScope = {scope: string; project?: string; environment?: string};
 export type ProfileEvidence = {record_id: string; version: number};
 export type DecisionProfile = {
@@ -167,13 +173,31 @@ export type Memory = {
 };
 export type SearchHit = {
   id: string;
+  kind: string;
+  title: string;
+  keywords: string[];
   score: number;
   matched_keywords: Array<{
     query_keyword: string;
     stored_keyword: string;
     similarity: number;
   }>;
+  trust_level: string;
+  security_state: string;
+  correction_status?: string;
+  correction_graph_complete?: boolean;
   metadata?: Record<string, unknown>;
+};
+export type SearchResponse = {
+  mode: "keyword_vector";
+  match_mode: SearchMode;
+  projection: RetrievalProjection;
+  byte_limit: number;
+  response_bytes: number;
+  selected_hits: number;
+  returned: number;
+  truncated: boolean;
+  hits: SearchHit[];
 };
 export type Page<T> = {items: T[]; limit: number; offset: number};
 export type BatchItem<T = unknown> = {
@@ -284,10 +308,24 @@ export class VibeMemoryClient {
     return this.request<Memory>(`/v1/records/${encodeURIComponent(id)}`, {}, false, options);
   }
 
-  search(keywords: string[], match_mode: SearchMode = "hybrid", options: RequestOptions = {}) {
-    return this.request<{hits: SearchHit[]}>(
+  search(
+    keywords: string[],
+    match_mode: SearchMode = "hybrid",
+    options: RequestOptions = {},
+    retrieval: SearchRetrievalOptions = {},
+  ) {
+    return this.request<SearchResponse>(
       "/v1/search",
-      {method: "POST", body: JSON.stringify({keywords, match_mode})},
+      {
+        method: "POST",
+        body: JSON.stringify({
+          keywords,
+          match_mode,
+          projection: retrieval.projection ?? "minimal",
+          byte_limit: retrieval.byte_limit ?? 16384,
+          limit: retrieval.limit ?? 8,
+        }),
+      },
       true,
       options,
     );
@@ -374,7 +412,10 @@ export class VibeMemoryClient {
   contextBundle(request: Record<string, unknown>, options: RequestOptions = {}) {
     return this.request(
       "/v1/context-bundle",
-      {method: "POST", body: JSON.stringify(request)},
+      {
+        method: "POST",
+        body: JSON.stringify({projection: "minimal", byte_limit: 32768, ...request}),
+      },
       true,
       options,
     );

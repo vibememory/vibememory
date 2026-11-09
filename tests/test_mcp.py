@@ -264,6 +264,16 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "room_read",
         }.issubset(names)
         assert "vault_get" not in names and "file_upload" not in names
+        search_schema = next(tool for tool in tools if tool["name"] == "memory_search")[
+            "inputSchema"
+        ]
+        assert search_schema["properties"]["projection"]["default"] == "minimal"
+        assert search_schema["properties"]["byte_limit"]["default"] == 16384
+        bundle_schema = next(
+            tool for tool in tools if tool["name"] == "context_bundle_get"
+        )["inputSchema"]
+        assert bundle_schema["properties"]["projection"]["default"] == "minimal"
+        assert bundle_schema["properties"]["byte_limit"]["default"] == 32768
 
         uploaded_audit = mcp(
             client,
@@ -318,8 +328,10 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             },
         )["result"]["structuredContent"]
         assert bundle["llm_calls"] == 0
+        assert bundle["projection"] == "minimal"
         assert bundle["items"][0]["id"] == created["id"]
         assert "content" not in bundle["items"][0]
+        assert "metadata" not in bundle["items"][0]
         assert embedder.calls == [["녹차", "음료 선호"]]
 
         audit = mcp(
@@ -394,6 +406,9 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             },
         )["result"]["structuredContent"]
         assert found["hits"][0]["id"] == created["id"]
+        assert found["projection"] == "minimal"
+        assert found["byte_limit"] == 16384
+        assert "metadata" not in found["hits"][0]
         assert embedder.calls[-1] == ["녹차"]
 
         events = mcp(

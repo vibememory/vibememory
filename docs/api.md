@@ -203,11 +203,13 @@ The agent extracts search keywords before calling:
   "exclude_keywords": ["archived"],
   "metadata_filters": {"project": "vibe-memory"},
   "created_after": "2026-01-01T00:00:00Z",
+  "projection": "minimal",
+  "byte_limit": 16384,
   "limit": 5
 }
 ```
 
-Scopes: `all`, `memories`, `documents`, `entities`. `match_mode` is `semantic`, `exact`, or `hybrid`; exact mode performs no embedding call, while semantic/hybrid embed only the supplied search keywords. `tags` and `must_keywords` require every value, `exclude_keywords` rejects exact stored-keyword matches, `metadata_filters` uses exact JSON scalar equality, and date bounds require offset-aware timestamps normalized to UTC. `min_score` prevents unrelated results from filling the response. The response contains record IDs, matched keywords, metadata, provenance/security fields, explicit correction summaries, the chosen mode, and similarity scores. It does not build an answer, rerank raw body content, or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422). `exclude_resolved_superseded=true` excludes an old record only when exactly one active, trusted, non-cyclic full-scope correction is present; conflicts, partial/unknown scope, and unresolved claims remain visible.
+Scopes: `all`, `memories`, `documents`, `entities`. `match_mode` is `semantic`, `exact`, or `hybrid`; exact mode performs no embedding call, while semantic/hybrid embed only the supplied search keywords. `tags` and `must_keywords` require every value, `exclude_keywords` rejects exact stored-keyword matches, `metadata_filters` uses exact JSON scalar equality, and date bounds require offset-aware timestamps normalized to UTC. `min_score` prevents unrelated results from filling the response. `projection=minimal` returns first-stage ID/title/keywords/score/match/trust/correction fields without metadata or provenance; fetch only selected IDs with record get. `projection=standard` preserves the richer response. REST defaults to `standard` for compatibility, while MCP and the public SDK/CLI default to `minimal` with a 16 KiB budget. `byte_limit` bounds compact UTF-8 JSON at a record boundary; `response_bytes`, `returned`, `selected_hits`, and `truncated` make the bound inspectable. The byte budget is deterministic and tokenizer-independent—the server never calls an LLM or tokenizer. The response does not build an answer, rerank raw body content, or automatically traverse the graph. The agent fetches sources and selects evidence. A raw `query` field is rejected (422). `exclude_resolved_superseded=true` excludes an old record only when exactly one active, trusted, non-cyclic full-scope correction is present; conflicts, partial/unknown scope, and unresolved claims remain visible.
 
 Untrusted records are omitted unless `include_untrusted` is true. Quarantined records require both `include_untrusted` and `include_quarantined`; setting only the latter is rejected. The same opt-in pair applies to record lists and graph traversal.
 
@@ -220,8 +222,8 @@ request must provide at least one selector: `anchor_id`, `record_ids`, `kinds`,
 edges to `depth` 0–2 and may restrict relationship types. Security defaults match
 ordinary retrieval; quarantined records require both explicit opt-ins.
 
-The response contains stored IDs, versions, provenance, security and correction
-state, latest authenticated writer, retrieval reasons, and explicit edges.
+The standard response contains stored IDs, versions, provenance, security and
+correction state, latest authenticated writer, retrieval reasons, and explicit edges.
 Optional `metadata.vibe_memory_profile` values are preserved unchanged in get,
 search, and context-bundle results. Decision profile v1 distinguishes
 `proposed`/`open`/`decided`/`rejected`/`unknown`; Checkpoint profile v1 separates
@@ -242,7 +244,11 @@ collects raw logs. Mirrors `vibe_memory_failure_outcome`,
 `vibe_memory_failure_stage`, and `vibe_memory_failure_reference_status` support
 exact filters. Each observing agent should write its own record so authenticated
 creator/writer history remains distinct from the reported evidence state.
-`include_content` defaults to false. `limit` and `byte_limit` bound each page. The
+`include_content` defaults to false. `projection=minimal` omits heavy metadata,
+provenance, writer, correction-claim, relationship-reason and evidence fields while
+retaining stable coordinates, retrieval reasons, trust/security state, hashes, and
+correction status. REST defaults to `standard`; MCP and SDKs default to `minimal`
+with a 32 KiB page budget. `limit` and `byte_limit` bound each page. The
 opaque `next_cursor` binds the normalized selector to record/edge versions; if the
 selected snapshot changes, reuse returns 409 and the caller must restart. With an
 unchanged snapshot and selector, ordering and page content are stable. Missing

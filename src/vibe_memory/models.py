@@ -404,6 +404,8 @@ class VaultCaptureSubmit(Input):
 
 class SearchInput(KeywordsInput):
     limit: int = Field(default=8, ge=1, le=50)
+    projection: Literal["minimal", "standard"] = "standard"
+    byte_limit: int = Field(default=1048576, ge=1024, le=1048576)
     scope: Literal["all", "memories", "documents", "entities"] = "all"
     tags: list[str] = Field(default_factory=list, max_length=30)
     match_mode: Literal["semantic", "exact", "hybrid"] = "semantic"
@@ -478,6 +480,7 @@ class ContextBundleInput(Input):
     depth: int = Field(default=1, ge=0, le=2)
     limit: int = Field(default=25, ge=1, le=100)
     byte_limit: int = Field(default=131072, ge=2048, le=1048576)
+    projection: Literal["minimal", "standard"] = "standard"
     cursor: str | None = Field(default=None, min_length=1, max_length=2048)
     include_content: bool = False
     include_untrusted: bool = False
@@ -530,6 +533,20 @@ class GraphAuditInput(Input):
         if self.include_quarantined and not self.include_untrusted:
             raise ValueError("include_quarantined requires include_untrusted")
         return self
+
+
+class MCPMemorySearchInput(SearchInput):
+    """Token-bounded first-stage retrieval defaults for agent tool calls."""
+
+    projection: Literal["minimal", "standard"] = "minimal"
+    byte_limit: int = Field(default=16384, ge=1024, le=1048576)
+
+
+class MCPContextBundleInput(ContextBundleInput):
+    """Compact handoff defaults while preserving explicit standard projection."""
+
+    projection: Literal["minimal", "standard"] = "minimal"
+    byte_limit: int = Field(default=32768, ge=2048, le=1048576)
 
 
 class GraphManifestItem(RelationInput):

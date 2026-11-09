@@ -30,4 +30,8 @@ def test_postgres_store_owns_vector_search():
             return {"mode": "keyword_vector", "hits": []}
 
     result = retrieve(Store(), Embedder(), "alice", SearchInput(keywords=["tea"]))
-    assert result == {"mode": "keyword_vector", "hits": []}
+    assert result["mode"] == "keyword_vector"
+    assert result["projection"] == "standard"
+    assert result["hits"] == []
+    assert result["returned"] == 0
+    assert result["truncated"] is False

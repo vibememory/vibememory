@@ -47,7 +47,6 @@ from .models import (
     AgentRoomMessageInput,
     AgentRoomReadInput,
     AgentRoomUpdate,
-    ContextBundleInput,
     DocumentInput,
     EntityCreateMany,
     EntityInput,
@@ -56,6 +55,8 @@ from .models import (
     GraphAuditInput,
     GraphDiffInput,
     Input,
+    MCPContextBundleInput,
+    MCPMemorySearchInput,
     MemoryCorrectionInput,
     MemoryInput,
     MemoryMaintenanceAuditInput,
@@ -67,14 +68,13 @@ from .models import (
     RelationCreateMany,
     RelationInput,
     RelationUpdate,
-    SearchInput,
 )
 from .retrieval import retrieve
 from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.38.0"
+SERVER_VERSION = "0.39.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -87,7 +87,9 @@ SERVER_INSTRUCTIONS = (
     "Use Vibe Memory proactively when prior user preferences, project decisions, or session "
     "context may help. Extract 1-8 concise keywords and call memory_search; never send a raw "
     "question as a keyword. Record bodies have no lexical/full-text index; include useful error "
-    "codes, paths, names, aliases, and project identifiers in agent-supplied keywords. Store "
+    "codes, paths, names, aliases, and project identifiers in agent-supplied keywords. Search "
+    "uses a token-conscious minimal projection by default; fetch only the 1-3 relevant records "
+    "with record_get. Store "
     "durable facts, preferences, decisions, and useful session "
     "context with memory_create. The client infers entities and relationships before writing "
     "them. All Vibe Memory timestamps use UTC. Original files stay byte-stream uploads outside "
@@ -383,8 +385,9 @@ TOOLS = [
         "memory_search",
         "Search memory by extracted keywords",
         "Use this before answering when prior preferences, facts, documents, or entities may "
-        "matter. Extract concise keywords yourself. Do not send the user's raw question.",
-        SearchInput,
+        "matter. Extract concise keywords yourself. Do not send the user's raw question. The "
+        "default minimal projection is a first-stage candidate list; fetch only selected IDs.",
+        MCPMemorySearchInput,
         "memory:read",
         read_only=True,
     ),
@@ -418,7 +421,7 @@ TOOLS = [
         "Return only stored owner-scoped records, versions, provenance, correction state, and "
         "explicit graph edges selected by IDs, filters, or a 0-2 hop anchor. The server makes "
         "no summary, priority, entity, or relationship inference.",
-        ContextBundleInput,
+        MCPContextBundleInput,
         "memory:read",
         read_only=True,
     ),
@@ -811,11 +814,11 @@ MODEL_MAP = {
     "profile_get": EmptyInput,
     "vault_list": EmptyInput,
     "vault_get": VaultNameInput,
-    "memory_search": SearchInput,
+    "memory_search": MCPMemorySearchInput,
     "record_get": RecordIdInput,
     "records_list": RecordListInput,
     "graph_get": GraphInput,
-    "context_bundle_get": ContextBundleInput,
+    "context_bundle_get": MCPContextBundleInput,
     "graph_audit": GraphAuditInput,
     "graph_diff": GraphDiffInput,
     "memory_maintenance_audit": MemoryMaintenanceAuditInput,

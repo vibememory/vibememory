@@ -96,6 +96,42 @@ def test_context_bundle_is_deterministic_bounded_and_snapshot_checked(client):
     assert stale.status_code == 409
 
 
+def test_context_bundle_minimal_projection_omits_heavy_handoff_fields(client):
+    anchor = add_memory(client, "private decision body", "project")
+    related = add_memory(client, "private implementation body", "implementation")
+    add_relation(
+        client,
+        anchor,
+        related,
+        reason="long evidence reason that belongs in the standard projection",
+    )
+
+    response = client.post(
+        "/v1/context-bundle",
+        json={
+            "anchor_id": anchor["id"],
+            "depth": 1,
+            "projection": "minimal",
+            "byte_limit": 4096,
+            "limit": 2,
+        },
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["projection"] == "minimal"
+    assert payload["returned"] == 2
+    assert payload["truncated"] is False
+    assert payload["page_bytes"] <= payload["byte_limit"]
+    assert payload["page_bytes"] == _wire_size(payload)
+    assert {"metadata", "provenance", "latest_writer", "source"}.isdisjoint(
+        payload["items"][0]
+    )
+    assert "content" not in payload["items"][0]
+    assert {"reason", "evidence", "creator_agent_name"}.isdisjoint(
+        payload["relations"][0]
+    )
+
+
 def test_context_bundle_preserves_owner_and_security_boundaries(client):
     record = add_memory(client, "alice record", "alice")
     client.headers["Authorization"] = "Bearer " + KEY_B

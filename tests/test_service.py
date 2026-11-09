@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from conftest import KEY_A, KEY_A2, KEY_B, SpyEmbedder
 from fastapi.testclient import TestClient
@@ -53,6 +55,62 @@ def test_only_supplied_keywords_embedded(client, embedder):
     assert result["mode"] == "keyword_vector"
     assert result["hits"][0]["matched_keywords"][0]["stored_keyword"] == "tea"
     assert len(embedder.calls) == 3
+
+
+def test_search_minimal_projection_is_two_stage_and_byte_bounded(client):
+    first = memory(
+        client,
+        "large private body that must not appear in first-stage retrieval",
+        keywords=["token budget"],
+        metadata={"private_detail": "x" * 3000},
+    )
+    memory(client, "second candidate", keywords=["token budget"])
+    for index in range(10):
+        memory(client, f"bounded candidate {index}", keywords=["token budget"])
+
+    standard = client.post(
+        "/v1/search",
+        json={"keywords": ["token budget"], "match_mode": "exact", "limit": 12},
+    ).json()
+    assert standard["projection"] == "standard"
+    first_hit = next(hit for hit in standard["hits"] if hit["id"] == first["id"])
+    assert first_hit["metadata"]["private_detail"] == "x" * 3000
+
+    minimal = client.post(
+        "/v1/search",
+        json={
+            "keywords": ["token budget"],
+            "match_mode": "exact",
+            "projection": "minimal",
+            "byte_limit": 1024,
+            "limit": 12,
+        },
+    )
+    assert minimal.status_code == 200, minimal.text
+    payload = minimal.json()
+    assert payload["projection"] == "minimal"
+    assert payload["byte_limit"] == 1024
+    assert payload["selected_hits"] == 12
+    assert payload["returned"] == len(payload["hits"])
+    assert payload["truncated"] is True
+    assert payload["response_bytes"] <= payload["byte_limit"]
+    assert payload["response_bytes"] < standard["response_bytes"]
+    assert payload["response_bytes"] == len(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    )
+    assert payload["hits"]
+    assert {
+        "metadata",
+        "provenance",
+        "source",
+        "security_warnings",
+        "correction_claims",
+    }.isdisjoint(payload["hits"][0])
+
+    fetched = client.get("/v1/records/" + first["id"])
+    assert fetched.status_code == 200
+    assert fetched.json()["content"].startswith("large private body")
+    assert fetched.json()["metadata"]["private_detail"] == "x" * 3000
 
 
 def test_auth_multiagent_isolation(client, embedder):

@@ -117,10 +117,24 @@ def _record_matches_context(record, data):
     return True
 
 
-def _context_record(record, reasons, include_content):
-    projected = {
-        key: record.get(key)
-        for key in (
+def _context_record(record, reasons, include_content, projection):
+    fields = (
+        (
+            "id",
+            "kind",
+            "subtype",
+            "title",
+            "created_at",
+            "keywords",
+            "version",
+            "trust_level",
+            "security_state",
+            "content_hash",
+            "correction_status",
+            "correction_graph_complete",
+        )
+        if projection == "minimal"
+        else (
             "id",
             "kind",
             "subtype",
@@ -145,9 +159,11 @@ def _context_record(record, reasons, include_content):
             "correction_status",
             "correction_graph_complete",
         )
-    }
+    )
+    projected = {key: record.get(key) for key in fields}
     projected["updated_at"] = _updated_at(record)
-    projected["latest_writer"] = (record.get("writer_history") or [None])[-1]
+    if projection == "standard":
+        projected["latest_writer"] = (record.get("writer_history") or [None])[-1]
     projected["retrieval_reason"] = sorted(reasons)
     projected["content_included"] = bool(include_content)
     if include_content:
@@ -155,10 +171,18 @@ def _context_record(record, reasons, include_content):
     return projected
 
 
-def _context_relation(edge):
-    return {
-        key: edge.get(key)
-        for key in (
+def _context_relation(edge, projection):
+    fields = (
+        (
+            "id",
+            "source_id",
+            "target_id",
+            "relation",
+            "status",
+            "version",
+        )
+        if projection == "minimal"
+        else (
             "id",
             "source_id",
             "target_id",
@@ -179,6 +203,10 @@ def _context_relation(edge):
             "extraction_version",
             "correction_scope",
         )
+    )
+    return {
+        key: edge.get(key)
+        for key in fields
     }
 
 
@@ -284,6 +312,8 @@ def context_bundle(store, owner, data):
             "selector_hash": selector_hash,
             "llm_calls": 0,
             "generated_summary": False,
+            "projection": data.projection,
+            "byte_limit": data.byte_limit,
             "temporal": {
                 "valid_at": data.valid_at.isoformat() if data.valid_at else None,
                 "known_at": data.known_at.isoformat() if data.known_at else None,
@@ -291,12 +321,14 @@ def context_bundle(store, owner, data):
             },
             "items": page,
             "relations": [
-                _context_relation(edge)
+                _context_relation(edge, data.projection)
                 for edge in relevant_edges
                 if edge["source_id"] in page_ids or edge["target_id"] in page_ids
             ],
             "missing_record_ids": missing,
             "total": len(selected),
+            "returned": len(page),
+            "truncated": next_offset < len(selected),
             "next_cursor": (
                 _cursor_encode(selector_hash, snapshot, next_offset)
                 if next_offset < len(selected)
@@ -308,14 +340,16 @@ def context_bundle(store, owner, data):
     page = []
     for record in selected[offset : offset + data.limit]:
         projected = _context_record(
-            record, reasons[record["id"]], data.include_content
+            record, reasons[record["id"]], data.include_content, data.projection
         )
         candidate = response([*page, projected])
         if _wire_size(candidate) <= data.byte_limit:
             page.append(projected)
             continue
         if not page and data.include_content:
-            projected = _context_record(record, reasons[record["id"]], False)
+            projected = _context_record(
+                record, reasons[record["id"]], False, data.projection
+            )
             projected["content_omitted_due_to_byte_limit"] = True
             candidate = response([projected])
             if _wire_size(candidate) <= data.byte_limit:

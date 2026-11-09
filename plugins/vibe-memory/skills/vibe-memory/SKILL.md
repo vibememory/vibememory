@@ -22,6 +22,8 @@ For a handoff that must preserve whether a choice was only proposed/open or expl
 
 An unavailable memory service must not block independent work. Never claim a read or write succeeded unless the tool returned success.
 
+Keep retrieval two-stage: `memory_search` uses a minimal bounded projection by default; inspect candidates, then call `record_get` for only the 1–3 records needed. Request standard metadata only when the task requires it.
+
 ## Authoring records that can be found again
 
 Write compact conclusions, not diary entries. Put the stable subject and the retrieval words an agent is likely to know in `keywords`; keep identifiers, conditions, evidence, result, and the next unresolved action in the content. A useful record stands on its own after the conversation is gone.

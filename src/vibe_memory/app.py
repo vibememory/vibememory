@@ -252,7 +252,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.38.0",
+        version="0.39.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -3252,6 +3252,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 return retrieve(db, embedder, user, data)
         except (NotFound, Conflict):
             raise
+        except ValueError as error:
+            raise HTTPException(422, str(error)) from None
         except Exception:
             log.exception("Retrieval failed")
             raise HTTPException(503, "Retrieval unavailable") from None

@@ -23,6 +23,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Reviewed graph maintenance:** content-free audits plus snapshot-bound diff/apply require exact create/retract approvals and preserve parallel claims.
 - **Agent mailboxes:** same-account persistent handoffs with recipient-scoped SSE and explicit acknowledgements.
 - **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.
+- **Token-bounded two-stage retrieval:** agent clients receive compact candidate projections under deterministic byte budgets and fetch only selected records.
 - **Provenance quarantine:** external/imported text is untrusted and excluded from normal search and graph traversal until an agent explicitly reviews it.
 - **Web console:** signup/login, account isolation, memory management, raw file uploads, relationships, and feature requests.
 - **Account security:** optional authenticator-app TOTP with one-time recovery codes; OTP secrets are encrypted and recovery codes are stored only as hashes.

@@ -27,7 +27,8 @@ If the CLI is not connected, run `vibe-memory login --vault-access --name
 Never request or reveal an API key in chat. Independent work continues when Vibe
 Memory is unavailable.
 
-For substantial work, recall before planning and save a compact session checkpoint
+For substantial work, recall before planning. Keep the default minimal bounded
+projection and fetch only 1–3 selected records with `get`. Save a compact session checkpoint
 after accepted decisions, corrections, verified milestones, blockers, or next
 actions change. Use the stable project name, `session checkpoint`, and the topic as
 keywords. Before writing, recall the prior checkpoint; if an equivalent state is

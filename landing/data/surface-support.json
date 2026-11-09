@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-11-09T00:00:00Z",
+  "time_basis": "UTC",
+  "capabilities": [
+    { "id": "remote_mcp", "label": "원격 MCP" },
+    { "id": "skill", "label": "Skill 지침" },
+    { "id": "hooks", "label": "자동 Hook" },
+    { "id": "local_runtime", "label": "로컬 실행" }
+  ],
+  "providers": [
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "source_url": "https://learn.chatgpt.com/docs/plugins",
+      "surfaces": [
+        {
+          "id": "chatgpt-chat",
+          "name": "ChatGPT Chat",
+          "recommended_for": "빠른 대화와 수동 기억 관리",
+          "connection": "Vibe Memory Plugin",
+          "connection_url": "https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "supported",
+            "hooks": "unsupported",
+            "local_runtime": "unsupported"
+          },
+          "note": "대화 중 Skill이 기억 조회와 저장을 유도하지만, 세션 시작·종료 Hook은 실행하지 않습니다."
+        },
+        {
+          "id": "chatgpt-work",
+          "name": "ChatGPT Work",
+          "recommended_for": "여러 단계의 업무와 결과물",
+          "connection": "Vibe Memory Plugin",
+          "connection_url": "https://chatgpt.com/plugins/plugins_6ae31884dce08191b5b77fc3e1844cec",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "supported",
+            "hooks": "limited",
+            "local_runtime": "limited"
+          },
+          "note": "호스팅된 Work Cloud에서는 로컬 command hook이 동작하지 않습니다. 로컬 컴퓨터 접근은 별도 환경 권한을 따릅니다."
+        },
+        {
+          "id": "codex-local",
+          "name": "Codex CLI · Desktop",
+          "recommended_for": "코드 작업과 가장 강한 자동 연속성",
+          "connection": "Plugin / Skill + MCP",
+          "connection_url": "/guide#codex-hooks",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "supported",
+            "hooks": "supported",
+            "local_runtime": "supported"
+          },
+          "note": "로컬 Codex 런타임에서는 Hook과 CLI를 사용할 수 있습니다. IDE 확장은 Plugin 설치를 지원하지 않아 Skill과 직접 MCP 연결을 사용합니다."
+        }
+      ]
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "source_url": "https://support.claude.com/en/articles/13837440-use-plugins-in-claude",
+      "surfaces": [
+        {
+          "id": "claude-chat",
+          "name": "Claude Chat · Mobile",
+          "recommended_for": "어디서나 대화형 기억 사용",
+          "connection": "원격 MCP Connector",
+          "connection_url": "https://claude.ai/customize/connectors",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "limited",
+            "hooks": "unsupported",
+            "local_runtime": "unsupported"
+          },
+          "note": "원격 MCP는 사용할 수 있습니다. Plugin Skill은 유료 플랜에서 제공되며 Hook과 로컬 MCP는 Chat에서 실행되지 않습니다."
+        },
+        {
+          "id": "claude-desktop",
+          "name": "Claude Desktop Chat",
+          "recommended_for": "대화와 로컬 MCP 확장",
+          "connection": "Connector / Desktop Extension",
+          "connection_url": "https://claude.ai/customize/connectors",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "limited",
+            "hooks": "unsupported",
+            "local_runtime": "supported"
+          },
+          "note": "원격 Connector와 로컬 Desktop Extension을 사용할 수 있지만 Chat 탭에서는 Plugin Hook과 sub-agent가 실행되지 않습니다."
+        },
+        {
+          "id": "claude-cowork",
+          "name": "Claude Cowork",
+          "recommended_for": "로컬 자료를 포함한 장기 업무",
+          "connection": "Vibe Memory Plugin",
+          "connection_url": "https://claude.ai/customize/plugins",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "supported",
+            "hooks": "supported",
+            "local_runtime": "supported"
+          },
+          "note": "유료 플랜에서 Skill, Hook, sub-agent와 로컬 확장을 사용할 수 있습니다. 원격 Connector 트래픽은 Anthropic Cloud에서 시작됩니다."
+        },
+        {
+          "id": "claude-code",
+          "name": "Claude Code",
+          "recommended_for": "개발 작업과 완전한 Hook 자동화",
+          "connection": "Plugin / Skill + MCP",
+          "connection_url": "/guide#claude-code-hooks",
+          "capabilities": {
+            "remote_mcp": "supported",
+            "skill": "supported",
+            "hooks": "supported",
+            "local_runtime": "supported"
+          },
+          "note": "Claude 계정 로그인과 2.1.273 이상에서는 Plugin이 동기화됩니다. API Key·Bedrock 로그인은 계정 Plugin을 동기화하지 않습니다."
+        }
+      ]
+    }
+  ]
+}

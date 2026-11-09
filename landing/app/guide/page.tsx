@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { LegacyPage } from "@/components/LegacyPage";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
+import { SurfaceCapabilityGuide } from "@/components/SurfaceCapabilityGuide";
 import { legacyDocument } from "@/lib/legacy";
 
 const description =
@@ -44,7 +45,7 @@ export default function Guide() {
     description,
     url: "https://vibememory.io/guide",
     mainEntityOfPage: "https://vibememory.io/guide",
-    dateModified: "2026-10-30",
+    dateModified: "2026-11-09",
     inLanguage: "ko-KR",
     image: "https://vibememory.io/assets/og-vibe-memory-v2.png",
     author: {
@@ -61,7 +62,11 @@ export default function Guide() {
   return (
     <>
       <SeoJsonLd data={jsonLd} />
-      <LegacyPage {...page} pageStylesheet="/assets/guide.css" />
+      <LegacyPage
+        {...page}
+        pageStylesheet="/assets/guide.css"
+        slot={{ marker: "<!-- SURFACE_SUPPORT_MATRIX -->", node: <SurfaceCapabilityGuide /> }}
+      />
     </>
   );
 }

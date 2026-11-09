@@ -124,7 +124,7 @@ for (const link of document.querySelectorAll('[data-use-mcp]')) {
     try {
       await copyText(`${location.origin}/mcp`);
       notify(link.hasAttribute('data-install-chatgpt-plugin')
-        ? 'ChatGPT Work 설치 화면을 열었습니다. 연결이 필요하면 복사된 MCP 주소를 사용하세요.'
+        ? 'ChatGPT Plugin 설치 화면을 열었습니다. 설치 후 Chat과 Work에서 사용할 수 있습니다.'
         : 'MCP 주소를 복사했습니다. 열린 서비스의 커넥터에 붙여넣으세요.');
     } catch {
       notify('MCP 주소를 복사하지 못했습니다. vibememory.io/mcp를 직접 입력해주세요.');

@@ -27,7 +27,7 @@ test('guide has its own canonical, metadata, and article schema', () => {
   assert.match(html, /<link rel="canonical" href="https:\/\/vibememory\.io\/guide"/);
   assert.match(html, /<meta property="og:type" content="article"/);
   assert.match(html, /"@type":"TechArticle"/);
-  assert.match(html, /"dateModified":"2026-10-30"/);
+  assert.match(html, /"dateModified":"2026-11-09"/);
 });
 
 test('support page is public, canonical, and identifies its purpose', () => {

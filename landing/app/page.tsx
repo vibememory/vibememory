@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { AgentSupportMatrix } from "@/components/AgentSupportMatrix";
 import { LegacyPage } from "@/components/LegacyPage";
 import { SeoJsonLd } from "@/components/SeoJsonLd";
+import { SurfaceCapabilityGuide } from "@/components/SurfaceCapabilityGuide";
 import { legacyDocument } from "@/lib/legacy";
 
 const description =
@@ -97,7 +98,7 @@ export default function Home() {
       <LegacyPage
         {...page}
         scripts={["/assets/app.js"]}
-        slot={{ marker: "<!-- AGENT_SUPPORT_MATRIX -->", node: <AgentSupportMatrix /> }}
+        slot={{ marker: "<!-- AGENT_SUPPORT_MATRIX -->", node: <><SurfaceCapabilityGuide /><AgentSupportMatrix /></> }}
       />
     </>
   );

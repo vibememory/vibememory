@@ -77,7 +77,7 @@
     if (!readPreference()) applyTheme(systemTheme());
   }
 
-  window.vmTheme = {current: currentTheme, set: setTheme, useSystem() {
+  window.vmTheme = {current: currentTheme, set: setTheme, mount: mountToggle, useSystem() {
     try { localStorage.removeItem(storageKey); } catch { /* Keep the current theme when storage is blocked. */ }
     return applyTheme(systemTheme());
   }};
@@ -87,5 +87,8 @@
   window.addEventListener('storage', event => {
     if (event.key === storageKey) applyTheme(valid.has(event.newValue) ? event.newValue : systemTheme());
   });
-  document.addEventListener('DOMContentLoaded', mountToggle);
+  document.addEventListener('DOMContentLoaded', () => {
+    mountToggle();
+    window.addEventListener('load', mountToggle, {once:true});
+  });
 })();

@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,58055,e=>{"use strict";var t=e.i(71645);e.s(["PublicHeaderControls",0,function(){return(0,t.useEffect)(()=>{window.vmMountLanguageSwitcher?.(),window.vmTheme?.mount?.()},[]),null}])}]);

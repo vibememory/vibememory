@@ -47,7 +47,7 @@
           "name": "Codex CLI · Desktop",
           "recommended_for": "코드 작업과 가장 강한 자동 연속성",
           "connection": "Plugin / Skill + MCP",
-          "connection_url": "/guide#codex-hooks",
+          "connection_url": "/guide/codex",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "supported",
@@ -110,7 +110,7 @@
           "name": "Claude Code",
           "recommended_for": "개발 작업과 완전한 Hook 자동화",
           "connection": "Plugin / Skill + MCP",
-          "connection_url": "/guide#claude-code-hooks",
+          "connection_url": "/guide/claude-code",
           "capabilities": {
             "remote_mcp": "supported",
             "skill": "supported",

@@ -466,6 +466,8 @@ html[data-theme="dark"] .handoff-service { background: linear-gradient(155deg,#1
 html[data-theme="dark"] .handoff-agent-card li { color: #aab6c9; }
 html[data-theme="dark"] .handoff-agent-card li strong { color: #e2e9f5; }
 html[data-theme="dark"] .handoff-service small { border-color: #30405a; color: #94a2b8; }
+html[data-theme="dark"] .guide-harness-links a { border-color: #2e3b51; background: #111827; color: #d8e1ef; }
+html[data-theme="dark"] .guide-harness-links a:hover { border-color: #526b9d; background: #17233a; color: #a9bcff; }
 
 @media (max-width: 820px) {
   .header-actions .vm-theme-toggle { position: fixed; right: 12px; bottom: 12px; z-index: 61; margin: 0; }

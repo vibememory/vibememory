@@ -37,7 +37,7 @@
     }
   },
   "archive": "/downloads/vibe-memory-skill.zip",
-  "archive_sha256": "8e828111beacdce97903fd47b28fad343fb9e53d731a39a8db9fbef8731981cb",
+  "archive_sha256": "022419c7123950a5d48468b8928c816e7270e27e421d6c3facfc4d14d2b23a56",
   "official_archive_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip",
   "official_manifest_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/manifest.json",
   "compatibility": {

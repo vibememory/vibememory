@@ -2,17 +2,17 @@
 
 > 이 문서는 `landing/data/agent-support.json`에서 생성됩니다. 직접 수정하지 마세요.
 
-최종 검증: **2026-10-30T07:54:06Z** (UTC)
+최종 검증: **2026-11-09T09:15:00Z** (UTC)
 이 기능에 SSE 필요: **아니요**
 
 | 에이전트 | Skill | MCP | Hook 불러오기 | Hook 체크포인트 | 상태 | 설치 |
 | --- | --- | --- | --- | --- | --- | --- |
-| Claude Code | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide#claude-code-hooks) |
-| OpenAI Codex | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide#codex-hooks) |
-| Cursor | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide#cursor-hooks) |
-| Muse Code | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide#muse-hooks) |
-| Hermes Agent | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide#hermes-hooks) |
-| OpenClaw | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide#openclaw-hooks) |
+| Claude Code | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide/claude-code) |
+| OpenAI Codex | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide/codex) |
+| Cursor | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide/cursor) |
+| Muse Code | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide/muse-code) |
+| Hermes Agent | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide/hermes) |
+| OpenClaw | 지원됨 | 지원됨 | 지원됨 | 지원됨 | 지원됨 | [가이드](https://vibememory.io/guide/openclaw) |
 
 ## 세부 검증 정보
 

@@ -1,0 +1,218 @@
+{
+  "schema_version": 1,
+  "verified_at": "2026-11-09T09:15:00Z",
+  "time_basis": "UTC",
+  "common": {
+    "mcp_url": "https://vibememory.io/mcp",
+    "skill_url": "https://vibememory.io/downloads/vibe-memory-skill.zip",
+    "repository_url": "https://github.com/vibememory/vibememory"
+  },
+  "guides": [
+    {
+      "id": "claude-code",
+      "slug": "claude-code",
+      "name": "Claude Code",
+      "icon": "/assets/brands/claude-code.png",
+      "summary": "마켓플레이스 플러그인 하나로 Skill과 세션 Hook을 함께 설치하고, 원격 MCP를 선택적으로 연결합니다.",
+      "minimum_version": "2.1.275",
+      "environment": "Claude Code CLI · Linux · macOS · Windows",
+      "install_method": "Marketplace Plugin",
+      "install_commands": [
+        "/plugin install vibe-memory --marketplace vibememory/vibememory"
+      ],
+      "install_note": "설치 화면에서 user, project, local 범위를 확인하세요. 플러그인과 수동 Hook을 동시에 켜면 이벤트가 두 번 실행됩니다.",
+      "mcp_commands": [
+        "claude mcp add --transport http --scope user vibe-memory https://vibememory.io/mcp",
+        "/mcp"
+      ],
+      "hook_adapter": "Marketplace plugin · hooks/hooks.json",
+      "config_paths": ["~/.claude/settings.json", ".claude/settings.json"],
+      "events": [
+        {"host": "SessionStart", "vibe_memory": "recall"},
+        {"host": "Stop", "vibe_memory": "checkpoint reminder"},
+        {"host": "PreCompact", "vibe_memory": "pending marker"}
+      ],
+      "verify_commands": ["/plugin", "/hooks", "/mcp"],
+      "update_commands": ["/plugin", "vibe-memory --version"],
+      "uninstall_commands": ["/plugin", "# Remove only the Vibe Memory groups when using manual hooks"],
+      "limitation": "Hook은 fail-open으로 동작합니다. CLI 누락, 로그인 만료, 네트워크 실패가 발생해도 Claude Code 작업은 중단하지 않습니다.",
+      "official_docs": [
+        {"label": "Claude plugins", "url": "https://support.claude.com/en/articles/13837440-use-plugins-in-claude"},
+        {"label": "Claude Code MCP", "url": "https://support.claude.com/en/articles/14554922-claude-code-user-faq"},
+        {"label": "Claude Code hooks", "url": "https://support.claude.com/en/articles/14554000-claude-code-power-user-tips"}
+      ]
+    },
+    {
+      "id": "codex",
+      "slug": "codex",
+      "name": "OpenAI Codex",
+      "icon": "/assets/brands/codex.png",
+      "summary": "Codex CLI와 Desktop에는 Skill, 원격 MCP, 검토 가능한 로컬 Hook을 각각 연결합니다.",
+      "minimum_version": "0.166.0",
+      "environment": "Codex CLI · ChatGPT Desktop의 Codex · local runtime",
+      "install_method": "Skill + MCP + reviewed hooks",
+      "install_commands": [
+        "# Copy the Vibe Memory Skill into your Codex skill directory",
+        "# Then open it once so Codex reads the current SKILL.md"
+      ],
+      "install_note": "CLI 또는 Desktop의 로컬 Codex 런타임에서 진행하세요. IDE 확장에서는 Skill과 직접 MCP 연결을 사용하고 플러그인 설치를 전제로 하지 않습니다.",
+      "mcp_commands": [
+        "codex mcp add vibe-memory --url https://vibememory.io/mcp",
+        "codex mcp list"
+      ],
+      "hook_adapter": "agent-adapters/codex/hooks.json",
+      "config_paths": ["~/.codex/hooks.json", ".codex/hooks.json"],
+      "events": [
+        {"host": "SessionStart", "vibe_memory": "recall"},
+        {"host": "Stop", "vibe_memory": "checkpoint reminder"},
+        {"host": "PreCompact", "vibe_memory": "pending marker"}
+      ],
+      "verify_commands": ["/hooks", "codex mcp list", "vibe-memory --version"],
+      "update_commands": ["# Re-copy the reviewed Vibe Memory hook groups", "/hooks"],
+      "uninstall_commands": ["# Remove only the Vibe Memory groups from hooks.json", "codex mcp remove vibe-memory"],
+      "limitation": "Command Hook은 로컬 실행 환경이 필요합니다. Work Cloud나 로컬 실행 권한이 없는 표면에서는 Skill과 MCP만 사용합니다.",
+      "official_docs": [
+        {"label": "Codex MCP", "url": "https://developers.openai.com/resources/docs-mcp"},
+        {"label": "Agent plugin packaging", "url": "https://developers.openai.com/plugins/build/plugins"}
+      ]
+    },
+    {
+      "id": "cursor",
+      "slug": "cursor",
+      "name": "Cursor",
+      "icon": "/assets/brands/cursor.svg",
+      "summary": "Cursor의 Skill과 원격 MCP를 연결하고, 전용 변환 어댑터로 소문자 Hook 이벤트를 안전하게 매핑합니다.",
+      "minimum_version": "1.7.0",
+      "environment": "Cursor Desktop · Cursor CLI · local command hooks",
+      "install_method": "Skill + mcp.json + translation adapter",
+      "install_commands": [
+        "# Install the Vibe Memory Skill from the ZIP or the install prompt",
+        "# Review agent-adapters/cursor before enabling hooks"
+      ],
+      "install_note": "Cursor 전용 어댑터를 검토된 절대 경로에 복사하세요. Codex나 Muse의 Hook 파일을 그대로 사용하면 안 됩니다.",
+      "mcp_commands": [
+        "{\n  \"mcpServers\": {\n    \"vibe-memory\": {\n      \"url\": \"https://vibememory.io/mcp\"\n    }\n  }\n}"
+      ],
+      "hook_adapter": "agent-adapters/cursor/vibe_memory_hook.py",
+      "config_paths": ["~/.cursor/hooks.json", ".cursor/hooks.json"],
+      "events": [
+        {"host": "sessionStart", "vibe_memory": "additional_context"},
+        {"host": "stop", "vibe_memory": "one bounded followup_message"},
+        {"host": "preCompact", "vibe_memory": "pending marker"}
+      ],
+      "verify_commands": ["Customize → Hooks", "Hooks output channel", "Customize → MCPs"],
+      "update_commands": ["# Replace the adapter, then re-merge the three reviewed entries"],
+      "uninstall_commands": ["# Remove the three Vibe Memory hook entries and copied adapter"],
+      "limitation": "Stop의 loop_limit은 1로 유지하고 failClosed는 false로 둡니다. Windows에서는 python3 대신 py를 사용합니다.",
+      "official_docs": [
+        {"label": "Cursor hooks", "url": "https://cursor.com/docs/hooks"},
+        {"label": "Cursor MCP", "url": "https://cursor.com/docs/mcp"},
+        {"label": "Cursor plugins", "url": "https://cursor.com/docs/plugins"}
+      ]
+    },
+    {
+      "id": "muse",
+      "slug": "muse-code",
+      "name": "Muse Code",
+      "icon": "/assets/brands/muse.svg",
+      "summary": "Muse Code가 검색하는 Skill 경로를 활용하고, 네이티브 Hook 계약과 원격 MCP를 프로젝트 또는 사용자 범위로 연결합니다.",
+      "minimum_version": "1.3.0",
+      "environment": "Muse Code terminal · CI · Linux · macOS · Windows",
+      "install_method": "Discovered Skill + native hooks + MCP",
+      "install_commands": [
+        "muse skills list",
+        "muse skills inspect vibe-memory"
+      ],
+      "install_note": "프로젝트 Hook은 workspace를 신뢰한 뒤 실행됩니다. 사용자 설정의 기존 schema_version과 다른 Hook 그룹을 보존하세요.",
+      "mcp_commands": [
+        "{\n  \"mcp_servers\": {\n    \"vibe-memory\": {\n      \"url\": \"https://vibememory.io/mcp\"\n    }\n  }\n}"
+      ],
+      "hook_adapter": "agent-adapters/muse/hooks.json",
+      "config_paths": [".muse/hooks.json", "~/.config/muse/settings.json"],
+      "events": [
+        {"host": "SessionStart", "vibe_memory": "recall"},
+        {"host": "Stop", "vibe_memory": "checkpoint reminder"},
+        {"host": "PreCompact", "vibe_memory": "pending marker"}
+      ],
+      "verify_commands": ["muse skills inspect vibe-memory", "# Start a new session and inspect startup diagnostics"],
+      "update_commands": ["# Re-sync the Skill and replace the three reviewed hook groups"],
+      "uninstall_commands": ["# Remove only the Vibe Memory groups from the selected hooks file"],
+      "limitation": "Muse에는 별도 muse hooks 명령이 없습니다. 설정 변경 후 새 세션의 시작 진단에서 경고 없이 로드되는지 확인합니다.",
+      "official_docs": [
+        {"label": "Muse Code", "url": "https://www.musemuse.dev/docs/muse-code"},
+        {"label": "Muse extending", "url": "https://www.musemuse.dev/docs/muse-code/extending"}
+      ]
+    },
+    {
+      "id": "hermes",
+      "slug": "hermes",
+      "name": "Hermes Agent",
+      "icon": "/assets/brands/hermes.png",
+      "summary": "Hermes의 프로필별 MCP와 첫 실행 동의형 Shell Hook을 연결하고 CLI, Gateway, Desktop에서 같은 기억을 사용합니다.",
+      "minimum_version": "0.22.5 verified floor",
+      "environment": "Hermes CLI · Gateway · Desktop · TUI · dashboard chat",
+      "install_method": "Skill + profile MCP + consented shell hooks",
+      "install_commands": [
+        "# Install or expose the Vibe Memory Skill to Hermes",
+        "hermes hooks list"
+      ],
+      "install_note": "활성 Hermes 프로필에만 설정을 병합하고 hooks_auto_accept는 false로 유지하세요. 비대화형 Gateway는 운영자가 allowlist를 준비해야 합니다.",
+      "mcp_commands": [
+        "mcp_servers:\n  vibe-memory:\n    url: https://vibememory.io/mcp\n    auth: oauth",
+        "hermes mcp login vibe-memory",
+        "/reload-mcp"
+      ],
+      "hook_adapter": "agent-adapters/hermes/vibe_memory_hook.py",
+      "config_paths": ["~/.hermes/config.yaml", "profiles/<name>/config.yaml"],
+      "events": [
+        {"host": "pre_llm_call", "vibe_memory": "recall / next-turn checkpoint"},
+        {"host": "pre_verify", "vibe_memory": "coding checkpoint"},
+        {"host": "post_compaction", "vibe_memory": "pending marker"},
+        {"host": "on_session_finalize", "vibe_memory": "visible final reminder"}
+      ],
+      "verify_commands": ["hermes hooks list", "hermes hooks doctor", "hermes hooks test pre_llm_call"],
+      "update_commands": ["# Replace the adapter file", "hermes hooks doctor", "/reload-mcp"],
+      "uninstall_commands": ["# Remove the four Vibe Memory hook entries", "hermes hooks revoke COMMAND"],
+      "limitation": "관찰 전용 세션 종료 이벤트는 추가 모델 패스를 강제하지 않습니다. 비코딩 변경은 다음 프롬프트에서 체크포인트될 수 있습니다.",
+      "official_docs": [
+        {"label": "Hermes hooks", "url": "https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks"},
+        {"label": "Hermes MCP", "url": "https://hermes-agent.nousresearch.com/docs/user-guide/features/mcp"}
+      ]
+    },
+    {
+      "id": "openclaw",
+      "slug": "openclaw",
+      "name": "OpenClaw",
+      "icon": "/assets/brands/openclaw.svg",
+      "summary": "OpenClaw Gateway에 검토된 네이티브 플러그인을 연결하고 대화 접근, 프롬프트 주입, 프로젝트 범위를 개별 승인합니다.",
+      "minimum_version": "2026.10.9",
+      "environment": "OpenClaw Gateway · native plugins enabled",
+      "install_method": "Native plugin + managed MCP",
+      "install_commands": [
+        "openclaw plugins install --link ./agent-adapters/openclaw --force --accept-capabilities",
+        "openclaw plugins enable vibe-memory-hooks"
+      ],
+      "install_note": "플러그인 기능 승인과 대화 접근 권한은 별개입니다. allowConversationAccess, allowPromptInjection, projectRoots를 각각 검토하세요.",
+      "mcp_commands": [
+        "openclaw mcp add vibe-memory --url https://vibememory.io/mcp --transport streamable-http",
+        "openclaw mcp login vibe-memory",
+        "openclaw mcp doctor vibe-memory --probe"
+      ],
+      "hook_adapter": "agent-adapters/openclaw",
+      "config_paths": ["openclaw.json · plugins.entries.vibe-memory-hooks"],
+      "events": [
+        {"host": "before_prompt_build", "vibe_memory": "recall"},
+        {"host": "before_agent_finalize", "vibe_memory": "one checkpoint revision"},
+        {"host": "before_compaction", "vibe_memory": "pending marker"}
+      ],
+      "verify_commands": ["openclaw plugins inspect vibe-memory-hooks --runtime --json", "openclaw mcp doctor vibe-memory --probe"],
+      "update_commands": ["openclaw plugins reload vibe-memory-hooks", "openclaw mcp reload"],
+      "uninstall_commands": ["openclaw plugins uninstall vibe-memory-hooks", "openclaw mcp unset vibe-memory"],
+      "limitation": "before_agent_finalize를 발생시키지 않는 하네스 경로에서는 마지막 체크포인트 패스를 강제할 수 없습니다.",
+      "official_docs": [
+        {"label": "OpenClaw plugins", "url": "https://docs.openclaw.ai/plugin"},
+        {"label": "OpenClaw MCP", "url": "https://docs.openclaw.ai/tools/mcp"}
+      ]
+    }
+  ]
+}

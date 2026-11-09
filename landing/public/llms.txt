@@ -9,6 +9,13 @@ License: MIT
 ## Public documentation
 
 - Connection guide: https://vibememory.io/guide
+- Product-specific harness guides: https://vibememory.io/guide/harnesses
+- Claude Code guide: https://vibememory.io/guide/claude-code
+- OpenAI Codex guide: https://vibememory.io/guide/codex
+- Cursor guide: https://vibememory.io/guide/cursor
+- Muse Code guide: https://vibememory.io/guide/muse-code
+- Hermes Agent guide: https://vibememory.io/guide/hermes
+- OpenClaw guide: https://vibememory.io/guide/openclaw
 - Support: https://vibememory.io/support
 - OpenAPI schema: https://vibememory.io/openapi.json
 - Live Skill: https://vibememory.io/skills/vibe-memory/SKILL.md

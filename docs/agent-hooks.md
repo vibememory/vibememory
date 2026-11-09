@@ -5,6 +5,12 @@ commands. The hooks never send a transcript, hidden reasoning, file contents, or
 environment variables to the service. They use only the project directory name,
 the local Git state fingerprint, compact search results, and queued handoffs.
 
+Start with the [product guide index](https://vibememory.io/guide/harnesses) and
+open the exact guide for Claude Code, Codex, Cursor, Muse Code, Hermes Agent, or
+OpenClaw. Event names, configuration locations, consent flows, and payload
+contracts are product-specific; never translate one harness configuration into
+another.
+
 ## Claude Code plugin
 
 Install the current native CLI first and make the verified `vibe-memory` binary

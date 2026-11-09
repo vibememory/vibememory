@@ -30,6 +30,19 @@ test('guide has its own canonical, metadata, and article schema', () => {
   assert.match(html, /"dateModified":"2026-11-09"/);
 });
 
+test('product harness guides are canonical, structured, and independently discoverable', () => {
+  const products = ['claude-code', 'codex', 'cursor', 'muse-code', 'hermes', 'openclaw'];
+  const index = read('dist/guide/harnesses.html');
+  assert.match(index, /<link rel="canonical" href="https:\/\/vibememory\.io\/guide\/harnesses"/);
+  assert.match(index, /"@type":"CollectionPage"/);
+  for (const product of products) {
+    const html = read(`dist/guide/${product}.html`);
+    assert.match(html, new RegExp(`<link rel="canonical" href="https:\\/\\/vibememory\\.io\\/guide\\/${product}"`));
+    assert.match(html, /"@type":"TechArticle"/);
+    assert.match(index, new RegExp(`href="\\/guide\\/${product}"`));
+  }
+});
+
 test('support page is public, canonical, and identifies its purpose', () => {
   const html = read('dist/support.html');
   assert.match(html, /<title>지원 \| Vibe Memory<\/title>/);
@@ -58,9 +71,12 @@ test('crawl discovery files expose only canonical public pages', () => {
   assert.match(robots, /Sitemap: https:\/\/vibememory\.io\/sitemap\.xml/);
   assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/guide<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/guide\/harnesses<\/loc>/);
+  assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/guide\/openclaw<\/loc>/);
   assert.match(sitemap, /<loc>https:\/\/vibememory\.io\/support<\/loc>/);
   assert.doesNotMatch(sitemap, /\/console/);
   assert.match(llms, /Vibe Memory does not call an LLM/);
+  assert.match(llms, /Product-specific harness guides/);
   assert.equal(manifest.name, 'Vibe Memory');
   assert.equal(manifest.start_url, '/');
 });

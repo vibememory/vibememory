@@ -201,20 +201,21 @@ function relationshipGraphStyles() {
   const dark = document.documentElement.dataset.theme === 'dark';
   const compact = window.matchMedia('(max-width: 520px)').matches;
   const palette = dark ? {
-    node:'#151e2e',text:'#e6edf8',border:'#52627d',memory:'#6f8eff',memoryBg:'#17264a',entity:'#a98bdd',entityBg:'#281f3c',document:'#63bda2',documentBg:'#132d29',file:'#d5a064',fileBg:'#302315',selected:'#88a2ff',selectedBg:'#20305a',edge:'#5f708d',arrow:'#7185aa',edgeText:'#b9c7dd',label:'#111827',labelBorder:'#344158'
+    text:'#dbe5f5',outline:'#0d1421',memory:'#738eff',entity:'#b08ae4',document:'#58bea0',file:'#dda15f',selected:'#a9bbff',edge:'#52627d'
   } : {
-    node:'#ffffff',text:'#3d4a62',border:'#aebce0',memory:'#7892ec',memoryBg:'#f9fbff',entity:'#a991d8',entityBg:'#fcfaff',document:'#72b9a5',documentBg:'#f8fdfa',file:'#d9a36d',fileBg:'#fffaf5',selected:'#315bfb',selectedBg:'#f0f4ff',edge:'#aeb9d5',arrow:'#8fa0ca',edgeText:'#60719a',label:'#ffffff',labelBorder:'#dde4f2'
+    text:'#4a5870',outline:'#f8faff',memory:'#5f7ff0',entity:'#926dce',document:'#38a083',file:'#cd8742',selected:'#315bfb',edge:'#aab5c8'
   };
   return [
-    {selector:'node',style:{'shape':'roundrectangle','width':compact ? 158 : 192,'height':compact ? 62 : 68,'background-color':palette.node,'border-width':1.5,'border-color':palette.border,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':compact ? 11 : 12,'font-weight':500,'text-wrap':'wrap','text-max-width':compact ? 136 : 166,'text-valign':'center','text-halign':'center','line-height':1.45,'overlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity','transition-duration':'160ms'}},
-    {selector:'node.kind-memory',style:{'border-color':palette.memory,'background-color':palette.memoryBg}},
-    {selector:'node.kind-entity',style:{'border-color':palette.entity,'background-color':palette.entityBg}},
-    {selector:'node.kind-document',style:{'border-color':palette.document,'background-color':palette.documentBg}},
-    {selector:'node.kind-file',style:{'border-color':palette.file,'background-color':palette.fileBg}},
-    {selector:'node:selected, node.highlighted',style:{'border-width':2.4,'border-color':palette.selected,'background-color':palette.selectedBg}},
-    {selector:'edge',style:{'width':1.55,'curve-style':'bezier','control-point-step-size':42,'line-color':palette.edge,'target-arrow-color':palette.arrow,'target-arrow-shape':'triangle','arrow-scale':.95,'label':'data(relation)','font-family':'ui-monospace, SFMono-Regular, Consolas, monospace','font-size':9.5,'color':palette.edgeText,'text-background-color':palette.label,'text-background-opacity':.96,'text-background-padding':5,'text-border-color':palette.labelBorder,'text-border-width':1,'text-border-opacity':1,'text-rotation':'autorotate','text-margin-y':-10,'overlay-opacity':0,'transition-property':'line-color, target-arrow-color, width, opacity','transition-duration':'160ms'}},
-    {selector:'edge:selected, edge.highlighted',style:{'width':2.4,'line-color':palette.selected,'target-arrow-color':palette.selected,'color':palette.selected,'z-index':10}},
-    {selector:'.faded',style:{'opacity':.12,'text-opacity':.08}}
+    {selector:'node',style:{'shape':'ellipse','width':'data(size)','height':'data(size)','background-color':palette.memory,'border-width':1.5,'border-color':palette.outline,'label':'data(label)','color':palette.text,'font-family':'VibeSans, Arial, sans-serif','font-size':compact ? 9.5 : 10.5,'font-weight':520,'text-wrap':'ellipsis','text-max-width':compact ? 86 : 124,'text-valign':'bottom','text-halign':'center','text-margin-y':compact ? 7 : 9,'text-outline-width':2.5,'text-outline-color':palette.outline,'min-zoomed-font-size':7,'overlay-opacity':0,'underlay-opacity':0,'transition-property':'border-color, border-width, background-color, opacity, width, height','transition-duration':'160ms'}},
+    {selector:'node.kind-memory',style:{'background-color':palette.memory}},
+    {selector:'node.kind-entity',style:{'background-color':palette.entity}},
+    {selector:'node.kind-document',style:{'background-color':palette.document}},
+    {selector:'node.kind-file',style:{'background-color':palette.file}},
+    {selector:'node.hub',style:{'font-size':compact ? 10.5 : 11.5,'font-weight':650,'text-max-width':compact ? 104 : 150}},
+    {selector:'node:selected, node.highlighted',style:{'width':'data(focusSize)','height':'data(focusSize)','border-width':3,'border-color':palette.selected,'underlay-color':palette.selected,'underlay-opacity':.14,'underlay-padding':7,'z-index':20}},
+    {selector:'edge',style:{'width':.8,'curve-style':'straight','line-color':palette.edge,'line-opacity':.5,'target-arrow-shape':'none','label':'','overlay-opacity':0,'transition-property':'line-color, width, opacity','transition-duration':'160ms'}},
+    {selector:'edge:selected, edge.highlighted',style:{'width':1.8,'line-color':palette.selected,'line-opacity':.95,'z-index':10}},
+    {selector:'.faded',style:{'opacity':.1,'text-opacity':.05}}
   ];
 }
 async function bindRelationshipGraph(records, relations) {
@@ -229,12 +230,19 @@ async function bindRelationshipGraph(records, relations) {
     degree.set(edge.target_id, (degree.get(edge.target_id) || 0) + 1);
   }
   const elements = [
-    ...records.map(record => ({data:{
-      id:record.id,
-      label:`${graphTitle(record)}\n${graphKindLabel(record.kind)} · 연결 ${degree.get(record.id) || 0}`,
-      title:graphTitle(record),
-      kind:record.kind || 'record'
-    },classes:`kind-${record.kind || 'record'}`})),
+    ...records.map(record => {
+      const connections = degree.get(record.id) || 0;
+      const size = Math.round(Math.min(34, 11 + Math.sqrt(Math.max(1, connections)) * 5));
+      return {data:{
+        id:record.id,
+        label:graphTitle(record),
+        title:graphTitle(record),
+        kind:record.kind || 'record',
+        degree:connections,
+        size,
+        focusSize:size + 7
+      },classes:`kind-${record.kind || 'record'}${connections >= 4 ? ' hub' : ''}`};
+    }),
     ...relations.map((edge, index) => ({data:{
       id:`relation-${index}`,
       source:edge.source_id,
@@ -266,18 +274,18 @@ async function bindRelationshipGraph(records, relations) {
     layout:{
       name:records.length > 1 ? 'cose' : 'grid',
       animate:true,
-      animationDuration:650,
+      animationDuration:720,
       fit:true,
       padding:fitPadding(),
       randomize:true,
-      nodeRepulsion:compact ? 240000 : 420000,
-      idealEdgeLength:compact ? 96 : 135,
-      edgeElasticity:100,
-      nestingFactor:1.2,
-      gravity:.16,
-      numIter:1200,
-      nodeOverlap:32,
-      componentSpacing:compact ? 72 : 110,
+      nodeRepulsion:compact ? 9000 : 13000,
+      idealEdgeLength:compact ? 68 : 90,
+      edgeElasticity:70,
+      nestingFactor:1.1,
+      gravity:.32,
+      numIter:1500,
+      nodeOverlap:18,
+      componentSpacing:compact ? 54 : 76,
       stop:() => {
         requestAnimationFrame(() => {
           if (!relationshipCy || !stage.isConnected) return;
@@ -495,7 +503,7 @@ async function navigate(view, reset = true, historyMode = 'push') {
         const visibleIds = new Set(), visibleRelations = [];
         for (const edge of ranked) {
           const additions = Number(!visibleIds.has(edge.source_id)) + Number(!visibleIds.has(edge.target_id));
-          if (visibleIds.size + additions > 21 || visibleRelations.length >= 36) continue;
+          if (visibleIds.size + additions > 36 || visibleRelations.length >= 64) continue;
           visibleIds.add(edge.source_id); visibleIds.add(edge.target_id); visibleRelations.push(edge);
         }
         const records = await Promise.all([...visibleIds].map(id => api('/v1/records/' + encodeURIComponent(id))));

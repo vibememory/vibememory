@@ -190,20 +190,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'href="https://claude.ai/customize/connectors"' in landing
         assert 'data-use-mcp="chatgpt"' in landing
         assert "`${location.origin}/mcp`" in landing_script.text
-        assert '<script src="/assets/theme-init.js?v=20261106-v033-0"></script>' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261106-v033-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261106-v033-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261106-v033-0"' in landing
-        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261106-v033-0"' in landing
-        assert '<script src="/assets/theme.js?v=20261106-v033-0" defer="">' in landing
-        assert '<script src="/assets/i18n.js?v=20261106-v033-0" defer="">' in landing
-        assert '<script src="/assets/install-prompt.js?v=20261106-v033-0" defer="">' in landing
-        assert '<script src="/assets/app.js?v=20261106-v033-0" defer="">' in landing
-        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261106-v033-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261106-v033-0" defer="">' in console
-        assert '<script src="/assets/console.js?v=20261106-v033-0" defer="">' in console
-        assert '<script src="/assets/ui-kit.js?v=20261106-v033-0" defer="">' in admin
-        assert '<script src="/assets/admin.js?v=20261106-v033-0" defer="">' in admin
+        assert '<script src="/assets/theme-init.js?v=20261109-v039-1"></script>' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-jp.css?v=20261109-v039-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/fonts/noto-sans-sc.css?v=20261109-v039-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/theme.css?v=20261109-v039-1"' in landing
+        assert '<link rel="stylesheet" href="/assets/product-ui.css?v=20261109-v039-1"' in landing
+        assert '<script src="/assets/theme.js?v=20261109-v039-1" defer="">' in landing
+        assert '<script src="/assets/i18n.js?v=20261109-v039-1" defer="">' in landing
+        assert '<script src="/assets/install-prompt.js?v=20261109-v039-1" defer="">' in landing
+        assert '<script src="/assets/app.js?v=20261109-v039-1" defer="">' in landing
+        assert '<script src="/assets/vendor/cytoscape.min.js?v=20261109-v039-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261109-v039-1" defer="">' in console
+        assert '<script src="/assets/console.js?v=20261109-v039-1" defer="">' in console
+        assert '<script src="/assets/ui-kit.js?v=20261109-v039-1" defer="">' in admin
+        assert '<script src="/assets/admin.js?v=20261109-v039-1" defer="">' in admin
         assert 'class="admin-overview-grid"' in admin
         assert "function renderOverview()" in admin_script.text
         assert "/v1/admin/feature-requests?limit=5&offset=0" in admin_script.text
@@ -266,9 +266,9 @@ def test_console_and_api_share_one_origin(settings):
         assert 'class="ui-choice-card ui-choice-card--sensitive"' in connect
         assert 'class="ui-choice-control"' in connect
         assert 'class="ui-choice-state"' in connect
-        assert '/assets/ui-kit.css?v=20261106-v033-0' in connect
-        assert '/assets/theme.css?v=20261106-v033-0' in connect
-        assert '/assets/product-ui.css?v=20261106-v033-0' in connect
+        assert '/assets/ui-kit.css?v=20261109-v039-1' in connect
+        assert '/assets/theme.css?v=20261109-v039-1' in connect
+        assert '/assets/product-ui.css?v=20261109-v039-1' in connect
         theme_init_script = client.get("/assets/theme-init.js").text
         theme_script = client.get("/assets/theme.js").text
         theme_styles = client.get("/assets/theme.css").text
@@ -281,16 +281,20 @@ def test_console_and_api_share_one_origin(settings):
         assert 'id="sun"' in client.get("/assets/icons.svg").text
         assert 'html[data-theme="dark"]' in theme_styles
         assert "relationshipGraphStyles" in console_script.text
-        assert "compact ? 158 : 192" in console_script.text
+        assert "'shape':'ellipse'" in console_script.text
+        assert "'width':'data(size)'" in console_script.text
+        assert "'target-arrow-shape':'none'" in console_script.text
+        assert "connections >= 4 ? ' hub' : ''" in console_script.text
         assert "relationshipCy.fit(relationshipCy.elements(':visible'), fitPadding())" in console_script.text
-        assert "inset:106px 0 0;height:auto" in responsive_styles.text
+        assert "inset:62px 0 0;height:auto" in responsive_styles.text
+        assert "Obsidian-style Cytoscape relationship graph" in responsive_styles.text
         assert 'class="tag-list"' in console_script.text
         assert ".tag-list{display:flex;max-width:100%;min-width:0;flex-wrap:wrap" in console_styles.text
         assert ".records-table .tag-list{grid-column:2;width:100%}" in responsive_styles.text
         assert ".request-table td:nth-child(1),.request-table td:nth-child(3){width:100%}" in console_styles.text
         assert ".request-table .record-title,.request-table .record-subtitle,.request-table .request-result-preview{grid-column:2;width:100%;max-width:100%}" in console_styles.text
         assert ".request-count{flex:0 0 auto;white-space:nowrap}" in console_styles.text
-        assert "'font-size':compact ? 11 : 12" in console_script.text
+        assert "'font-size':compact ? 9.5 : 10.5" in console_script.text
         assert "vm-theme-change" in console_script.text
         assert "--sidebar-width: 260px" in product_styles.text
         assert '.sidebar nav button[aria-current="page"] { box-shadow: none; }' in product_styles.text
@@ -401,8 +405,8 @@ def test_console_and_api_share_one_origin(settings):
         assert "copy-mcp-url" in console_script.text
         assert console.index("/assets/vendor/cytoscape.min.js") < console.index("/assets/console.js")
         assert client.get("/assets/vendor/cytoscape.min.js").status_code == 200
-        assert "visibleIds.size + additions > 21" in console_script.text
-        assert "visibleRelations.length >= 36" in console_script.text
+        assert "visibleIds.size + additions > 36" in console_script.text
+        assert "visibleRelations.length >= 64" in console_script.text
         assert client.get("/assets/console-fixes.css").status_code == 200
         assert "prefers-reduced-motion" in client.get("/assets/console.css").text
         assert "topbar-search" in console

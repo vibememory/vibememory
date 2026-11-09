@@ -4,6 +4,7 @@ from .client import (
     VibeMemoryError,
     checkpoint_profile_metadata,
     decision_profile_metadata,
+    failure_reproduction_profile_metadata,
 )
 
 __all__ = [
@@ -12,4 +13,5 @@ __all__ = [
     "VibeMemoryError",
     "checkpoint_profile_metadata",
     "decision_profile_metadata",
+    "failure_reproduction_profile_metadata",
 ]

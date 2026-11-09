@@ -30,6 +30,66 @@ export type CheckpointProfile = {
   evidence?: ProfileEvidence[];
   remaining_unknowns?: string[];
 };
+export type FailureSample = {
+  identifier: string;
+  record_id?: string;
+  record_version?: number;
+  input_rows?: number;
+  input_bytes?: number;
+  description?: string;
+  input_excerpt_redacted?: string;
+};
+export type ExternalReferenceStatus =
+  | "match"
+  | "changed"
+  | "missing"
+  | "inaccessible"
+  | "unverified";
+export type FailureEvidenceReference =
+  | {kind: "uploaded_file"; file_id: string; file_version?: number}
+  | {
+      kind: "external";
+      reference: string;
+      expected_sha256?: string;
+      expected_bytes?: number;
+      verification?: {
+        status: ExternalReferenceStatus;
+        checked_at?: string;
+        observed_sha256?: string;
+        observed_bytes?: number;
+        detail_redacted?: string;
+      };
+    };
+export type FailureReproductionProfile = {
+  type: "failure_reproduction";
+  version: 1;
+  outcome: "failed" | "invalid_result";
+  observed_at: string;
+  sample: FailureSample;
+  attempted_settings?: Array<{name: string; value_redacted: string}>;
+  failure: {stage: string; code?: string; message_redacted: string};
+  minimal_reproduction: {
+    conditions: string[];
+    command?: string;
+    expected_result?: string;
+    observed_result: string;
+  };
+  parsing_steps?: Array<{
+    order: number;
+    stage: string;
+    operation: string;
+    input_summary: string;
+    output_summary: string;
+  }>;
+  evidence_references?: FailureEvidenceReference[];
+};
+export type FailureReproductionMetadata = Record<string, unknown> & {
+  vibe_memory_failure_reproduction: FailureReproductionProfile;
+  vibe_memory_failure_profile_version: 1;
+  vibe_memory_failure_outcome: FailureReproductionProfile["outcome"];
+  vibe_memory_failure_stage: string;
+  vibe_memory_failure_reference_status: ExternalReferenceStatus | "none" | "mixed";
+};
 export type ProfileMetadata = Record<string, unknown> & {
   vibe_memory_profile: DecisionProfile | CheckpointProfile;
   vibe_memory_profile_type: "decision" | "checkpoint";
@@ -64,6 +124,34 @@ export function checkpointProfileMetadata(
     vibe_memory_profile_version: 1,
     vibe_memory_profile_state: profile.claimed_stage,
     vibe_memory_profile_observation: profile.observation_kind,
+  };
+}
+
+/** Builds sanitized failure evidence; this helper never opens external references. */
+export function failureReproductionProfileMetadata(
+  profile: Omit<FailureReproductionProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+): FailureReproductionMetadata {
+  const externalStatuses = new Set(
+    (profile.evidence_references ?? [])
+      .filter((reference): reference is Extract<FailureEvidenceReference, {kind: "external"}> =>
+        reference.kind === "external",
+      )
+      .map((reference) => reference.verification?.status ?? "unverified"),
+  );
+  const referenceStatus =
+    externalStatuses.size === 0
+      ? "none"
+      : externalStatuses.size === 1
+        ? [...externalStatuses][0]
+        : "mixed";
+  return {
+    ...metadata,
+    vibe_memory_failure_reproduction: {...profile, type: "failure_reproduction", version: 1},
+    vibe_memory_failure_profile_version: 1,
+    vibe_memory_failure_outcome: profile.outcome,
+    vibe_memory_failure_stage: profile.failure.stage,
+    vibe_memory_failure_reference_status: referenceStatus,
   };
 }
 

@@ -230,6 +230,18 @@ Exact scalar mirrors (`vibe_memory_profile_type`, `vibe_memory_profile_state`, a
 `vibe_memory_profile_observation`) can be used with `metadata_filters`. Profile
 validation establishes shape only—not truth, authority, approval, deployment, or
 independent verification. Stored reproduction commands are never executed.
+An independent optional `metadata.vibe_memory_failure_reproduction` profile v1
+preserves a sanitized sample identifier and size, attempted non-secret settings,
+failure stage/code/message, minimal conditions, ordered parsing steps, and typed
+evidence references. `uploaded_file` references carry a Vibe Memory `file_id`;
+`external` references may carry expected SHA-256/size plus a client-reported
+`match`, `changed`, `missing`, `inaccessible`, or `unverified` state. The server
+normalizes supplied UTC timestamps and validates comparisons but never opens an
+external path or URL, runs a command, reads an uploaded file for the profile, or
+collects raw logs. Mirrors `vibe_memory_failure_outcome`,
+`vibe_memory_failure_stage`, and `vibe_memory_failure_reference_status` support
+exact filters. Each observing agent should write its own record so authenticated
+creator/writer history remains distinct from the reported evidence state.
 `include_content` defaults to false. `limit` and `byte_limit` bound each page. The
 opaque `next_cursor` binds the normalized selector to record/edge versions; if the
 selected snapshot changes, reuse returns 409 and the caller must restart. With an

@@ -133,10 +133,17 @@ function featureRequestDetail(record) {
 function recordRows(items, deletable = true) {
   const evidenceProfile = item => {
     const profile = item.metadata?.vibe_memory_profile;
-    if (!profile || (profile.type !== 'decision' && profile.type !== 'checkpoint')) return '';
-    const state = profile.type === 'decision' ? profile.state : profile.claimed_stage;
-    const observation = profile.type === 'checkpoint' ? ` · ${profile.observation_kind}` : '';
-    return `<span class="evidence-profile-badge profile-${h(profile.type)}"><strong>${profile.type === 'decision' ? 'Decision' : 'Checkpoint'}</strong>${h(state || 'unknown')}${h(observation)}</span>`;
+    const failure = item.metadata?.vibe_memory_failure_reproduction;
+    let badges = '';
+    if (profile && (profile.type === 'decision' || profile.type === 'checkpoint')) {
+      const state = profile.type === 'decision' ? profile.state : profile.claimed_stage;
+      const observation = profile.type === 'checkpoint' ? ` · ${profile.observation_kind}` : '';
+      badges += `<span class="evidence-profile-badge profile-${h(profile.type)}"><strong>${profile.type === 'decision' ? 'Decision' : 'Checkpoint'}</strong>${h(state || 'unknown')}${h(observation)}</span>`;
+    }
+    if (failure?.type === 'failure_reproduction') {
+      badges += `<span class="evidence-profile-badge profile-failure"><strong>Failure</strong>${h(failure.failure?.stage || 'unknown')} · ${h(failure.outcome || 'failed')}</span>`;
+    }
+    return badges;
   };
   const correction = item => {
     const status = item.correction_status;
@@ -150,12 +157,23 @@ function recordRows(items, deletable = true) {
 
 function evidenceProfileDetail(record) {
   const profile = record.metadata?.vibe_memory_profile;
-  if (!profile || (profile.type !== 'decision' && profile.type !== 'checkpoint')) return '';
-  const isDecision = profile.type === 'decision';
-  const state = isDecision ? profile.state : profile.claimed_stage;
-  const scope = isDecision ? profile.applies_to : profile.target;
-  const evidence = (profile.evidence || []).map(item => `<code>${h(item.record_id)} · v${h(item.version)}</code>`).join(' ');
-  return `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>${isDecision ? 'DECISION PROFILE' : 'CHECKPOINT PROFILE'} · v${h(profile.version)}</span><strong>${h(state || 'unknown')}</strong></div><p>에이전트가 제공한 구조화 메타데이터이며, Vibe Memory가 진실·권한·승인 또는 독립 검증을 보증한다는 뜻이 아닙니다.</p><dl>${isDecision ? `<div><dt>주제</dt><dd>${h(profile.topic)}</dd></div>${profile.option ? `<div><dt>선택지</dt><dd>${h(profile.option)}</dd></div>` : ''}<div><dt>보고된 결정자</dt><dd>${h(profile.reported_decider || '미기재')} · 인증된 작성 연결과 별도</dd></div><div><dt>결정 시각</dt><dd>${h(profile.decided_at || '미기재')}</dd></div>` : `<div><dt>관측 구분</dt><dd>${h(profile.observation_kind)}</dd></div><div><dt>관측 시각</dt><dd>${h(profile.observed_at)}</dd></div><div><dt>환경</dt><dd>${h(profile.environment_identity || scope?.environment || '미기재')}</dd></div>`}<div><dt>적용 범위</dt><dd>${h([scope?.project,scope?.scope,scope?.environment].filter(Boolean).join(' · ') || '미기재')}</dd></div>${evidence ? `<div><dt>근거 좌표</dt><dd>${evidence}</dd></div>` : ''}</dl></section>`;
+  const failure = record.metadata?.vibe_memory_failure_reproduction;
+  let output = '';
+  if (profile && (profile.type === 'decision' || profile.type === 'checkpoint')) {
+    const isDecision = profile.type === 'decision';
+    const state = isDecision ? profile.state : profile.claimed_stage;
+    const scope = isDecision ? profile.applies_to : profile.target;
+    const evidence = (profile.evidence || []).map(item => `<code>${h(item.record_id)} · v${h(item.version)}</code>`).join(' ');
+    output += `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>${isDecision ? 'DECISION PROFILE' : 'CHECKPOINT PROFILE'} · v${h(profile.version)}</span><strong>${h(state || 'unknown')}</strong></div><p>에이전트가 제공한 구조화 메타데이터이며, Vibe Memory가 진실·권한·승인 또는 독립 검증을 보증한다는 뜻이 아닙니다.</p><dl>${isDecision ? `<div><dt>주제</dt><dd>${h(profile.topic)}</dd></div>${profile.option ? `<div><dt>선택지</dt><dd>${h(profile.option)}</dd></div>` : ''}<div><dt>보고된 결정자</dt><dd>${h(profile.reported_decider || '미기재')} · 인증된 작성 연결과 별도</dd></div><div><dt>결정 시각</dt><dd>${h(profile.decided_at || '미기재')}</dd></div>` : `<div><dt>관측 구분</dt><dd>${h(profile.observation_kind)}</dd></div><div><dt>관측 시각</dt><dd>${h(profile.observed_at)}</dd></div><div><dt>환경</dt><dd>${h(profile.environment_identity || scope?.environment || '미기재')}</dd></div>`}<div><dt>적용 범위</dt><dd>${h([scope?.project,scope?.scope,scope?.environment].filter(Boolean).join(' · ') || '미기재')}</dd></div>${evidence ? `<div><dt>근거 좌표</dt><dd>${evidence}</dd></div>` : ''}</dl></section>`;
+  }
+  if (failure?.type === 'failure_reproduction') {
+    const references = (failure.evidence_references || []).map(reference => reference.kind === 'uploaded_file'
+      ? `<code>업로드 · ${h(reference.file_id)}${reference.file_version ? ` · v${h(reference.file_version)}` : ''}</code>`
+      : `<code>외부 · ${h(reference.verification?.status || 'unverified')} · ${h(reference.reference)}</code>`).join(' ');
+    const parsing = (failure.parsing_steps || []).map(step => `<code>${h(step.order)}. ${h(step.stage)} · ${h(step.operation)} · ${h(step.input_summary)} → ${h(step.output_summary)}</code>`).join(' ');
+    output += `<section class="evidence-profile-detail failure-profile-detail"><div class="evidence-profile-heading"><span>FAILURE REPRODUCTION · v${h(failure.version)}</span><strong>${h(failure.outcome)}</strong></div><p>에이전트가 제공한 정제된 재현 정보입니다. 서버는 외부 경로를 열거나 명령을 실행하지 않으며, 접근 불가를 파일 없음으로 간주하지 않습니다.</p><dl><div><dt>샘플</dt><dd>${h(failure.sample?.identifier || '미기재')} · ${h(failure.sample?.input_rows ?? '행 미기재')}행 · ${h(failure.sample?.input_bytes ?? '크기 미기재')} bytes</dd></div><div><dt>실패</dt><dd>${h(failure.failure?.stage || '미기재')}${failure.failure?.code ? ` · ${h(failure.failure.code)}` : ''}</dd></div><div><dt>관측 시각</dt><dd>${h(failure.observed_at || '미기재')}</dd></div><div><dt>최소 조건</dt><dd>${h((failure.minimal_reproduction?.conditions || []).join(' · ') || '미기재')}</dd></div>${parsing ? `<div class="profile-wide"><dt>파싱 경로</dt><dd>${parsing}</dd></div>` : ''}${references ? `<div class="profile-wide"><dt>근거 참조</dt><dd>${references}</dd></div>` : ''}</dl></section>`;
+  }
+  return output;
 }
 const graphKindLabel = kind => t(({memory:'기억',entity:'엔티티',document:'문서',file:'파일'}[kind] || kind || '기록'));
 const graphTitle = record => record?.title || record?.content?.slice(0, 46) || '이름 없는 기록';
@@ -572,7 +590,7 @@ async function contextHandoff(cursor = null, existingRequest = null) {
     const reproducible = JSON.stringify({schema_version:bundle.schema_version || '1',request,response:bundle},null,2);
     const omitted = bundle.items.filter(item => item.content_omitted_due_to_byte_limit).length;
     const partial = Boolean(bundle.next_cursor || omitted || bundle.missing_record_ids?.length);
-    detail('다른 에이전트에서 이어가기',`<div class="bundle-state ${partial ? 'partial' : 'complete'}"><strong>${partial ? '부분 묶음' : '현재 묶음 완료'}</strong><span>${bundle.items.length}/${bundle.total}개 · ${formatBytes(bundle.page_bytes || new Blob([reproducible]).size)}</span></div><p class="dialog-help">Vault 값은 포함되지 않습니다. ${omitted ? `${omitted}개 본문은 byte 제한으로 생략됨 · ` : ''}${bundle.missing_record_ids?.length ? `${bundle.missing_record_ids.length}개 ID는 접근 불가 또는 없음 · ` : ''}snapshot ${h(String(bundle.snapshot || '').slice(0,12))}</p><div class="handoff-summary">${bundle.items.map(item => { const profile = item.metadata?.vibe_memory_profile; const profileSummary = profile ? ` · ${profile.type === 'decision' ? `Decision ${profile.state}` : `Checkpoint ${profile.claimed_stage}/${profile.observation_kind}`}` : ''; return `<article><strong>${h(item.title || item.id)}</strong><span>v${h(item.version)} · ${h((item.retrieval_reason || []).join(', ') || '명시 선택')} · ${h(item.correction_status || 'current')}${h(profileSummary)}${item.content_omitted_due_to_byte_limit ? ' · 본문 생략' : ''}</span></article>`; }).join('')}</div><div class="bundle-actions"><button class="button primary" id="copy-context-bundle" type="button">이 페이지 JSON 복사 ${icon('copy')}</button>${bundle.next_cursor ? `<button class="secondary-button" type="button" data-action="context-bundle-next" data-cursor="${h(bundle.next_cursor)}">다음 페이지 미리보기 ${icon('arrow-right')}</button>` : ''}</div><details><summary>재현 가능한 JSON 미리보기</summary><pre class="detail-pre">${h(reproducible)}</pre></details>`,'CONTEXT BUNDLE');
+    detail('다른 에이전트에서 이어가기',`<div class="bundle-state ${partial ? 'partial' : 'complete'}"><strong>${partial ? '부분 묶음' : '현재 묶음 완료'}</strong><span>${bundle.items.length}/${bundle.total}개 · ${formatBytes(bundle.page_bytes || new Blob([reproducible]).size)}</span></div><p class="dialog-help">Vault 값은 포함되지 않습니다. ${omitted ? `${omitted}개 본문은 byte 제한으로 생략됨 · ` : ''}${bundle.missing_record_ids?.length ? `${bundle.missing_record_ids.length}개 ID는 접근 불가 또는 없음 · ` : ''}snapshot ${h(String(bundle.snapshot || '').slice(0,12))}</p><div class="handoff-summary">${bundle.items.map(item => { const profile = item.metadata?.vibe_memory_profile; const failure = item.metadata?.vibe_memory_failure_reproduction; const profileSummary = profile ? ` · ${profile.type === 'decision' ? `Decision ${profile.state}` : `Checkpoint ${profile.claimed_stage}/${profile.observation_kind}`}` : ''; const failureSummary = failure ? ` · Failure ${failure.failure?.stage || 'unknown'}/${failure.outcome || 'failed'}` : ''; return `<article><strong>${h(item.title || item.id)}</strong><span>v${h(item.version)} · ${h((item.retrieval_reason || []).join(', ') || '명시 선택')} · ${h(item.correction_status || 'current')}${h(profileSummary)}${h(failureSummary)}${item.content_omitted_due_to_byte_limit ? ' · 본문 생략' : ''}</span></article>`; }).join('')}</div><div class="bundle-actions"><button class="button primary" id="copy-context-bundle" type="button">이 페이지 JSON 복사 ${icon('copy')}</button>${bundle.next_cursor ? `<button class="secondary-button" type="button" data-action="context-bundle-next" data-cursor="${h(bundle.next_cursor)}">다음 페이지 미리보기 ${icon('arrow-right')}</button>` : ''}</div><details><summary>재현 가능한 JSON 미리보기</summary><pre class="detail-pre">${h(reproducible)}</pre></details>`,'CONTEXT BUNDLE');
     $('#copy-context-bundle').addEventListener('click',async () => { await copyText(reproducible); toast('Context Bundle 페이지를 복사했습니다.'); });
   } catch (error) {
     if (error.status !== 409) throw error;

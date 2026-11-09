@@ -38,6 +38,27 @@ def test_python_sdk_structured_error_cancellation_and_pages():
         }
     )
     assert checkpoint["vibe_memory_profile_observation"] == "author_reported"
+    failure = module.failure_reproduction_profile_metadata(
+        {
+            "outcome": "failed",
+            "observed_at": "2026-11-09T05:00:00Z",
+            "sample": {"identifier": "two-row-csv", "input_rows": 2},
+            "failure": {"stage": "parse", "message_redacted": "invalid number"},
+            "minimal_reproduction": {
+                "conditions": ["strict mode"],
+                "observed_result": "parse failed",
+            },
+            "evidence_references": [
+                {
+                    "kind": "external",
+                    "reference": "/tmp/sample.csv",
+                    "verification": {"status": "missing"},
+                }
+            ],
+        }
+    )
+    assert failure["vibe_memory_failure_reproduction"]["type"] == "failure_reproduction"
+    assert failure["vibe_memory_failure_reference_status"] == "missing"
     body = json.dumps(
         {
             "error": {
@@ -88,6 +109,7 @@ def test_sdk_package_versions_and_typescript_contract():
         "async *records",
         "decisionProfileMetadata",
         "checkpointProfileMetadata",
+        "failureReproductionProfileMetadata",
         "createWithMetadata",
     ):
         assert exported in typescript_source

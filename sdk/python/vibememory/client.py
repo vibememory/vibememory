@@ -34,6 +34,32 @@ def checkpoint_profile_metadata(profile, metadata=None):
     }
 
 
+def failure_reproduction_profile_metadata(profile, metadata=None):
+    """Build sanitized failure evidence; external references are never opened here."""
+
+    profile = {**profile, "type": "failure_reproduction", "version": 1}
+    external_statuses = {
+        reference.get("verification", {}).get("status", "unverified")
+        for reference in profile.get("evidence_references", [])
+        if reference.get("kind") == "external"
+    }
+    reference_status = (
+        "none"
+        if not external_statuses
+        else next(iter(external_statuses))
+        if len(external_statuses) == 1
+        else "mixed"
+    )
+    return {
+        **(metadata or {}),
+        "vibe_memory_failure_reproduction": profile,
+        "vibe_memory_failure_profile_version": 1,
+        "vibe_memory_failure_outcome": profile["outcome"],
+        "vibe_memory_failure_stage": profile["failure"]["stage"],
+        "vibe_memory_failure_reference_status": reference_status,
+    }
+
+
 class VibeMemoryError(RuntimeError):
     def __init__(self, status, body, *, headers=None):
         try:

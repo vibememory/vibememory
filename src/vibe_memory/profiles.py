@@ -6,6 +6,7 @@ safe to execute.
 """
 
 import json
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
@@ -13,6 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 ShortText = Annotated[str, Field(min_length=1, max_length=300)]
 LongText = Annotated[str, Field(min_length=1, max_length=4000)]
+Sha256 = Annotated[str, Field(pattern=r"^[0-9a-fA-F]{64}$")]
+
+SENSITIVE_SETTING_PATTERN = re.compile(
+    r"(?:authorization|cookie|credential|password|secret|token|api[_-]?key)", re.I
+)
 
 
 class ProfileInput(BaseModel):
@@ -105,6 +111,147 @@ class CheckpointProfile(ProfileInput):
         return value.astimezone(UTC)
 
 
+class FailureSample(ProfileInput):
+    identifier: ShortText
+    record_id: str | None = Field(default=None, min_length=1, max_length=100)
+    record_version: int | None = Field(default=None, ge=1)
+    input_rows: int | None = Field(default=None, ge=0)
+    input_bytes: int | None = Field(default=None, ge=0)
+    description: LongText | None = None
+    input_excerpt_redacted: LongText | None = None
+
+
+class AttemptedSetting(ProfileInput):
+    name: str = Field(min_length=1, max_length=100)
+    value_redacted: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("name")
+    @classmethod
+    def reject_sensitive_setting_names(cls, value):
+        if SENSITIVE_SETTING_PATTERN.search(value):
+            raise ValueError("attempted setting names must not identify secrets or credentials")
+        return value
+
+
+class FailureDetail(ProfileInput):
+    stage: ShortText
+    code: ShortText | None = None
+    message_redacted: LongText
+
+
+class ParsingStep(ProfileInput):
+    order: int = Field(ge=1, le=1000)
+    stage: ShortText
+    operation: ShortText
+    input_summary: LongText
+    output_summary: LongText
+
+
+class MinimalReproduction(ProfileInput):
+    conditions: list[LongText] = Field(min_length=1, max_length=30)
+    command: LongText | None = None
+    expected_result: LongText | None = None
+    observed_result: LongText
+
+
+class UploadedEvidenceReference(ProfileInput):
+    kind: Literal["uploaded_file"]
+    file_id: str = Field(min_length=1, max_length=100)
+    file_version: int | None = Field(default=None, ge=1)
+
+
+class ExternalReferenceVerification(ProfileInput):
+    status: Literal["match", "changed", "missing", "inaccessible", "unverified"]
+    checked_at: datetime | None = None
+    observed_sha256: Sha256 | None = None
+    observed_bytes: int | None = Field(default=None, ge=0)
+    detail_redacted: LongText | None = None
+
+    @field_validator("checked_at")
+    @classmethod
+    def normalize_checked_at(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("checked_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_status_coordinates(self):
+        observed = self.observed_sha256 is not None or self.observed_bytes is not None
+        if self.status == "unverified":
+            if self.checked_at is not None or observed:
+                raise ValueError("unverified references cannot include check results")
+        elif self.checked_at is None:
+            raise ValueError("verified reference states require checked_at")
+        if self.status in {"missing", "inaccessible"} and observed:
+            raise ValueError(f"{self.status} references cannot include observed content coordinates")
+        return self
+
+
+class ExternalEvidenceReference(ProfileInput):
+    kind: Literal["external"]
+    reference: str = Field(min_length=1, max_length=2000)
+    expected_sha256: Sha256 | None = None
+    expected_bytes: int | None = Field(default=None, ge=0)
+    verification: ExternalReferenceVerification = Field(
+        default_factory=lambda: ExternalReferenceVerification(status="unverified")
+    )
+
+    @model_validator(mode="after")
+    def validate_comparison(self):
+        status = self.verification.status
+        hash_pair = self.expected_sha256 is not None and self.verification.observed_sha256 is not None
+        size_pair = self.expected_bytes is not None and self.verification.observed_bytes is not None
+        if status in {"match", "changed"} and not (hash_pair or size_pair):
+            raise ValueError(f"{status} requires comparable expected and observed coordinates")
+        comparisons = []
+        if hash_pair:
+            comparisons.append(
+                self.expected_sha256.casefold() == self.verification.observed_sha256.casefold()
+            )
+        if size_pair:
+            comparisons.append(self.expected_bytes == self.verification.observed_bytes)
+        if status == "match" and comparisons and not all(comparisons):
+            raise ValueError("match coordinates must be equal")
+        if status == "changed" and comparisons and all(comparisons):
+            raise ValueError("changed requires at least one different coordinate")
+        return self
+
+
+EvidenceReference = Annotated[
+    UploadedEvidenceReference | ExternalEvidenceReference,
+    Field(discriminator="kind"),
+]
+
+
+class FailureReproductionProfile(ProfileInput):
+    type: Literal["failure_reproduction"]
+    version: Literal[1]
+    outcome: Literal["failed", "invalid_result"]
+    observed_at: datetime
+    sample: FailureSample
+    attempted_settings: list[AttemptedSetting] = Field(default_factory=list, max_length=30)
+    failure: FailureDetail
+    minimal_reproduction: MinimalReproduction
+    parsing_steps: list[ParsingStep] = Field(default_factory=list, max_length=100)
+    evidence_references: list[EvidenceReference] = Field(default_factory=list, max_length=50)
+
+    @field_validator("observed_at")
+    @classmethod
+    def normalize_observed_at(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_parsing_order(self):
+        orders = [step.order for step in self.parsing_steps]
+        if orders != sorted(orders) or len(orders) != len(set(orders)):
+            raise ValueError("parsing step order values must be unique and ascending")
+        return self
+
+
 def normalize_metadata_profiles(metadata: dict) -> dict:
     """Validate an opted-in profile and add deterministic scalar filter mirrors."""
 
@@ -131,6 +278,39 @@ def normalize_metadata_profiles(metadata: dict) -> dict:
         normalized["vibe_memory_profile_type"] = profile_type
         normalized["vibe_memory_profile_version"] = version
         normalized["vibe_memory_profile_state"] = state
+
+    failure_key = "vibe_memory_failure_reproduction"
+    raw_failure = normalized.get(failure_key)
+    failure_mirrors = (
+        "vibe_memory_failure_profile_version",
+        "vibe_memory_failure_outcome",
+        "vibe_memory_failure_stage",
+        "vibe_memory_failure_reference_status",
+    )
+    if raw_failure is None:
+        for key in failure_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_failure, dict):
+            raise ValueError(f"{failure_key} must be an object")
+        profile = FailureReproductionProfile.model_validate(raw_failure)
+        external_statuses = {
+            reference.verification.status
+            for reference in profile.evidence_references
+            if isinstance(reference, ExternalEvidenceReference)
+        }
+        reference_status = (
+            "none"
+            if not external_statuses
+            else next(iter(external_statuses))
+            if len(external_statuses) == 1
+            else "mixed"
+        )
+        normalized[failure_key] = profile.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_failure_profile_version"] = profile.version
+        normalized["vibe_memory_failure_outcome"] = profile.outcome
+        normalized["vibe_memory_failure_stage"] = profile.failure.stage
+        normalized["vibe_memory_failure_reference_status"] = reference_status
     if len(json.dumps(normalized, ensure_ascii=False, allow_nan=False)) > 30000:
         raise ValueError("metadata must fit within 30000 characters of JSON")
     return normalized

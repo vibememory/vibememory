@@ -4,7 +4,7 @@ Your own server exposes an interactive schema at `/docs` and machine-readable Op
 
 Contract discovery is available at `/.well-known/vibe-memory`. Public record, relationship and error JSON Schemas plus the minimum OpenAPI profile are served under `/contracts/v1/`; compatibility rules and the explicit UMP comparison limits are under `/contracts/`. Clients may request contract `1.0` or `1.1` with `Vibe-Memory-Contract-Version`. Responses identify the negotiated and supported versions; unknown versions return HTTP 406 with `UNSUPPORTED_CONTRACT_VERSION`. All timestamps and temporal query fields use UTC. `X-Vibe-Memory-Namespace` selects a hard authorization partition; project values in metadata are classification only and never grant access.
 
-Portable archives use raw byte streams: `GET /v1/portable-archive` returns a versioned ZIP with a SHA-256 manifest and JSONL records/relations, while `POST /v1/portable-archive/import` accepts `application/vnd.vibememory.archive+zip`. Import is a dry run unless `?apply=true` is explicit. Tokens, OAuth state, sessions, OTP data and Vault values are always excluded.
+Portable archives use raw byte streams: `GET /v1/portable-archive` returns a versioned ZIP with a SHA-256 manifest and JSONL records/relations, while repeated `record_id` query parameters select a partial Agent Context Package. Every new export includes `agent-context-package.json`; selected relations require both endpoints and omitted profile references remain explicit. `POST /v1/portable-archive/import` accepts `application/vnd.vibememory.archive+zip` and deterministically remaps imported IDs into the destination owner while preserving source coordinates in provenance. Import is a dry run unless `?apply=true` is explicit. Tokens, OAuth state, sessions, OTP data, Vault values, Skill executables and raw file bytes are always excluded; current packages remain `lossless=false` because record history and raw files are not replayed.
 
 Agent Memory Repo interoperability is a separate human-readable projection. `GET /v1/agent-memory-repo/export` returns a ZIP containing `MEMORY.md`, topic indexes, one Markdown file per active record, and a checksum manifest. For import, the service never opens or analyzes a repository: a connected agent parses files, supplies retrieval keywords and source coordinates, calls `/v1/agent-memory-repo/diff`, presents the exact result for approval, then sends only approved create IDs to `/v1/agent-memory-repo/apply`. Imported entries are untrusted and quarantined until separately reviewed.
 
@@ -108,12 +108,13 @@ Remote MCP clients use OAuth 2.1 authorization code + S256 PKCE instead of agent
 | PATCH | `/v1/relations/{id}` | Retract/restore using reason and expected_version |
 | GET | `/v1/graph/{id}` | Explicit 0–2 hop active-edge traversal |
 | POST | `/v1/context-bundle` | Stable, byte-bounded, LLM-free handoff selected by IDs, filters, or a 0–2 hop anchor |
+| POST | `/v1/agent-states/reconciliation/candidates` | Metadata-only current Agent State records with structurally divergent statuses for one exact project/task |
 | POST | `/v1/graph/audit` | Content-free deterministic graph consistency audit |
 | POST | `/v1/graph/diff` | Dry-run an agent-authored desired-edge manifest and issue a snapshot-bound approval hash |
 | POST | `/v1/graph/apply` | Apply only explicitly approved create/retract IDs while the diff hash remains current |
 | POST | `/v1/memory-maintenance/audit` | Metadata-only duplicate, staleness, weak-index, source, orphan and unresolved-correction candidates; no recommendation or write |
 | POST | `/v1/search` | Keyword search with relevance and structured filters |
-| GET | `/v1/portable-archive` | Download manifest-hashed JSONL ZIP; excludes credentials, Vault and raw files |
+| GET | `/v1/portable-archive` | Download a full or repeated-`record_id` partial Agent Context Package ZIP; excludes credentials, Vault, Skill executables and raw files |
 | POST | `/v1/portable-archive/import` | Raw byte-stream archive dry-run; `?apply=true` is explicit and imported data is quarantined |
 | GET | `/v1/agent-memory-repo/export` | Download a human-readable Agent Memory Repo ZIP projection; excludes credentials and Vault |
 | POST | `/v1/agent-memory-repo/diff` | Dry-run entries and keywords prepared by a connected agent; the server does not parse repository files |
@@ -283,8 +284,44 @@ checks the external harness, or automatically retries a failure. A separate
 Checkpoint or Failure Reproduction profile can preserve broader completion claims
 or sanitized reproduction detail.
 
+`POST /v1/agent-states/reconciliation/candidates` accepts one exact project/task
+coordinate and returns only current visible Agent State records when at least two
+distinct reported statuses exist. It is a deterministic metadata-only candidate
+view: bodies are omitted, access controls apply first, and the service does not
+select truth, merge meaning, schedule work or resolve a disagreement. MCP exposes
+the same operation as `state_reconciliation_candidates`.
+
+Optional `metadata.vibe_memory_state_reconciliation` profile v1 preserves an
+external resolver's explicit `open` or `resolved` observation over at least two
+unique Agent State record/version coordinates. A resolved observation must select
+one of those exact candidates and include the reported resolver, rationale and UTC
+resolution time. The authenticated writer remains separate from the reported
+resolver. The profile neither changes candidate records nor grants resolution
+authority; use an ordinary versioned record update or explicit correction relation
+when an authorized actor intends to change stored state.
+
+Optional `metadata.vibe_memory_agent_capability_manifest` profile v1 declares an
+agent ID, reported harness, capability names, supported task types, versioned Skill
+references, required permission categories, manifest version and UTC observation
+time. It is descriptive data only. Effective Vibe Memory authorization still comes
+from the current connection and namespace grants; host availability and third-party
+permissions remain unevaluated. The server does not probe the harness, assign work
+or guarantee that a declared capability will succeed.
+
+Optional `metadata.vibe_memory_context_lifecycle` profile v1 classifies a record as
+`ephemeral_execution`, `session`, `project`, `long_term`, `decision_history`, or
+`archived_context`; supplies an `indefinite`, `manual_archive`, or `until` retention
+assertion; and selects `include`, `explicit_only`, or `exclude` for Context Bundle
+inclusion. Expired and excluded records are omitted from bundles by default;
+`explicit_only` records are included only by an exact record ID or anchor. The
+`include_lifecycle_excluded` request flag is an explicit selection override only:
+authorization, namespace, trust and quarantine rules still apply. The response
+lists lifecycle-omitted IDs and reasons. Lifecycle metadata never automatically
+deletes, archives, restores or changes a record's permissions.
+
 Minimal search and Context Bundle results add compact `agent_state` and
-`skill_execution` summaries only when those profiles exist. Consumers fetch a
+`skill_execution`, `state_reconciliation`, `agent_capability_manifest`, and
+`context_lifecycle` summaries only when those profiles exist. Consumers fetch a
 selected record for full lists, reasons and references. Standard projections
 preserve complete metadata.
 `include_content` defaults to false. `projection=minimal` omits heavy metadata,

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibememory.io/contracts/v1/state-reconciliation-profile.json",
+  "title": "Vibe Memory State Reconciliation Profile 1",
+  "description": "An external harness or user-authored resolution record for competing Agent State observations. The service validates coordinates and preserves the report but never chooses truth or merges state semantically.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "version", "project_id", "task_id", "status", "candidate_refs", "observed_at"],
+  "properties": {
+    "type": {"const": "state_reconciliation"},
+    "version": {"const": 1},
+    "project_id": {"type": "string", "minLength": 1, "maxLength": 300},
+    "task_id": {"type": "string", "minLength": 1, "maxLength": 300},
+    "status": {"enum": ["open", "resolved"]},
+    "candidate_refs": {"type": "array", "minItems": 2, "maxItems": 50, "items": {"$ref": "#/$defs/record"}},
+    "selected_ref": {"$ref": "#/$defs/record"},
+    "reported_resolver": {"type": "string", "minLength": 1, "maxLength": 300},
+    "rationale": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "resolved_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "resolved"}}, "required": ["status"]},
+      "then": {"required": ["selected_ref", "reported_resolver", "rationale", "resolved_at"]}
+    },
+    {
+      "if": {"properties": {"status": {"const": "open"}}, "required": ["status"]},
+      "then": {"not": {"anyOf": [{"required": ["selected_ref"]}, {"required": ["reported_resolver"]}, {"required": ["resolved_at"]}]}}
+    }
+  ],
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "version"],
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "version": {"type": "integer", "minimum": 1}
+      }
+    }
+  }
+}

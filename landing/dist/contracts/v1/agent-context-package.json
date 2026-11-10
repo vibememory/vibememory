@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibememory.io/contracts/v1/agent-context-package.json",
+  "title": "Vibe Memory Portable Agent Context Package Manifest 1",
+  "description": "Manifest embedded in a permission-scoped portable archive. It classifies included profile and dependency coordinates without carrying secrets, permission grants, raw file bytes, or executable Skills.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "format", "selection", "record_ids", "profiles", "decision_reference_ids", "evidence_reference_ids", "skill_refs", "dependency_relation_ids", "omitted_reference_ids", "secrets_included", "skill_executables_included", "permission_grants_included", "raw_files_included"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "format": {"const": "vibe-memory-agent-context-package"},
+    "selection": {"enum": ["full", "partial"]},
+    "requested_record_ids": {"type": "array", "maxItems": 200, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+    "record_ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "checkpoint", "failure_reproduction", "evidence_impact_review", "agent_state", "state_reconciliation", "skill_execution", "agent_capability_manifest", "context_lifecycle"],
+      "properties": {
+        "decision": {"$ref": "#/$defs/ids"},
+        "checkpoint": {"$ref": "#/$defs/ids"},
+        "failure_reproduction": {"$ref": "#/$defs/ids"},
+        "evidence_impact_review": {"$ref": "#/$defs/ids"},
+        "agent_state": {"$ref": "#/$defs/ids"},
+        "state_reconciliation": {"$ref": "#/$defs/ids"},
+        "skill_execution": {"$ref": "#/$defs/ids"},
+        "agent_capability_manifest": {"$ref": "#/$defs/ids"},
+        "context_lifecycle": {"$ref": "#/$defs/ids"}
+      }
+    },
+    "decision_reference_ids": {"$ref": "#/$defs/ids"},
+    "evidence_reference_ids": {"$ref": "#/$defs/ids"},
+    "skill_refs": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/skill"}},
+    "dependency_relation_ids": {"$ref": "#/$defs/ids"},
+    "omitted_reference_ids": {"$ref": "#/$defs/ids"},
+    "secrets_included": {"const": false},
+    "skill_executables_included": {"const": false},
+    "permission_grants_included": {"const": false},
+    "raw_files_included": {"const": false}
+  },
+  "$defs": {
+    "ids": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 100}},
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 300},
+        "version": {"type": "string", "minLength": 1, "maxLength": 300},
+        "digest": {"type": "string", "maxLength": 71, "pattern": "^(?:sha256:)?[0-9a-fA-F]{64}$"}
+      },
+      "anyOf": [{"required": ["version"]}, {"required": ["digest"]}]
+    }
+  }
+}

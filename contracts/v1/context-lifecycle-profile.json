@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibememory.io/contracts/v1/context-lifecycle-profile.json",
+  "title": "Vibe Memory Context Lifecycle Profile 1",
+  "description": "A declarative context lifetime and Context Bundle inclusion policy. It never grants access, automatically deletes a record, bypasses archive/delete rules, or reconstructs unavailable history.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "version", "context_class", "retention", "context_bundle_policy", "observed_at"],
+  "properties": {
+    "type": {"const": "context_lifecycle"},
+    "version": {"const": 1},
+    "context_class": {"enum": ["ephemeral_execution", "session", "project", "long_term", "decision_history", "archived_context"]},
+    "retention": {"enum": ["indefinite", "manual_archive", "until"]},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "context_bundle_policy": {"enum": ["include", "explicit_only", "exclude"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "observed_at": {"type": "string", "format": "date-time"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"retention": {"const": "until"}}, "required": ["retention"]},
+      "then": {"required": ["expires_at"]},
+      "else": {"not": {"required": ["expires_at"]}}
+    }
+  ]
+}

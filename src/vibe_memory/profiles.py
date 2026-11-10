@@ -34,13 +34,16 @@ class ProfileScope(ProfileInput):
 class ProfileEvidence(ProfileInput):
     record_id: str = Field(min_length=1, max_length=100)
     version: int = Field(ge=1)
-    source_type: Literal[
-        "git_commit",
-        "requirements_revision",
-        "document_revision",
-        "web",
-        "other",
-    ] | None = None
+    source_type: (
+        Literal[
+            "git_commit",
+            "requirements_revision",
+            "document_revision",
+            "web",
+            "other",
+        ]
+        | None
+    ) = None
     permalink: str | None = Field(default=None, min_length=1, max_length=2000)
     revision: str | None = Field(default=None, min_length=1, max_length=300)
     commit_sha: str | None = Field(
@@ -116,9 +119,7 @@ class CheckpointProfile(ProfileInput):
         "deployed",
         "operationally_verified",
     ]
-    observation_kind: Literal[
-        "author_reported", "observed", "reproduced", "failed", "unavailable"
-    ]
+    observation_kind: Literal["author_reported", "observed", "reproduced", "failed", "unavailable"]
     target: ProfileScope
     observed_at: datetime
     commit: str | None = Field(default=None, min_length=1, max_length=200)
@@ -212,7 +213,9 @@ class ExternalReferenceVerification(ProfileInput):
         elif self.checked_at is None:
             raise ValueError("verified reference states require checked_at")
         if self.status in {"missing", "inaccessible"} and observed:
-            raise ValueError(f"{self.status} references cannot include observed content coordinates")
+            raise ValueError(
+                f"{self.status} references cannot include observed content coordinates"
+            )
         return self
 
 
@@ -228,7 +231,9 @@ class ExternalEvidenceReference(ProfileInput):
     @model_validator(mode="after")
     def validate_comparison(self):
         status = self.verification.status
-        hash_pair = self.expected_sha256 is not None and self.verification.observed_sha256 is not None
+        hash_pair = (
+            self.expected_sha256 is not None and self.verification.observed_sha256 is not None
+        )
         size_pair = self.expected_bytes is not None and self.verification.observed_bytes is not None
         if status in {"match", "changed"} and not (hash_pair or size_pair):
             raise ValueError(f"{status} requires comparable expected and observed coordinates")
@@ -413,6 +418,134 @@ class SkillExecutionProfile(ProfileInput):
         return self
 
 
+class RecordCoordinate(ProfileInput):
+    record_id: str = Field(min_length=1, max_length=100)
+    version: int = Field(ge=1)
+
+
+class StateReconciliationProfile(ProfileInput):
+    """Explicit external resolution of competing Agent State observations."""
+
+    type: Literal["state_reconciliation"]
+    version: Literal[1]
+    project_id: ShortText
+    task_id: ShortText
+    status: Literal["open", "resolved"]
+    candidate_refs: list[RecordCoordinate] = Field(min_length=2, max_length=50)
+    selected_ref: RecordCoordinate | None = None
+    reported_resolver: ShortText | None = None
+    rationale: LongText | None = None
+    observed_at: datetime
+    resolved_at: datetime | None = None
+
+    @field_validator("observed_at", "resolved_at")
+    @classmethod
+    def normalize_reconciliation_time(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("reconciliation timestamps must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_resolution(self):
+        coordinates = [(item.record_id, item.version) for item in self.candidate_refs]
+        if len(coordinates) != len(set(coordinates)):
+            raise ValueError("candidate_refs must be unique")
+        if self.status == "resolved":
+            if not all(
+                (self.selected_ref, self.reported_resolver, self.rationale, self.resolved_at)
+            ):
+                raise ValueError(
+                    "resolved reconciliation requires selected_ref, reported_resolver, "
+                    "rationale, and resolved_at"
+                )
+            selected = (self.selected_ref.record_id, self.selected_ref.version)
+            if selected not in coordinates:
+                raise ValueError("selected_ref must be one of candidate_refs")
+            if self.resolved_at < self.observed_at:
+                raise ValueError("resolved_at cannot precede observed_at")
+        elif any((self.selected_ref, self.reported_resolver, self.resolved_at)):
+            raise ValueError("open reconciliation cannot select or report a resolver")
+        return self
+
+
+CapabilityName = Annotated[
+    str,
+    Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9._-]*$"),
+]
+PermissionName = Annotated[
+    str,
+    Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9._:-]*$"),
+]
+
+
+class AgentCapabilityManifestProfile(ProfileInput):
+    """Agent-reported capabilities, never an effective permission grant."""
+
+    type: Literal["agent_capability_manifest"]
+    version: Literal[1]
+    manifest_version: int = Field(ge=1)
+    agent_id: ShortText
+    harness: HarnessReference
+    capabilities: list[CapabilityName] = Field(min_length=1, max_length=100)
+    skill_refs: list[SkillReference] = Field(default_factory=list, max_length=100)
+    supported_task_types: list[CapabilityName] = Field(default_factory=list, max_length=100)
+    required_permissions: list[PermissionName] = Field(default_factory=list, max_length=100)
+    observed_at: datetime
+
+    @field_validator("capabilities", "supported_task_types", "required_permissions")
+    @classmethod
+    def unique_capabilities(cls, values):
+        if len(values) != len(set(values)):
+            raise ValueError("capability manifest lists must contain unique values")
+        return values
+
+    @field_validator("observed_at")
+    @classmethod
+    def normalize_manifest_time(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+
+class ContextLifecycleProfile(ProfileInput):
+    """Declarative context lifetime and bundle policy; it never deletes records."""
+
+    type: Literal["context_lifecycle"]
+    version: Literal[1]
+    context_class: Literal[
+        "ephemeral_execution",
+        "session",
+        "project",
+        "long_term",
+        "decision_history",
+        "archived_context",
+    ]
+    retention: Literal["indefinite", "manual_archive", "until"]
+    expires_at: datetime | None = None
+    context_bundle_policy: Literal["include", "explicit_only", "exclude"] = "include"
+    reason: LongText | None = None
+    observed_at: datetime
+
+    @field_validator("expires_at", "observed_at")
+    @classmethod
+    def normalize_lifecycle_time(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("lifecycle timestamps must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def validate_retention(self):
+        if self.retention == "until" and self.expires_at is None:
+            raise ValueError("until retention requires expires_at")
+        if self.retention != "until" and self.expires_at is not None:
+            raise ValueError("expires_at is only valid with until retention")
+        return self
+
+
 def agent_state_summary(metadata: dict) -> dict | None:
     profile = (metadata or {}).get("vibe_memory_agent_state")
     if not isinstance(profile, dict) or profile.get("type") != "agent_state":
@@ -441,6 +574,46 @@ def skill_execution_summary(metadata: dict) -> dict | None:
         "reported_status": profile.get("reported_status"),
         "verification_status": profile.get("verification_status"),
         "reported_harness": harness.get("id") if isinstance(harness, dict) else None,
+    }
+
+
+def state_reconciliation_summary(metadata: dict) -> dict | None:
+    profile = (metadata or {}).get("vibe_memory_state_reconciliation")
+    if not isinstance(profile, dict) or profile.get("type") != "state_reconciliation":
+        return None
+    return {
+        "profile_version": profile.get("version"),
+        "project_id": profile.get("project_id"),
+        "task_id": profile.get("task_id"),
+        "status": profile.get("status"),
+        "candidate_count": len(profile.get("candidate_refs") or []),
+    }
+
+
+def capability_manifest_summary(metadata: dict) -> dict | None:
+    profile = (metadata or {}).get("vibe_memory_agent_capability_manifest")
+    if not isinstance(profile, dict) or profile.get("type") != "agent_capability_manifest":
+        return None
+    harness = profile.get("harness") or {}
+    return {
+        "profile_version": profile.get("version"),
+        "manifest_version": profile.get("manifest_version"),
+        "agent_id": profile.get("agent_id"),
+        "harness": harness.get("id") if isinstance(harness, dict) else None,
+        "capability_count": len(profile.get("capabilities") or []),
+    }
+
+
+def context_lifecycle_summary(metadata: dict) -> dict | None:
+    profile = (metadata or {}).get("vibe_memory_context_lifecycle")
+    if not isinstance(profile, dict) or profile.get("type") != "context_lifecycle":
+        return None
+    return {
+        "profile_version": profile.get("version"),
+        "context_class": profile.get("context_class"),
+        "retention": profile.get("retention"),
+        "expires_at": profile.get("expires_at"),
+        "context_bundle_policy": profile.get("context_bundle_policy"),
     }
 
 
@@ -570,6 +743,74 @@ def normalize_metadata_profiles(metadata: dict) -> dict:
         normalized["vibe_memory_skill_execution_status"] = execution.reported_status
         normalized["vibe_memory_skill_verification_status"] = execution.verification_status
         normalized["vibe_memory_skill_execution_harness"] = execution.reported_harness.id
+
+    reconciliation_key = "vibe_memory_state_reconciliation"
+    raw_reconciliation = normalized.get(reconciliation_key)
+    reconciliation_mirrors = (
+        "vibe_memory_state_reconciliation_profile_version",
+        "vibe_memory_state_reconciliation_project_id",
+        "vibe_memory_state_reconciliation_task_id",
+        "vibe_memory_state_reconciliation_status",
+    )
+    if raw_reconciliation is None:
+        for key in reconciliation_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_reconciliation, dict):
+            raise ValueError(f"{reconciliation_key} must be an object")
+        reconciliation = StateReconciliationProfile.model_validate(raw_reconciliation)
+        normalized[reconciliation_key] = reconciliation.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_state_reconciliation_profile_version"] = reconciliation.version
+        normalized["vibe_memory_state_reconciliation_project_id"] = reconciliation.project_id
+        normalized["vibe_memory_state_reconciliation_task_id"] = reconciliation.task_id
+        normalized["vibe_memory_state_reconciliation_status"] = reconciliation.status
+
+    capability_key = "vibe_memory_agent_capability_manifest"
+    raw_capability = normalized.get(capability_key)
+    capability_mirrors = (
+        "vibe_memory_agent_capability_profile_version",
+        "vibe_memory_agent_capability_manifest_version",
+        "vibe_memory_agent_capability_agent_id",
+        "vibe_memory_agent_capability_harness",
+    )
+    if raw_capability is None:
+        for key in capability_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_capability, dict):
+            raise ValueError(f"{capability_key} must be an object")
+        capability = AgentCapabilityManifestProfile.model_validate(raw_capability)
+        normalized[capability_key] = capability.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_agent_capability_profile_version"] = capability.version
+        normalized["vibe_memory_agent_capability_manifest_version"] = capability.manifest_version
+        normalized["vibe_memory_agent_capability_agent_id"] = capability.agent_id
+        normalized["vibe_memory_agent_capability_harness"] = capability.harness.id
+
+    lifecycle_key = "vibe_memory_context_lifecycle"
+    raw_lifecycle = normalized.get(lifecycle_key)
+    lifecycle_mirrors = (
+        "vibe_memory_context_lifecycle_profile_version",
+        "vibe_memory_context_class",
+        "vibe_memory_context_retention",
+        "vibe_memory_context_bundle_policy",
+        "vibe_memory_context_expires_at",
+    )
+    if raw_lifecycle is None:
+        for key in lifecycle_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_lifecycle, dict):
+            raise ValueError(f"{lifecycle_key} must be an object")
+        lifecycle = ContextLifecycleProfile.model_validate(raw_lifecycle)
+        normalized[lifecycle_key] = lifecycle.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_context_lifecycle_profile_version"] = lifecycle.version
+        normalized["vibe_memory_context_class"] = lifecycle.context_class
+        normalized["vibe_memory_context_retention"] = lifecycle.retention
+        normalized["vibe_memory_context_bundle_policy"] = lifecycle.context_bundle_policy
+        if lifecycle.expires_at is None:
+            normalized.pop("vibe_memory_context_expires_at", None)
+        else:
+            normalized["vibe_memory_context_expires_at"] = lifecycle.expires_at.isoformat()
     if len(json.dumps(normalized, ensure_ascii=False, allow_nan=False)) > 30000:
         raise ValueError("metadata must fit within 30000 characters of JSON")
     return normalized

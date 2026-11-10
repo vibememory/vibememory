@@ -236,6 +236,7 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "context_bundle_get",
             "graph_audit",
             "evidence_impact_candidates",
+            "state_reconciliation_candidates",
             "graph_diff",
             "graph_apply",
             "memory_maintenance_audit",
@@ -270,9 +271,9 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         ]
         assert search_schema["properties"]["projection"]["default"] == "minimal"
         assert search_schema["properties"]["byte_limit"]["default"] == 16384
-        bundle_schema = next(
-            tool for tool in tools if tool["name"] == "context_bundle_get"
-        )["inputSchema"]
+        bundle_schema = next(tool for tool in tools if tool["name"] == "context_bundle_get")[
+            "inputSchema"
+        ]
         assert bundle_schema["properties"]["projection"]["default"] == "minimal"
         assert bundle_schema["properties"]["byte_limit"]["default"] == 32768
 
@@ -358,6 +359,19 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         assert impact_candidates["candidates"] == []
         assert impact_candidates["unrecorded_dependency_semantics"] == "unknown"
 
+        reconciliation_candidates = mcp(
+            client,
+            credentials["access_token"],
+            322,
+            "tools/call",
+            {
+                "name": "state_reconciliation_candidates",
+                "arguments": {"project_id": "visionflow", "task_id": "inspection-node"},
+            },
+        )["result"]["structuredContent"]
+        assert reconciliation_candidates["candidates"] == []
+        assert reconciliation_candidates["status_divergence"] is False
+
         maintenance = mcp(
             client,
             credentials["access_token"],
@@ -438,9 +452,12 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "record_id": created["id"],
             "kind": "memory",
         }
-        assert next(
-            item for item in events["items"] if item["event"] == "agent_audit_log.created"
-        )["data"]["audit_log_id"] == uploaded_audit["id"]
+        assert (
+            next(item for item in events["items"] if item["event"] == "agent_audit_log.created")[
+                "data"
+            ]["audit_log_id"]
+            == uploaded_audit["id"]
+        )
         auth_result = mcp(
             client,
             credentials["access_token"],

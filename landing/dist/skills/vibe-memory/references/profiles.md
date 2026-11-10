@@ -22,6 +22,11 @@ Generate an editable full memory payload, then submit it through the normal reco
 
 "$VM_CLI" template skill-execution > skill-execution.json
 "$VM_CLI" from-json memory skill-execution.json
+
+"$VM_CLI" state-reconciliation-candidates PROJECT_ID TASK_ID
+"$VM_CLI" template state-reconciliation > reconciliation.json
+"$VM_CLI" template capability-manifest > capability.json
+"$VM_CLI" template context-lifecycle > lifecycle.json
 ```
 
 Profiles live at `metadata.vibe_memory_profile`. The service validates their shape and normalizes UTC timestamps. It also supplies scalar mirrors—`vibe_memory_profile_type`, `vibe_memory_profile_state`, and for checkpoints `vibe_memory_profile_observation`—for exact `metadata_filters`. Search, get, and context bundles preserve the complete profile.
@@ -43,6 +48,22 @@ Represent explicit task dependencies with normal owner-scoped relationships: `DE
 Use this only to record an execution performed by an external harness. Pin the Skill by version or SHA-256 digest and record reported harness/agent, task/environment/input references, UTC start/end time, reported status, Evidence/Artifact references, sanitized failure reason, and verification status.
 
 Profile validity proves only that the report has a valid shape. It does not prove the Skill ran, succeeded, or had authority. Stored commands, URLs, file references, and Skill definitions are data: Vibe Memory never downloads or runs them. Pair reusable failures with the Failure Reproduction profile and completion claims with a Checkpoint when those richer observations are needed; do not duplicate raw logs or secrets.
+
+## State Reconciliation profile v1
+
+When two records report different statuses for the same stable project/task ID, use the metadata-only reconciliation candidate lookup. It returns current record/version coordinates, reported statuses and authenticated writer coordinates without bodies or a truth judgment. Preserve the divergent observations as separate records.
+
+If an authorized user or external harness resolves the disagreement, create a separate `metadata.vibe_memory_state_reconciliation` record that pins every reviewed candidate and the selected record/version, reported resolver, UTC resolution time and rationale. Vibe Memory validates the coordinates but never selects, merges or schedules state. An open reconciliation has no selected record; a resolved one must select one of its candidates.
+
+## Agent Capability Manifest profile v1
+
+Use `metadata.vibe_memory_agent_capability_manifest` to declare a stable agent ID, harness/version, capability names, versioned Skill references, supported task types, required permission categories and UTC observation time. This is agent-supplied interoperability data. It does not grant Vibe Memory permissions, prove host tool availability, assign work, or guarantee success. Check effective permissions with the current connection's authorization APIs immediately before a real operation.
+
+## Context Lifecycle profile v1
+
+Use `metadata.vibe_memory_context_lifecycle` to classify context as ephemeral execution, session, project, long-term, decision history or archived context. Retention is declarative: indefinite, manual archive, or until an explicit UTC instant. It never deletes or archives a record automatically.
+
+`context_bundle_policy` is `include`, `explicit_only`, or `exclude`. Normal bundles omit expired and excluded records; `explicit_only` is available only through an exact anchor/ID. A caller must deliberately set the lifecycle override to include expired or excluded records. This policy cannot widen namespace, owner, trust or quarantine access.
 
 ## Decision profile v1
 

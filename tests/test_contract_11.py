@@ -18,19 +18,27 @@ def test_namespace_grants_hard_isolate_records(settings):
         client.headers["Origin"] = ORIGIN
         client.post(
             "/auth/signup",
-            json={"name": "Namespace", "email": "namespace@example.com", "password": "long-password-123"},
+            json={
+                "name": "Namespace",
+                "email": "namespace@example.com",
+                "password": "long-password-123",
+            },
         )
         namespace = client.post("/auth/namespaces", json={"name": "Project Atlas"}).json()
         key = client.post("/auth/api-keys", json={"name": "Scoped"}).json()
         client.put(
             f"/auth/api-keys/{key['id']}/namespaces",
-            json={"grants": [{"namespace_id": namespace["id"], "can_read": True, "can_write": True}]},
+            json={
+                "grants": [{"namespace_id": namespace["id"], "can_read": True, "can_write": True}]
+            },
         )
         auth = {"Authorization": "Bearer " + key["key"], "Origin": ""}
         assert client.get("/v1/records", headers=auth).status_code == 404
         scoped = {**auth, "X-Vibe-Memory-Namespace": namespace["id"]}
         record = client.post(
-            "/v1/memories", headers=scoped, json={"content": "Atlas decision", "keywords": ["Atlas"]}
+            "/v1/memories",
+            headers=scoped,
+            json={"content": "Atlas decision", "keywords": ["Atlas"]},
         ).json()
         assert client.get("/v1/records/" + record["id"], headers=scoped).status_code == 200
         assert client.get("/v1/records/" + record["id"], headers=auth).status_code == 404
@@ -115,12 +123,14 @@ def test_contract_documents_and_version_negotiation(client):
         "openapi_profile": "/contracts/v1/openapi-profile.json",
         "decision_profile": "/contracts/v1/decision-profile.json",
         "checkpoint_profile": "/contracts/v1/checkpoint-profile.json",
-        "failure_reproduction_profile":
-            "/contracts/v1/failure-reproduction-profile.json",
-        "evidence_impact_review_profile":
-            "/contracts/v1/evidence-impact-review-profile.json",
+        "failure_reproduction_profile": "/contracts/v1/failure-reproduction-profile.json",
+        "evidence_impact_review_profile": "/contracts/v1/evidence-impact-review-profile.json",
         "agent_state_profile": "/contracts/v1/agent-state-profile.json",
         "skill_execution_profile": "/contracts/v1/skill-execution-profile.json",
+        "state_reconciliation_profile": "/contracts/v1/state-reconciliation-profile.json",
+        "agent_capability_manifest_profile": "/contracts/v1/agent-capability-manifest-profile.json",
+        "context_lifecycle_profile": "/contracts/v1/context-lifecycle-profile.json",
+        "agent_context_package": "/contracts/v1/agent-context-package.json",
         "governance": "/contracts/GOVERNANCE.md",
         "ump_mapping": "/contracts/ump-mapping.md",
     }
@@ -135,9 +145,7 @@ def test_contract_documents_and_version_negotiation(client):
         assert schema["title"] == title
         assert schema["additionalProperties"] is True
 
-    profile = json.loads(
-        (CONTRACTS / "v1" / "openapi-profile.json").read_text(encoding="utf-8")
-    )
+    profile = json.loads((CONTRACTS / "v1" / "openapi-profile.json").read_text(encoding="utf-8"))
     assert profile["openapi"] == "3.1.0"
     assert profile["x-vibe-memory-profile"]["server_inference"] is False
     assert {"/v1/memories", "/v1/records/{id}", "/v1/search", "/v1/relations"} <= set(
@@ -146,16 +154,10 @@ def test_contract_documents_and_version_negotiation(client):
 
     decision = json.loads((CONTRACTS / "v1" / "decision-profile.json").read_text())
     checkpoint = json.loads((CONTRACTS / "v1" / "checkpoint-profile.json").read_text())
-    failure = json.loads(
-        (CONTRACTS / "v1" / "failure-reproduction-profile.json").read_text()
-    )
-    impact = json.loads(
-        (CONTRACTS / "v1" / "evidence-impact-review-profile.json").read_text()
-    )
+    failure = json.loads((CONTRACTS / "v1" / "failure-reproduction-profile.json").read_text())
+    impact = json.loads((CONTRACTS / "v1" / "evidence-impact-review-profile.json").read_text())
     state = json.loads((CONTRACTS / "v1" / "agent-state-profile.json").read_text())
-    execution = json.loads(
-        (CONTRACTS / "v1" / "skill-execution-profile.json").read_text()
-    )
+    execution = json.loads((CONTRACTS / "v1" / "skill-execution-profile.json").read_text())
     assert decision["additionalProperties"] is False
     assert checkpoint["additionalProperties"] is False
     assert failure["additionalProperties"] is False
@@ -180,9 +182,7 @@ def test_contract_documents_and_version_negotiation(client):
     assert current.headers["vibe-memory-contract-version"] == "1.1"
     assert current.json()["negotiated_contract_version"] == "1.1"
 
-    unsupported = client.get(
-        "/v1/capabilities", headers={"Vibe-Memory-Contract-Version": "9.0"}
-    )
+    unsupported = client.get("/v1/capabilities", headers={"Vibe-Memory-Contract-Version": "9.0"})
     assert unsupported.status_code == 406
     assert unsupported.json()["supported_contract_versions"] == ["1.0", "1.1"]
     assert unsupported.json()["error"]["reason_code"] == "UNSUPPORTED_CONTRACT_VERSION"

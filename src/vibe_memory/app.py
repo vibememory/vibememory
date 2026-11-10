@@ -86,6 +86,7 @@ from .deterministic import (
     evidence_impact_candidates,
     graph_audit,
     graph_diff,
+    state_reconciliation_candidates,
 )
 from .embeddings import Embedder
 from .files import FileStorage
@@ -125,6 +126,7 @@ from .models import (
     RelationInput,
     RelationUpdate,
     SearchInput,
+    StateReconciliationCandidatesInput,
     VaultCaptureRequest,
     VaultCaptureSubmit,
     VaultGrantUpdate,
@@ -254,7 +256,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.40.0",
+        version="0.41.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -1728,6 +1730,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "agent_memory_repo_apply": "/v1/agent-memory-repo/apply",
                 "memory_maintenance_audit": "/v1/memory-maintenance/audit",
                 "evidence_impact_candidates": "/v1/evidence-impact/candidates",
+                "state_reconciliation_candidates": "/v1/agent-states/reconciliation/candidates",
                 "mcp": "/mcp",
             },
             "contracts": {
@@ -1737,12 +1740,14 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "openapi_profile": "/contracts/v1/openapi-profile.json",
                 "decision_profile": "/contracts/v1/decision-profile.json",
                 "checkpoint_profile": "/contracts/v1/checkpoint-profile.json",
-                "failure_reproduction_profile":
-                    "/contracts/v1/failure-reproduction-profile.json",
-                "evidence_impact_review_profile":
-                    "/contracts/v1/evidence-impact-review-profile.json",
+                "failure_reproduction_profile": "/contracts/v1/failure-reproduction-profile.json",
+                "evidence_impact_review_profile": "/contracts/v1/evidence-impact-review-profile.json",
                 "agent_state_profile": "/contracts/v1/agent-state-profile.json",
                 "skill_execution_profile": "/contracts/v1/skill-execution-profile.json",
+                "state_reconciliation_profile": "/contracts/v1/state-reconciliation-profile.json",
+                "agent_capability_manifest_profile": "/contracts/v1/agent-capability-manifest-profile.json",
+                "context_lifecycle_profile": "/contracts/v1/context-lifecycle-profile.json",
+                "agent_context_package": "/contracts/v1/agent-context-package.json",
                 "governance": "/contracts/GOVERNANCE.md",
                 "ump_mapping": "/contracts/ump-mapping.md",
             },
@@ -1760,6 +1765,10 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "evidence-impact-review-profile-v1",
                 "agent-state-profile-v1",
                 "skill-execution-profile-v1",
+                "state-reconciliation-profile-v1",
+                "agent-capability-manifest-profile-v1",
+                "context-lifecycle-profile-v1",
+                "agent-context-package-v1",
             ],
             "extensions": {
                 "historical_recorded_time": "unsupported",
@@ -1950,7 +1959,9 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     ):
         transport = request.state.agent_transport
         if transport != "browser":
-            transport = "cli" if CLI_USER_AGENT.match(request.headers.get("user-agent", "")) else "rest"
+            transport = (
+                "cli" if CLI_USER_AGENT.match(request.headers.get("user-agent", "")) else "rest"
+            )
         try:
             record, created = db.add_agent_audit_log(
                 user,
@@ -3119,6 +3130,14 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
     ):
         return evidence_impact_candidates(db, user, data)
 
+    @app.post("/v1/agent-states/reconciliation/candidates", tags=["retrieval"])
+    def find_state_reconciliation_candidates(
+        data: StateReconciliationCandidatesInput,
+        user=Depends(memory_reader),
+        db=Depends(store),
+    ):
+        return state_reconciliation_candidates(db, user, data)
+
     @app.post("/v1/graph/diff", tags=["graph"])
     def diff_graph(
         data: GraphDiffInput,
@@ -3343,8 +3362,22 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
             raise HTTPException(422, str(error)) from None
 
     @app.get("/v1/portable-archive", tags=["portability"])
-    def portable_export(request: Request, user=Depends(memory_reader), db=Depends(store)):
-        body, manifest = export_archive(db, user, getattr(request.state, "namespace_id", "default"))
+    def portable_export(
+        request: Request,
+        record_id: list[str] = Query(default=[], max_length=200),
+        user=Depends(memory_reader),
+        db=Depends(store),
+    ):
+        if len(record_id) != len(set(record_id)):
+            raise HTTPException(422, "record_id values must be unique")
+        if any(not value or len(value) > 100 for value in record_id):
+            raise HTTPException(422, "record_id values must contain 1-100 characters")
+        body, manifest = export_archive(
+            db,
+            user,
+            getattr(request.state, "namespace_id", "default"),
+            record_ids=record_id,
+        )
         return Response(
             body,
             media_type="application/vnd.vibememory.archive+zip",

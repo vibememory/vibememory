@@ -20,6 +20,7 @@ Vibe Memory stores the data your agents prepare. It does **not call an LLM**, in
 - **Durable relationship graph:** memories, entities, documents, provenance, and relationship history in PostgreSQL.
 - **Efficient graph refreshes:** idempotent 100-item entity/relation/update batches and compact paginated reads.
 - **Deterministic handoffs:** stable, byte-bounded context bundles expose stored evidence and explicit edges without an LLM or server-authored summary.
+- **Harness-neutral work state:** versioned Agent State, explicit reconciliation, external Skill observations, declarative capability/lifecycle profiles, and partial Agent Context Packages let another harness continue without turning Vibe Memory into a runtime.
 - **Reviewed graph maintenance:** content-free audits plus snapshot-bound diff/apply require exact create/retract approvals and preserve parallel claims.
 - **Agent mailboxes:** same-account persistent handoffs with recipient-scoped SSE and explicit acknowledgements.
 - **Keyword-only pgvector search:** local multilingual embeddings; raw content, titles, and summaries are never embedded.

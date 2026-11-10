@@ -4,11 +4,17 @@ import base64
 import hashlib
 import json
 from collections import Counter, defaultdict, deque
-from datetime import datetime
+from datetime import UTC, datetime
 
 from .clock import utc_now_iso
 from .corrections import annotate_corrections
-from .profiles import agent_state_summary, skill_execution_summary
+from .profiles import (
+    agent_state_summary,
+    capability_manifest_summary,
+    context_lifecycle_summary,
+    skill_execution_summary,
+    state_reconciliation_summary,
+)
 from .store import NotFound
 from .temporal import recorded_instant
 
@@ -118,6 +124,17 @@ def _record_matches_context(record, data):
     return True
 
 
+def _lifecycle_exclusion(record, now):
+    lifecycle = (record.get("metadata") or {}).get("vibe_memory_context_lifecycle")
+    if not isinstance(lifecycle, dict) or lifecycle.get("type") != "context_lifecycle":
+        return None
+    expires_at = lifecycle.get("expires_at")
+    if expires_at and datetime.fromisoformat(expires_at) <= now:
+        return "expired"
+    policy = lifecycle.get("context_bundle_policy", "include")
+    return policy if policy in {"explicit_only", "exclude"} else None
+
+
 def _context_record(record, reasons, include_content, projection):
     fields = (
         (
@@ -169,10 +186,19 @@ def _context_record(record, reasons, include_content, projection):
     if projection == "minimal":
         state = agent_state_summary(record.get("metadata") or {})
         execution = skill_execution_summary(record.get("metadata") or {})
+        reconciliation = state_reconciliation_summary(record.get("metadata") or {})
+        capability = capability_manifest_summary(record.get("metadata") or {})
+        lifecycle = context_lifecycle_summary(record.get("metadata") or {})
         if state:
             projected["agent_state"] = state
         if execution:
             projected["skill_execution"] = execution
+        if reconciliation:
+            projected["state_reconciliation"] = reconciliation
+        if capability:
+            projected["agent_capability_manifest"] = capability
+        if lifecycle:
+            projected["context_lifecycle"] = lifecycle
     projected["content_included"] = bool(include_content)
     if include_content:
         projected["content"] = record.get("content", "")
@@ -212,16 +238,11 @@ def _context_relation(edge, projection):
             "correction_scope",
         )
     )
-    return {
-        key: edge.get(key)
-        for key in fields
-    }
+    return {key: edge.get(key) for key in fields}
 
 
 def context_bundle(store, owner, data):
-    records = _all_records(
-        store, owner, data.include_untrusted, data.include_quarantined
-    )
+    records = _all_records(store, owner, data.include_untrusted, data.include_quarantined)
     by_id = {record["id"]: record for record in records}
     relations = [
         edge
@@ -270,9 +291,20 @@ def context_bundle(store, owner, data):
             reasons[record_id].add("selector_filter")
 
     selected = []
+    lifecycle_excluded = []
+    now = datetime.now(UTC)
     for record_id in selected_ids:
         record = by_id[record_id]
         if record_id != data.anchor_id and not _record_matches_context(record, data):
+            continue
+        lifecycle_reason = _lifecycle_exclusion(record, now)
+        explicit = record_id == data.anchor_id or record_id in data.record_ids
+        if (
+            lifecycle_reason
+            and not data.include_lifecycle_excluded
+            and not (lifecycle_reason == "explicit_only" and explicit)
+        ):
+            lifecycle_excluded.append({"id": record_id, "reason": lifecycle_reason})
             continue
         if record_id in data.record_ids and not reasons[record_id]:
             reasons[record_id].add("explicit_id")
@@ -288,9 +320,7 @@ def context_bundle(store, owner, data):
     ]
     relevant_edges.sort(key=lambda edge: (edge["created_at"], edge["id"]))
 
-    selector = data.model_dump(
-        mode="json", exclude={"cursor", "limit", "byte_limit"}
-    )
+    selector = data.model_dump(mode="json", exclude={"cursor", "limit", "byte_limit"})
     selector_hash = _digest(selector)
     snapshot = _digest(
         {
@@ -298,9 +328,7 @@ def context_bundle(store, owner, data):
                 (record["id"], record["version"], record.get("content_hash"), _updated_at(record))
                 for record in selected
             ],
-            "relations": [
-                (edge["id"], edge["version"], edge["status"]) for edge in relevant_edges
-            ],
+            "relations": [(edge["id"], edge["version"], edge["status"]) for edge in relevant_edges],
         }
     )
     offset = 0
@@ -334,6 +362,9 @@ def context_bundle(store, owner, data):
                 if edge["source_id"] in page_ids or edge["target_id"] in page_ids
             ],
             "missing_record_ids": missing,
+            "lifecycle_excluded": sorted(
+                lifecycle_excluded, key=lambda item: (item["id"], item["reason"])
+            ),
             "total": len(selected),
             "returned": len(page),
             "truncated": next_offset < len(selected),
@@ -355,9 +386,7 @@ def context_bundle(store, owner, data):
             page.append(projected)
             continue
         if not page and data.include_content:
-            projected = _context_record(
-                record, reasons[record["id"]], False, data.projection
-            )
+            projected = _context_record(record, reasons[record["id"]], False, data.projection)
             projected["content_omitted_due_to_byte_limit"] = True
             candidate = response([projected])
             if _wire_size(candidate) <= data.byte_limit:
@@ -367,6 +396,56 @@ def context_bundle(store, owner, data):
             raise ValueError("byte_limit is too small for one metadata record")
         break
     return response(page)
+
+
+def state_reconciliation_candidates(store, owner, data):
+    """Return same-task Agent State coordinates without judging which claim is true."""
+
+    candidates = []
+    for record in _all_records(store, owner, data.include_untrusted, data.include_quarantined):
+        profile = (record.get("metadata") or {}).get("vibe_memory_agent_state")
+        if not isinstance(profile, dict):
+            continue
+        if profile.get("project_id") != data.project_id or profile.get("task_id") != data.task_id:
+            continue
+        candidates.append(
+            {
+                "record_id": record["id"],
+                "record_version": record["version"],
+                "state_version": profile.get("state_version"),
+                "status": profile.get("status"),
+                "observed_at": profile.get("observed_at"),
+                "reported_harness": (profile.get("reported_harness") or {}).get("id"),
+                "creator_agent_id": record.get("creator_agent_id"),
+                "creator_agent_name": record.get("creator_agent_name"),
+                "latest_writer": (record.get("writer_history") or [None])[-1],
+                "content_hash": record.get("content_hash"),
+            }
+        )
+    candidates.sort(
+        key=lambda item: (
+            item.get("observed_at") or "",
+            item["record_id"],
+            item["record_version"],
+        ),
+        reverse=True,
+    )
+    statuses = sorted({item["status"] for item in candidates if item.get("status")})
+    total_candidates = len(candidates)
+    candidates = candidates[: data.candidate_limit]
+    return {
+        "project_id": data.project_id,
+        "task_id": data.task_id,
+        "generated_at": utc_now_iso(),
+        "llm_calls": 0,
+        "content_included": False,
+        "candidates": candidates,
+        "returned": len(candidates),
+        "total_candidates": total_candidates,
+        "distinct_statuses": statuses,
+        "status_divergence": len(statuses) > 1,
+        "resolution": "external_harness_or_user_required" if len(statuses) > 1 else "none",
+    }
 
 
 def _cycle_relation_ids(edges):
@@ -386,11 +465,7 @@ def _cycle_relation_ids(edges):
             pending.extend(adjacency[current] - visited)
         return False
 
-    return sorted(
-        edge["id"]
-        for edge in edges
-        if reaches(edge["target_id"], edge["source_id"])
-    )
+    return sorted(edge["id"] for edge in edges if reaches(edge["target_id"], edge["source_id"]))
 
 
 def _relation_claim(edge):
@@ -414,9 +489,7 @@ def _relation_claim(edge):
 
 
 def graph_audit(store, owner, data):
-    records = _all_records(
-        store, owner, data.include_untrusted, data.include_quarantined
-    )
+    records = _all_records(store, owner, data.include_untrusted, data.include_quarantined)
     by_id = {record["id"]: record for record in records}
     relations = [
         edge
@@ -444,12 +517,8 @@ def graph_audit(store, owner, data):
     fingerprints = defaultdict(list)
     for edge in valid:
         fingerprints[_digest(_relation_claim(edge))].append(edge["id"])
-    corrections = [
-        edge for edge in valid if edge["relation"] in {"SUPERSEDES", "CORRECTS"}
-    ]
-    dependencies = [
-        edge for edge in valid if edge["relation"] in {"DEPENDS_ON", "BLOCKED_BY"}
-    ]
+    corrections = [edge for edge in valid if edge["relation"] in {"SUPERSEDES", "CORRECTS"}]
+    dependencies = [edge for edge in valid if edge["relation"] in {"DEPENDS_ON", "BLOCKED_BY"}]
     dependency_cycles = _cycle_relation_ids(dependencies)
     incoming = defaultdict(list)
     for edge in corrections:
@@ -514,9 +583,7 @@ def graph_audit(store, owner, data):
 def evidence_impact_candidates(store, owner, data):
     """Find only explicit exact-version citations without judging their impact."""
 
-    records = _all_records(
-        store, owner, data.include_untrusted, data.include_quarantined
-    )
+    records = _all_records(store, owner, data.include_untrusted, data.include_quarantined)
     visible_ids = {record["id"] for record in records}
     candidates = []
     for record in records:

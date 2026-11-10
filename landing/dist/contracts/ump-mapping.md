@@ -15,6 +15,10 @@ This document records a conservative comparison surface for public memory propos
 | Agent State profile | Harness-neutral reported project/task state, blockers, next actions and pinned references | `completed` remains a writer claim; record `version`/`expected_version` is the concurrency coordinate. |
 | Skill Execution profile | Data-only report of a Skill run performed by an external harness | Profile validity does not prove execution, success, authority or verification. |
 | task dependency relationships | Explicit `DEPENDS_ON`, `BLOCKED_BY`, `RELATED_TO` and `SUPERSEDES` claims | Structural cycles are reported; the service never schedules or executes tasks. |
+| State Reconciliation profile | Explicit external resolution observation over competing Agent State coordinates | Candidate discovery reports structural status divergence only; it does not determine truth or merge meaning. |
+| Agent Capability Manifest | Agent-reported capability, task-type, Skill and required-permission declaration | The declaration never becomes an effective Vibe Memory grant, availability probe, assignment, or success guarantee. |
+| Context Lifecycle profile | Retention assertion and Context Bundle inclusion hint for a record | Expiry and exclusion affect bundle selection only; they do not delete data or override access control. |
+| Agent Context Package | Permission-scoped portable subset with explicit profile/dependency coordinates and omitted-reference reporting | The current archive excludes raw file bytes and version replay, remains `lossless=false`, and carries no secrets, permissions, or executable Skills. |
 | trust/quarantine | Local retrieval safety state | Import never promotes external trust automatically. |
 
 Lossless interchange requires both implementations to advertise the relevant extensions. Search ranking, embedding vectors, LLM reasoning and hidden prompts are intentionally outside the compatibility contract.

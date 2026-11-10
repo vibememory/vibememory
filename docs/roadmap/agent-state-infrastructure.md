@@ -1,7 +1,7 @@
 # Harness-Agnostic Agent State Infrastructure roadmap
 
-Status: Phase 0 complete; Phase 1–3 P0 implemented in source; Phase 4–7 remain
-partially implemented or designed as described below. Baseline reviewed:
+Status: Phase 0 complete; Phase 1–3 P0 implemented; Phase 4–6 foundations and a
+partial Phase 7 Agent Context Package implemented in source as described below. Baseline reviewed:
 Vibe Memory 0.39.4 and 60 feature requests on 2026-11-10 UTC.
 
 ## Product boundary
@@ -56,12 +56,12 @@ publication `b61c7a90`, black-box conformance `9c522c80`, and handoff benchmark
 | 1 Agent State | Checkpoint, record version, writer history, search and Context Bundle | No shared project/task state shape or compact state summary | Add optional Agent State profile in existing metadata, scalar mirrors, SDK helpers and minimal retrieval summary |
 | 2 Task Dependency | Generic relation graph, graph get, versions, evidence and audit | Dependency relations had no dedicated cycle diagnostic or normative usage guidance | Reuse relations and add deterministic cycle IDs for `DEPENDS_ON`/`BLOCKED_BY` |
 | 3 Skill Execution Memory | Checkpoint and Failure Reproduction | No shared Skill ID/version/digest and execution observation shape | Add optional Skill Execution profile in existing metadata and compact summary |
-| 4 Reconciliation | OCC, writer history, corrections, graph branches | Rejected stale payload is not retained as a first-class competing state and no semantic merge exists | Keep 409 now; design explicit competing observation records and user/harness resolution without server merge |
-| 5 Capability Manifest | `/v1/capabilities` describes server and connection actions | No persistent, versioned harness capability declaration | Design metadata profile; do not confuse declaration with effective server permission |
-| 6 Lifecycle Policy | valid time, archive/trash, corrections, current-version `known_at` limitation | No shared context-class/retention policy contract; no complete recorded-time history | Design policy metadata on existing records; do not bypass deletion or authorization |
-| 7 Context Package | Portable archive and Agent Memory Repo | Raw file bytes and complete version-history replay are not lossless; capability requirements are not explicit | Extend existing archive manifest only after Phase 5/6 contracts; keep `lossless=false` until verified |
+| 4 Reconciliation | OCC, writer history, corrections, graph branches | Rejected stale payload is not retained automatically and no semantic merge exists | Added deterministic candidates and explicit resolution observations; keep 409 and external resolution |
+| 5 Capability Manifest | `/v1/capabilities` describes server and connection actions | Persistent declarations were absent | Added versioned metadata declaration while effective permission remains connection-derived |
+| 6 Lifecycle Policy | valid time, archive/trash, corrections, current-version `known_at` limitation | Shared bundle-inclusion/retention classification was absent; complete history remains absent | Added declarative metadata and bundle selection; no automatic deletion or permission override |
+| 7 Context Package | Portable archive and Agent Memory Repo | Raw file bytes and complete version-history replay remain non-lossless | Added partial selection and role/reference manifest on the existing archive; retain `lossless=false` |
 
-No database table or agent-execution endpoint is required for Phase 1–3. Both new
+No database table or agent-execution endpoint is required for these phases. New
 profiles are optional metadata on ordinary records, so old records and clients
 remain valid.
 
@@ -139,12 +139,12 @@ Reproduction when another harness needs sanitized reproduction details. The Skil
 Execution profile supplies the missing common execution coordinates rather than
 duplicating those contracts.
 
-## Phase 4 — State Reconciliation (P1 design)
+## Phase 4 — State Reconciliation (P1 implemented foundation)
 
 Foundation already present: record OCC, 409 conflicts, versioned writer history,
 batch item conflicts, corrections and parallel relation claims.
 
-Next design work:
+Implemented additive foundation:
 
 1. On stale update, continue returning 409 and the current safe context reference;
    never merge meaning automatically.
@@ -152,17 +152,27 @@ Next design work:
    observation referencing the common task ID and base record/version.
 3. Represent an accepted resolution as a new version or `SUPERSEDES`/`CORRECTS`
    relationship with authenticated writer and rationale.
-4. Expose competing state records in a deterministic candidate view. Preserve
+4. Expose competing state records in a deterministic candidate view at
+   `POST /v1/agent-states/reconciliation/candidates`. Preserve
    `completed` versus `blocked` disagreement until an authorized harness or user
    resolves it.
 5. Consider field-disjoint merge only after a formal patch contract can prove that
    neither operation changes the same coordinate. Do not infer semantic equality.
 
-The current P0 does not claim to preserve the body of an unsubmitted stale PATCH.
+The optional `metadata.vibe_memory_state_reconciliation` profile preserves an
+external resolver's explicit open/resolved observation, candidate record/version
+coordinates, selected coordinate, rationale and UTC time. Runtime validation
+requires the selected coordinate to be one of the candidates. The profile does
+not mutate candidates or prove that the reported resolver had external authority.
 
-## Phase 5 — Agent Capability Manifest (P1 design)
+The current implementation still does not preserve the body of an unsubmitted
+stale PATCH. A harness that wants that proposal retained must save it as a separate
+Agent State record.
 
-Add an optional versioned metadata profile only after aligning it with existing
+## Phase 5 — Agent Capability Manifest (P1 implemented foundation)
+
+The optional versioned `metadata.vibe_memory_agent_capability_manifest` profile is
+aligned with existing
 `/v1/auth-context`, `/v1/capabilities` and `/v1/permission-check`:
 
 - harness ID/version;
@@ -171,30 +181,38 @@ Add an optional versioned metadata profile only after aligning it with existing
 - required Vibe Memory permission categories;
 - observation time and manifest version.
 
-The declaration must be labelled agent-reported. Effective Vibe Memory permissions
+The declaration is labelled agent-reported. Effective Vibe Memory permissions
 continue to come only from the authenticated connection, and host/tool permissions
 remain `not_evaluated`. The service must not probe whether a harness can really
 edit code or run tests and must not assign work from the declaration.
 
-## Phase 6 — Context Lifecycle Policy (P2 design)
+## Phase 6 — Context Lifecycle Policy (P2 implemented selection policy)
 
-Reuse current valid time, archive/trash, supersession, quarantine and portable
-metadata. A future optional profile may classify `ephemeral_execution`, `session`,
+The optional `metadata.vibe_memory_context_lifecycle` profile reuses current valid
+time, archive/trash, supersession, quarantine and portable metadata. It classifies
+`ephemeral_execution`, `session`,
 `project`, `long_term`, `decision_history`, or `archived_context`, with an explicit
-expiry and bundle-inclusion hint. These are retention inputs, not permission
-overrides. Expiry must not revive deleted data, disclose inaccessible records, or
-pretend current-version-only `known_at` is full bitemporal history.
+retention assertion and bundle-inclusion policy. Context Bundle now omits expired
+or excluded records by default, includes `explicit_only` only for exact IDs/anchor,
+and reports omitted coordinates. An explicit override changes selection only.
+These are retention inputs, not permission overrides. Expiry does not revive
+deleted data, disclose inaccessible records, or pretend current-version-only
+`known_at` is full bitemporal history.
 
 Automatic deletion is not part of this roadmap until retention authority,
 recoverability and audit semantics are separately approved.
 
-## Phase 7 — Portable Agent Context Package (P2 design)
+## Phase 7 — Portable Agent Context Package (P2 implemented partial package)
 
-Extend the existing portable archive rather than inventing a second container.
-An eventual package manifest can select Agent State records and their explicit
+The existing portable archive is extended rather than replaced. Every new export
+contains `agent-context-package.json`; repeated `record_id` parameters can select
+Agent State records and their explicit
 Decision, Evidence, dependency, Skill and capability references. Export remains
 permission-scoped and manifest-hashed; import remains raw byte-stream, dry-run by
-default, reference-checked, provenance-preserving and quarantined.
+default, reference-checked, provenance-preserving and quarantined. Relations are
+included only when both endpoints are selected, omitted profile references are
+reported, and imported IDs are deterministically remapped for the destination
+owner so globally unique storage cannot collide across owners.
 
 Current limitations remain visible: raw file bytes are excluded, version history
 is not replayed losslessly, and imported authorship never becomes local authenticated
@@ -205,12 +223,15 @@ advertised extension, the package must keep `lossless=false`.
 ## Cross-surface contract
 
 - REST uses existing memory creation/update, search, relation, graph audit and
-  Context Bundle endpoints.
-- MCP uses the same generic metadata-bearing tools; no execution tool is added.
-- Python and TypeScript SDKs expose profile types/helpers only and keep custom base
-  URLs for hosted, self-hosted and compatible implementations.
-- Rust CLI adds payload templates; `from-json memory` and existing graph commands
-  perform the writes.
+  Context Bundle endpoints, plus the read-only reconciliation candidate view and
+  record-selected portable export.
+- MCP exposes the same reconciliation candidate view and generic metadata-bearing
+  writes; no execution tool is added.
+- Python and TypeScript SDKs expose profile helpers and the reconciliation
+  candidate lookup while retaining custom base URLs for hosted, self-hosted and
+  compatible implementations.
+- Rust CLI adds payload templates, candidate lookup and full/partial portable
+  export; `from-json memory` and existing graph commands perform the writes.
 - All profile times are UTC after validation. Keywords remain agent supplied and
   are the only embedded values.
 - Idempotency remains available on record creation/batch paths; non-idempotent
@@ -241,19 +262,35 @@ advertised extension, the package must keep `lossless=false`.
 | Owner isolation | Other owner cannot inspect task graph | Implemented |
 | Skill failure reuse | Failure metadata and coordinates survive retrieval; command-looking text does not execute | Implemented |
 | Contract/runtime shape | JSON Schema and Pydantic/SDK examples agree | Implemented |
-| Portable state/Skill round trip | Existing archive preserves metadata, but full lossless history/raw files remain unsupported | Partial; Phase 7 |
+| Reconciliation candidates | Same project/task records with divergent statuses are listed without bodies or truth selection | Implemented in `test_agent_state_followup.py` |
+| Capability declaration isolation | Agent-reported required permissions do not alter the connection's effective grants | Implemented |
+| Lifecycle-aware handoff | Expired/excluded records are omitted, explicit override remains authorization-scoped, and no record is deleted | Implemented |
+| Portable partial package | Explicit subset, dependency/reference manifest and cross-owner deterministic ID remap round trip | Implemented foundation; full lossless history/raw files remain unsupported |
 | Large-data response regression | Existing deterministic byte-budget tests plus handoff/graph benchmarks | Existing; broader benchmark remains in progress |
 
 ### Verification executed on 2026-11-10 UTC
 
-- Service suite: `160 passed, 1 skipped`; the unrelated untracked graph-retrieval benchmark test was intentionally excluded.
-- P0/profile target suite: `27 passed`; includes cross-harness read/update, OCC conflict, owner isolation, dependency cycle and data-only Skill observation behavior.
-- JSON Schema: both new Draft 2020-12 schemas passed independent meta-schema validation with `check-jsonschema`.
+- Service suite: `165 passed, 1 skipped`; the unrelated untracked graph-retrieval
+  benchmark test was intentionally excluded.
+- Follow-up target suite: `30 passed`; includes candidate isolation, explicit
+  resolution validation, capability/permission separation, lifecycle selection,
+  MCP exposure, partial export, cross-owner import, reference remapping and
+  deterministic import retry.
+- JSON Schema: all four new Draft 2020-12 schemas passed independent meta-schema
+  validation with `check-jsonschema`.
 - Python/Ruff: changed server, SDK and test sources passed.
-- TypeScript SDK: `tsc -p tsconfig.json` passed for package `0.4.0`.
-- Skill packages: canonical, ChatGPT/Codex plugin and Claude Code plugin Skills passed `quick_validate.py`; the packaged Skill remains below its 8,000-byte entrypoint budget.
-- Web bundle: typecheck, i18n/theme/compatibility/security/SEO tests, Next.js production build and Cloudflare dry-run passed. No deployment was performed.
-- Rust CLI `3.19.0`: `cargo fmt --check` passed. `cargo test --all-targets` could not compile dependencies because this environment has no system `cc` linker; the CLI source commit is not a published binary release, and the distributed native manifest intentionally remains at verified release `3.18.0`.
+- TypeScript SDK: `tsc -p tsconfig.json` passed for package `0.5.0`.
+- Skill packages: canonical, ChatGPT/Codex plugin and Claude Code plugin Skills
+  passed `quick_validate.py`; progressive disclosure keeps the entrypoint compact.
+- Web bundle: typecheck, localization/theme/compatibility/security/SEO tests,
+  Next.js production build and Cloudflare dry-run passed. No deployment occurred.
+- Rust CLI `3.20.0`: `cargo fmt --check` and source diff checks passed.
+  `cargo test --all-targets` could not compile dependencies because this environment
+  has no system `cc` linker. The source is not a published binary release; the
+  distributed native manifest intentionally remains verified release `3.18.0`.
+
+A schema/build check is not treated as external harness execution proof. No
+deployment or production migration is part of this source change.
 
 ## Phase completion and follow-up
 
@@ -263,10 +300,11 @@ advertised extension, the package must keep `lossless=false`.
 | 1 | P0 implemented | Independent implementation conformance fixture and published package release |
 | 2 | P0 implemented | Optional task-only graph projection if measured response size requires it |
 | 3 | P0 implemented | Published CLI template release and more cross-harness fixtures |
-| 4 | Designed/partial foundation | Competing-state candidate and explicit resolution contract |
-| 5 | Designed | Capability vocabulary/profile aligned with effective permission APIs |
-| 6 | Designed/partial foundation | Retention authority and complete historical-version strategy |
-| 7 | In progress foundation | Raw-file option, history replay, extension-aware round-trip proof |
+| 4 | Implemented foundation | Preserve stale PATCH bodies automatically only if a future explicit proposal contract justifies it; semantic merge remains out of scope |
+| 5 | Implemented foundation | Standard capability vocabulary governance and external conformance fixtures |
+| 6 | Implemented selection policy | Retention/deletion authority and complete historical-version strategy remain separate work |
+| 7 | Implemented partial package | Raw-file option, history replay and extension-aware lossless round-trip proof remain future work |
 
-This roadmap deliberately does not mark Phase 4–7 complete and does not treat a
-green schema test as proof that an external harness executed or completed work.
+This roadmap deliberately distinguishes implemented foundations from complete
+lossless interchange and does not treat a green schema test as proof that an
+external harness executed or completed work.

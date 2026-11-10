@@ -96,6 +96,39 @@ def test_python_sdk_structured_error_cancellation_and_pages():
     )
     assert execution["vibe_memory_skill_execution"]["version"] == 1
     assert execution["vibe_memory_skill_id"] == "python-development"
+    reconciliation = module.state_reconciliation_profile_metadata(
+        {
+            "project_id": "visionflow",
+            "task_id": "inspection-node",
+            "status": "open",
+            "candidate_refs": [
+                {"record_id": "state-a", "version": 1},
+                {"record_id": "state-b", "version": 2},
+            ],
+            "observed_at": "2026-11-10T01:00:00Z",
+        }
+    )
+    assert reconciliation["vibe_memory_state_reconciliation_status"] == "open"
+    capability = module.agent_capability_manifest_profile_metadata(
+        {
+            "manifest_version": 1,
+            "agent_id": "codex-worker",
+            "harness": {"id": "codex"},
+            "capabilities": ["code_edit"],
+            "required_permissions": ["memory:read"],
+            "observed_at": "2026-11-10T01:00:00Z",
+        }
+    )
+    assert capability["vibe_memory_agent_capability_harness"] == "codex"
+    lifecycle = module.context_lifecycle_profile_metadata(
+        {
+            "context_class": "project",
+            "retention": "indefinite",
+            "context_bundle_policy": "include",
+            "observed_at": "2026-11-10T01:00:00Z",
+        }
+    )
+    assert lifecycle["vibe_memory_context_class"] == "project"
     body = json.dumps(
         {
             "error": {
@@ -120,6 +153,7 @@ def test_python_sdk_structured_error_cancellation_and_pages():
             {"items": [{"id": "three"}], "limit": 2, "offset": 2},
         ]
     )
+
     def list_page(limit, offset, cancelled=None):
         return next(pages)
 
@@ -142,6 +176,15 @@ def test_python_sdk_structured_error_cancellation_and_pages():
             "projection": "minimal",
             "byte_limit": 16384,
             "limit": 8,
+        },
+    )
+    client.state_reconciliation_candidates("visionflow", "inspection-node")
+    assert captured[-1] == (
+        "/v1/agent-states/reconciliation/candidates",
+        {
+            "project_id": "visionflow",
+            "task_id": "inspection-node",
+            "candidate_limit": 100,
         },
     )
     client.context_bundle(record_ids=["record-1"])
@@ -168,8 +211,8 @@ def test_sdk_package_versions_and_typescript_contract():
     typescript_source = (ROOT / "sdk" / "typescript" / "src" / "index.ts").read_text(
         encoding="utf-8"
     )
-    assert python_package["project"]["version"] == "0.4.0"
-    assert typescript_package["version"] == "0.4.0"
+    assert python_package["project"]["version"] == "0.5.0"
+    assert typescript_package["version"] == "0.5.0"
     for exported in (
         "VibeMemoryError",
         "RequestOptions",
@@ -181,7 +224,11 @@ def test_sdk_package_versions_and_typescript_contract():
         "evidenceImpactReviewProfileMetadata",
         "agentStateProfileMetadata",
         "skillExecutionProfileMetadata",
+        "stateReconciliationProfileMetadata",
+        "agentCapabilityManifestProfileMetadata",
+        "contextLifecycleProfileMetadata",
         "evidenceImpactCandidates",
+        "stateReconciliationCandidates",
         "createWithMetadata",
         "SearchResponse",
         "SearchRetrievalOptions",

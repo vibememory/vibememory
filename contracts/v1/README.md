@@ -14,6 +14,10 @@ Normative machine-readable documents:
 - `evidence-impact-review-profile.json`: one optional reviewer observation for an exact evidence record/version and target; conflicting observations remain separate and unknown stays unknown.
 - `agent-state-profile.json`: optional harness-neutral project/task state, next actions, blockers and version-pinned references; the enclosing record version is the optimistic concurrency coordinate and state is never executed.
 - `skill-execution-profile.json`: optional external-harness Skill execution observation with version/digest, environment/task/evidence references and verification state; the service never downloads or runs the Skill.
+- `state-reconciliation-profile.json`: optional explicit resolution observation over two or more competing Agent State record/version coordinates; open disagreements remain preserved and the service never selects a true state.
+- `agent-capability-manifest-profile.json`: optional agent-reported harness capabilities, task types, Skill coordinates and requested permission categories; it never grants effective permissions or proves availability.
+- `context-lifecycle-profile.json`: optional lifecycle classification, retention assertion and Context Bundle inclusion policy; expiry filters retrieval but never deletes, archives, restores or bypasses authorization.
+- `agent-context-package.json`: additive manifest embedded in portable archives to identify selected Agent State, Decision, Evidence, Skill, capability and dependency coordinates plus omitted references; packages contain data, not permissions or executable Skills.
 
 Time is UTC. `valid_from`/`valid_to` describe when an agent says a claim applies. `created_at`/`recorded_at` describe when the server recorded the current version. Historical `known_at` reconstruction is reported as `current_versions_only` until a server advertises that extension.
 

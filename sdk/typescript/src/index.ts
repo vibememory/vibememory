@@ -167,6 +167,42 @@ export type SkillExecutionMetadata = Record<string, unknown> & {
   vibe_memory_skill_verification_status: SkillExecutionProfile["verification_status"];
   vibe_memory_skill_execution_harness: string;
 };
+export type RecordCoordinate = {record_id: string; version: number};
+export type StateReconciliationProfile = {
+  type: "state_reconciliation";
+  version: 1;
+  project_id: string;
+  task_id: string;
+  status: "open" | "resolved";
+  candidate_refs: RecordCoordinate[];
+  selected_ref?: RecordCoordinate;
+  reported_resolver?: string;
+  rationale?: string;
+  observed_at: string;
+  resolved_at?: string;
+};
+export type AgentCapabilityManifestProfile = {
+  type: "agent_capability_manifest";
+  version: 1;
+  manifest_version: number;
+  agent_id: string;
+  harness: HarnessReference;
+  capabilities: string[];
+  skill_refs?: SkillReference[];
+  supported_task_types?: string[];
+  required_permissions?: string[];
+  observed_at: string;
+};
+export type ContextLifecycleProfile = {
+  type: "context_lifecycle";
+  version: 1;
+  context_class: "ephemeral_execution" | "session" | "project" | "long_term" | "decision_history" | "archived_context";
+  retention: "indefinite" | "manual_archive" | "until";
+  expires_at?: string;
+  context_bundle_policy: "include" | "explicit_only" | "exclude";
+  reason?: string;
+  observed_at: string;
+};
 export type FailureReproductionMetadata = Record<string, unknown> & {
   vibe_memory_failure_reproduction: FailureReproductionProfile;
   vibe_memory_failure_profile_version: 1;
@@ -290,6 +326,56 @@ export function skillExecutionProfileMetadata(
   };
 }
 
+/** Records an explicit external resolution without semantically merging competing state. */
+export function stateReconciliationProfileMetadata(
+  profile: Omit<StateReconciliationProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+) {
+  return {
+    ...metadata,
+    vibe_memory_state_reconciliation: {...profile, type: "state_reconciliation", version: 1},
+    vibe_memory_state_reconciliation_profile_version: 1,
+    vibe_memory_state_reconciliation_project_id: profile.project_id,
+    vibe_memory_state_reconciliation_task_id: profile.task_id,
+    vibe_memory_state_reconciliation_status: profile.status,
+  };
+}
+
+/** Records declared capabilities without granting permissions or assigning work. */
+export function agentCapabilityManifestProfileMetadata(
+  profile: Omit<AgentCapabilityManifestProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+) {
+  return {
+    ...metadata,
+    vibe_memory_agent_capability_manifest: {
+      ...profile,
+      type: "agent_capability_manifest",
+      version: 1,
+    },
+    vibe_memory_agent_capability_profile_version: 1,
+    vibe_memory_agent_capability_manifest_version: profile.manifest_version,
+    vibe_memory_agent_capability_agent_id: profile.agent_id,
+    vibe_memory_agent_capability_harness: profile.harness.id,
+  };
+}
+
+/** Records lifecycle intent without deleting, archiving, or broadening access. */
+export function contextLifecycleProfileMetadata(
+  profile: Omit<ContextLifecycleProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+) {
+  return {
+    ...metadata,
+    vibe_memory_context_lifecycle: {...profile, type: "context_lifecycle", version: 1},
+    vibe_memory_context_lifecycle_profile_version: 1,
+    vibe_memory_context_class: profile.context_class,
+    vibe_memory_context_retention: profile.retention,
+    vibe_memory_context_bundle_policy: profile.context_bundle_policy,
+    ...(profile.expires_at ? {vibe_memory_context_expires_at: profile.expires_at} : {}),
+  };
+}
+
 export type Memory = {
   id: string;
   kind: "memory";
@@ -331,6 +417,27 @@ export type SearchHit = {
     reported_status: SkillExecutionProfile["reported_status"];
     verification_status: SkillExecutionProfile["verification_status"];
     reported_harness: string;
+  };
+  state_reconciliation?: {
+    profile_version: number;
+    project_id: string;
+    task_id: string;
+    status: StateReconciliationProfile["status"];
+    candidate_count: number;
+  };
+  agent_capability_manifest?: {
+    profile_version: number;
+    manifest_version: number;
+    agent_id: string;
+    harness: string;
+    capability_count: number;
+  };
+  context_lifecycle?: {
+    profile_version: number;
+    context_class: ContextLifecycleProfile["context_class"];
+    retention: ContextLifecycleProfile["retention"];
+    expires_at?: string;
+    context_bundle_policy: ContextLifecycleProfile["context_bundle_policy"];
   };
 };
 export type SearchResponse = {
@@ -577,6 +684,23 @@ export class VibeMemoryClient {
       {
         method: "POST",
         body: JSON.stringify({evidence_record_id, evidence_version, candidate_limit}),
+      },
+      false,
+      options,
+    );
+  }
+
+  stateReconciliationCandidates(
+    project_id: string,
+    task_id: string,
+    candidate_limit = 100,
+    options: RequestOptions = {},
+  ) {
+    return this.request(
+      "/v1/agent-states/reconciliation/candidates",
+      {
+        method: "POST",
+        body: JSON.stringify({project_id, task_id, candidate_limit}),
       },
       false,
       options,

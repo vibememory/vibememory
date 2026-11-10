@@ -485,6 +485,7 @@ class ContextBundleInput(Input):
     include_content: bool = False
     include_untrusted: bool = False
     include_quarantined: bool = False
+    include_lifecycle_excluded: bool = False
 
     @field_validator("record_ids", "kinds", "tags", "relations")
     @classmethod
@@ -519,6 +520,22 @@ class ContextBundleInput(Input):
             )
         ):
             raise ValueError("at least one context selector is required")
+        return self
+
+
+class StateReconciliationCandidatesInput(Input):
+    """Metadata-only lookup for Agent State observations of one stable task."""
+
+    project_id: str = Field(min_length=1, max_length=300)
+    task_id: str = Field(min_length=1, max_length=300)
+    include_untrusted: bool = False
+    include_quarantined: bool = False
+    candidate_limit: int = Field(default=100, ge=2, le=500)
+
+    @model_validator(mode="after")
+    def safe_security_filters(self):
+        if self.include_quarantined and not self.include_untrusted:
+            raise ValueError("include_quarantined requires include_untrusted")
         return self
 
 
@@ -877,14 +894,10 @@ def _audit_metadata_is_safe(value):
 class AgentAuditLogInput(Input):
     """Sanitized, agent-authored operational evidence; never a transcript or reasoning trace."""
 
-    action: str = Field(
-        min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.:-]*$"
-    )
+    action: str = Field(min_length=1, max_length=120, pattern=r"^[a-z][a-z0-9_.:-]*$")
     outcome: Literal["success", "failure", "denied", "skipped"]
     summary: str = Field(min_length=1, max_length=1000)
-    resource_type: str = Field(
-        default="", max_length=80, pattern=r"^$|^[a-z][a-z0-9_.:-]*$"
-    )
+    resource_type: str = Field(default="", max_length=80, pattern=r"^$|^[a-z][a-z0-9_.:-]*$")
     resource_id: str = Field(default="", max_length=200)
     metadata: dict = Field(default_factory=dict)
     occurred_at: datetime | None = None

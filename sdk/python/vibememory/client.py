@@ -104,6 +104,51 @@ def skill_execution_profile_metadata(profile, metadata=None):
     }
 
 
+def state_reconciliation_profile_metadata(profile, metadata=None):
+    """Build an external reconciliation observation without merging state."""
+
+    profile = {**profile, "type": "state_reconciliation", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_state_reconciliation": profile,
+        "vibe_memory_state_reconciliation_profile_version": 1,
+        "vibe_memory_state_reconciliation_project_id": profile["project_id"],
+        "vibe_memory_state_reconciliation_task_id": profile["task_id"],
+        "vibe_memory_state_reconciliation_status": profile["status"],
+    }
+
+
+def agent_capability_manifest_profile_metadata(profile, metadata=None):
+    """Build a declaration that never grants effective permissions."""
+
+    profile = {**profile, "type": "agent_capability_manifest", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_agent_capability_manifest": profile,
+        "vibe_memory_agent_capability_profile_version": 1,
+        "vibe_memory_agent_capability_manifest_version": profile["manifest_version"],
+        "vibe_memory_agent_capability_agent_id": profile["agent_id"],
+        "vibe_memory_agent_capability_harness": profile["harness"]["id"],
+    }
+
+
+def context_lifecycle_profile_metadata(profile, metadata=None):
+    """Build declarative lifecycle metadata without deleting or archiving records."""
+
+    profile = {**profile, "type": "context_lifecycle", "version": 1}
+    result = {
+        **(metadata or {}),
+        "vibe_memory_context_lifecycle": profile,
+        "vibe_memory_context_lifecycle_profile_version": 1,
+        "vibe_memory_context_class": profile["context_class"],
+        "vibe_memory_context_retention": profile["retention"],
+        "vibe_memory_context_bundle_policy": profile["context_bundle_policy"],
+    }
+    if profile.get("expires_at"):
+        result["vibe_memory_context_expires_at"] = profile["expires_at"]
+    return result
+
+
 class VibeMemoryError(RuntimeError):
     def __init__(self, status, body, *, headers=None):
         try:
@@ -263,9 +308,7 @@ class VibeMemoryClient:
         )
 
     def list(self, limit=50, offset=0, *, cancelled=None):
-        return self._request(
-            f"/v1/records?limit={limit}&offset={offset}", cancelled=cancelled
-        )
+        return self._request(f"/v1/records?limit={limit}&offset={offset}", cancelled=cancelled)
 
     def iter_records(self, limit=50, offset=0, *, cancelled=None):
         """Yield deterministic API pages; cancellation is checked between requests."""
@@ -289,9 +332,7 @@ class VibeMemoryClient:
     def context_bundle(self, *, cancelled=None, **selectors):
         selectors.setdefault("projection", "minimal")
         selectors.setdefault("byte_limit", 32768)
-        return self._request(
-            "/v1/context-bundle", "POST", selectors, True, cancelled=cancelled
-        )
+        return self._request("/v1/context-bundle", "POST", selectors, True, cancelled=cancelled)
 
     def evidence_impact_candidates(
         self,
@@ -307,6 +348,26 @@ class VibeMemoryClient:
             {
                 "evidence_record_id": evidence_record_id,
                 "evidence_version": evidence_version,
+                "candidate_limit": candidate_limit,
+            },
+            False,
+            cancelled=cancelled,
+        )
+
+    def state_reconciliation_candidates(
+        self,
+        project_id,
+        task_id,
+        candidate_limit=100,
+        *,
+        cancelled=None,
+    ):
+        return self._request(
+            "/v1/agent-states/reconciliation/candidates",
+            "POST",
+            {
+                "project_id": project_id,
+                "task_id": task_id,
                 "candidate_limit": candidate_limit,
             },
             False,

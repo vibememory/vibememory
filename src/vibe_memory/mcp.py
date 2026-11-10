@@ -36,6 +36,7 @@ from .deterministic import (
     evidence_impact_candidates,
     graph_audit,
     graph_diff,
+    state_reconciliation_candidates,
 )
 from .models import (
     AgentAuditLogInput,
@@ -70,13 +71,14 @@ from .models import (
     RelationCreateMany,
     RelationInput,
     RelationUpdate,
+    StateReconciliationCandidatesInput,
 )
 from .retrieval import retrieve
 from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.40.0"
+SERVER_VERSION = "0.41.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -125,7 +127,11 @@ SERVER_INSTRUCTIONS = (
     "never infer that an unlisted target was unaffected or automatically invalidate a decision."
     " Store harness-neutral task state and external Skill execution reports only as structured "
     "data; reported completion or success is not verification. The service never schedules tasks, "
-    "downloads or runs Skills, executes stored commands, or resolves conflicting judgments."
+    "downloads or runs Skills, executes stored commands, or resolves conflicting judgments. Use "
+    "state_reconciliation_candidates only to locate same-task status divergence, then preserve an "
+    "authorized external resolution as a separate observation. Capability manifests never grant "
+    "permissions. Lifecycle policies affect Context Bundle selection only, and portable context "
+    "packages contain no permission grants, secrets, raw file bytes, or executable Skills."
 )
 
 
@@ -449,6 +455,16 @@ TOOLS = [
         "explicitly cite one evidence record/version. It makes no impact judgment, returns no "
         "record bodies or hashes, and does not classify unrecorded dependencies as unaffected.",
         EvidenceImpactCandidatesInput,
+        "memory:read",
+        read_only=True,
+    ),
+    _tool(
+        "state_reconciliation_candidates",
+        "Find same-task Agent State observations",
+        "Return owner-scoped metadata coordinates for Agent State records with one exact project "
+        "and task ID. Exact status divergence is reported without choosing truth, merging state, "
+        "or scheduling work.",
+        StateReconciliationCandidatesInput,
         "memory:read",
         read_only=True,
     ),
@@ -839,6 +855,7 @@ MODEL_MAP = {
     "context_bundle_get": MCPContextBundleInput,
     "graph_audit": GraphAuditInput,
     "evidence_impact_candidates": EvidenceImpactCandidatesInput,
+    "state_reconciliation_candidates": StateReconciliationCandidatesInput,
     "graph_diff": GraphDiffInput,
     "memory_maintenance_audit": MemoryMaintenanceAuditInput,
     "agent_memory_repo_diff": AgentMemoryRepoDiffInput,
@@ -1253,6 +1270,12 @@ class MCPHandler:
                     f"Found {result['returned']} exact evidence dependency candidates.",
                     result,
                 )
+            if name == "state_reconciliation_candidates":
+                result = state_reconciliation_candidates(db, owner, data)
+                return _text_result(
+                    f"Found {result['returned']} same-task Agent State observations.",
+                    result,
+                )
             if name == "graph_diff":
                 diff = graph_diff(db, owner, data)
                 return _text_result(
@@ -1353,9 +1376,7 @@ class MCPHandler:
                 record = db.get_agent_audit_log(
                     account_owner, principal["agent_id"], data.id, False
                 )
-                return _text_result(
-                    f"Fetched audit log {record['id']}.", {"audit_log": record}
-                )
+                return _text_result(f"Fetched audit log {record['id']}.", {"audit_log": record})
             if name == "message_inbox":
                 messages = db.inbox_messages(
                     account_owner, principal["agent_id"], data.after, data.limit, data.status
@@ -1722,9 +1743,7 @@ class MCPHandler:
                     data,
                 )
                 verb = "Appended" if created else "Found existing"
-                return _text_result(
-                    f"{verb} audit log {record['id']}.", {"audit_log": record}
-                )
+                return _text_result(f"{verb} audit log {record['id']}.", {"audit_log": record})
             if name == "message_ack":
                 message = db.ack_message(account_owner, principal["agent_id"], data.id, data.status)
                 return _text_result(

@@ -3,7 +3,13 @@ from datetime import datetime
 
 from .corrections import annotate_corrections
 from .embeddings import cosine
-from .profiles import agent_state_summary, skill_execution_summary
+from .profiles import (
+    agent_state_summary,
+    capability_manifest_summary,
+    context_lifecycle_summary,
+    skill_execution_summary,
+    state_reconciliation_summary,
+)
 from .security import record_is_retrievable
 from .temporal import recorded_instant
 
@@ -43,17 +49,24 @@ def _project_search_hit(hit, projection):
     projected = {key: hit.get(key) for key in MINIMAL_SEARCH_FIELDS}
     state = agent_state_summary(hit.get("metadata") or {})
     execution = skill_execution_summary(hit.get("metadata") or {})
+    reconciliation = state_reconciliation_summary(hit.get("metadata") or {})
+    capability = capability_manifest_summary(hit.get("metadata") or {})
+    lifecycle = context_lifecycle_summary(hit.get("metadata") or {})
     if state:
         projected["agent_state"] = state
     if execution:
         projected["skill_execution"] = execution
+    if reconciliation:
+        projected["state_reconciliation"] = reconciliation
+    if capability:
+        projected["agent_capability_manifest"] = capability
+    if lifecycle:
+        projected["context_lifecycle"] = lifecycle
     return projected
 
 
 def _bounded_search_response(result, request):
-    candidates = [
-        _project_search_hit(hit, request.projection) for hit in result.pop("hits", [])
-    ]
+    candidates = [_project_search_hit(hit, request.projection) for hit in result.pop("hits", [])]
 
     def response(hits):
         payload = {
@@ -127,9 +140,7 @@ def _temporal_hit(hit, request):
 
 def retrieve(store, embedder, owner, request):
     # The caller has already extracted these keywords. No question/content/title is embedded.
-    query_vectors = (
-        [] if request.match_mode == "exact" else embedder.keywords(request.keywords)
-    )
+    query_vectors = [] if request.match_mode == "exact" else embedder.keywords(request.keywords)
     if hasattr(store, "vector_search"):
         result = store.vector_search(owner, request, query_vectors, embedder.model_name)
         result["hits"] = [hit for hit in result["hits"] if _temporal_hit(hit, request)]
@@ -156,8 +167,10 @@ def retrieve(store, embedder, owner, request):
             exact = keyword["content"].casefold() == term.casefold()
             if request.match_mode == "exact" and not exact:
                 continue
-            semantic = 0.0 if request.match_mode == "exact" else cosine(
-                query_vectors[index], keyword["embedding"]
+            semantic = (
+                0.0
+                if request.match_mode == "exact"
+                else cosine(query_vectors[index], keyword["embedding"])
             )
             score = 1.0 if exact and request.match_mode in {"exact", "hybrid"} else semantic
             best = entry["matches"].get(term)
@@ -171,9 +184,7 @@ def retrieve(store, embedder, owner, request):
     for entry in records.values():
         record = entry["record"]
         matches = list(entry["matches"].values())
-        if not matches or not record_matches_filters(
-            record, entry["stored_keywords"], request
-        ):
+        if not matches or not record_matches_filters(record, entry["stored_keywords"], request):
             continue
         score = sum(match["similarity"] for match in matches) / len(request.keywords)
         if score < request.min_score:

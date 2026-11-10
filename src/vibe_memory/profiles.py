@@ -306,6 +306,144 @@ class EvidenceImpactReviewProfile(ProfileInput):
         return value.astimezone(UTC)
 
 
+class HarnessReference(ProfileInput):
+    """Agent-reported harness coordinates; authenticated writer identity is separate."""
+
+    id: ShortText
+    version: ShortText | None = None
+
+
+class SkillReference(ProfileInput):
+    id: ShortText
+    version: ShortText | None = None
+    digest: str | None = Field(
+        default=None,
+        pattern=r"^(?:sha256:)?[0-9a-fA-F]{64}$",
+        max_length=71,
+    )
+
+    @field_validator("digest")
+    @classmethod
+    def normalize_digest(cls, value):
+        return value.lower() if value else value
+
+    @model_validator(mode="after")
+    def versioned_reference(self):
+        if self.version is None and self.digest is None:
+            raise ValueError("skill references require version or digest")
+        return self
+
+
+class AgentStateProfile(ProfileInput):
+    """Harness-neutral task state supplied by an external agent."""
+
+    type: Literal["agent_state"]
+    version: Literal[1]
+    project_id: ShortText
+    task_id: ShortText
+    state_version: int = Field(ge=1)
+    status: Literal[
+        "unknown",
+        "planned",
+        "in_progress",
+        "blocked",
+        "completed",
+        "cancelled",
+    ]
+    goal: LongText
+    completed: list[LongText] = Field(default_factory=list, max_length=50)
+    next_actions: list[LongText] = Field(default_factory=list, max_length=50)
+    blockers: list[LongText] = Field(default_factory=list, max_length=30)
+    decision_refs: list[ProfileEvidence] = Field(default_factory=list, max_length=50)
+    evidence_refs: list[ProfileEvidence] = Field(default_factory=list, max_length=50)
+    skill_refs: list[SkillReference] = Field(default_factory=list, max_length=50)
+    reported_harness: HarnessReference
+    observed_at: datetime
+
+    @field_validator("observed_at")
+    @classmethod
+    def normalize_observed_at(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+
+class SkillExecutionProfile(ProfileInput):
+    """A reported Skill execution observation; it never authorizes execution."""
+
+    type: Literal["skill_execution"]
+    version: Literal[1]
+    skill: SkillReference
+    reported_harness: HarnessReference
+    reported_agent: ShortText | None = None
+    task_ref: ProfileEvidence | None = None
+    environment_ref: ProfileEvidence | None = None
+    input_refs: list[ProfileEvidence] = Field(default_factory=list, max_length=50)
+    started_at: datetime
+    finished_at: datetime | None = None
+    reported_status: Literal["started", "succeeded", "failed", "cancelled", "unknown"]
+    evidence_refs: list[ProfileEvidence] = Field(default_factory=list, max_length=50)
+    artifact_refs: list[ProfileEvidence] = Field(default_factory=list, max_length=50)
+    failure_reason: LongText | None = None
+    verification_status: Literal[
+        "unverified",
+        "author_reported",
+        "observed",
+        "reproduced",
+        "unavailable",
+    ]
+
+    @field_validator("started_at", "finished_at")
+    @classmethod
+    def normalize_execution_time(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("execution timestamps must include a UTC offset")
+        return value.astimezone(UTC)
+
+    @model_validator(mode="after")
+    def terminal_coordinates(self):
+        if self.finished_at is not None and self.finished_at < self.started_at:
+            raise ValueError("finished_at must not be earlier than started_at")
+        if self.reported_status != "started" and self.finished_at is None:
+            raise ValueError("terminal or unknown execution status requires finished_at")
+        if self.reported_status == "failed" and not self.failure_reason:
+            raise ValueError("failed Skill executions require failure_reason")
+        return self
+
+
+def agent_state_summary(metadata: dict) -> dict | None:
+    profile = (metadata or {}).get("vibe_memory_agent_state")
+    if not isinstance(profile, dict) or profile.get("type") != "agent_state":
+        return None
+    harness = profile.get("reported_harness") or {}
+    return {
+        "profile_version": profile.get("version"),
+        "project_id": profile.get("project_id"),
+        "task_id": profile.get("task_id"),
+        "state_version": profile.get("state_version"),
+        "status": profile.get("status"),
+        "reported_harness": harness.get("id") if isinstance(harness, dict) else None,
+    }
+
+
+def skill_execution_summary(metadata: dict) -> dict | None:
+    profile = (metadata or {}).get("vibe_memory_skill_execution")
+    if not isinstance(profile, dict) or profile.get("type") != "skill_execution":
+        return None
+    skill = profile.get("skill") or {}
+    harness = profile.get("reported_harness") or {}
+    return {
+        "profile_version": profile.get("version"),
+        "skill_id": skill.get("id") if isinstance(skill, dict) else None,
+        "skill_version": skill.get("version") if isinstance(skill, dict) else None,
+        "reported_status": profile.get("reported_status"),
+        "verification_status": profile.get("verification_status"),
+        "reported_harness": harness.get("id") if isinstance(harness, dict) else None,
+    }
+
+
 def normalize_metadata_profiles(metadata: dict) -> dict:
     """Validate an opted-in profile and add deterministic scalar filter mirrors."""
 
@@ -384,6 +522,54 @@ def normalize_metadata_profiles(metadata: dict) -> dict:
         normalized["vibe_memory_evidence_impact_profile_version"] = impact.version
         normalized["vibe_memory_evidence_impact"] = impact.impact
         normalized["vibe_memory_evidence_impact_target_kind"] = impact.target.kind
+
+    state_key = "vibe_memory_agent_state"
+    raw_state = normalized.get(state_key)
+    state_mirrors = (
+        "vibe_memory_agent_state_profile_version",
+        "vibe_memory_agent_state_project_id",
+        "vibe_memory_agent_state_task_id",
+        "vibe_memory_agent_state_status",
+        "vibe_memory_agent_state_version",
+        "vibe_memory_agent_state_harness",
+    )
+    if raw_state is None:
+        for key in state_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_state, dict):
+            raise ValueError(f"{state_key} must be an object")
+        state = AgentStateProfile.model_validate(raw_state)
+        normalized[state_key] = state.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_agent_state_profile_version"] = state.version
+        normalized["vibe_memory_agent_state_project_id"] = state.project_id
+        normalized["vibe_memory_agent_state_task_id"] = state.task_id
+        normalized["vibe_memory_agent_state_status"] = state.status
+        normalized["vibe_memory_agent_state_version"] = state.state_version
+        normalized["vibe_memory_agent_state_harness"] = state.reported_harness.id
+
+    execution_key = "vibe_memory_skill_execution"
+    raw_execution = normalized.get(execution_key)
+    execution_mirrors = (
+        "vibe_memory_skill_execution_profile_version",
+        "vibe_memory_skill_id",
+        "vibe_memory_skill_execution_status",
+        "vibe_memory_skill_verification_status",
+        "vibe_memory_skill_execution_harness",
+    )
+    if raw_execution is None:
+        for key in execution_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_execution, dict):
+            raise ValueError(f"{execution_key} must be an object")
+        execution = SkillExecutionProfile.model_validate(raw_execution)
+        normalized[execution_key] = execution.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_skill_execution_profile_version"] = execution.version
+        normalized["vibe_memory_skill_id"] = execution.skill.id
+        normalized["vibe_memory_skill_execution_status"] = execution.reported_status
+        normalized["vibe_memory_skill_verification_status"] = execution.verification_status
+        normalized["vibe_memory_skill_execution_harness"] = execution.reported_harness.id
     if len(json.dumps(normalized, ensure_ascii=False, allow_nan=False)) > 30000:
         raise ValueError("metadata must fit within 30000 characters of JSON")
     return normalized

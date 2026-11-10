@@ -12,6 +12,8 @@ Normative machine-readable documents:
 - `checkpoint-profile.json`: optional claimed stage, environment and observation evidence; stored commands are data only and are never executed by the service.
 - `failure-reproduction-profile.json`: optional sanitized failure, sample, parsing-path and evidence-reference coordinates; uploaded file IDs and untrusted external references are distinct, and the service never opens or verifies external references.
 - `evidence-impact-review-profile.json`: one optional reviewer observation for an exact evidence record/version and target; conflicting observations remain separate and unknown stays unknown.
+- `agent-state-profile.json`: optional harness-neutral project/task state, next actions, blockers and version-pinned references; the enclosing record version is the optimistic concurrency coordinate and state is never executed.
+- `skill-execution-profile.json`: optional external-harness Skill execution observation with version/digest, environment/task/evidence references and verification state; the service never downloads or runs the Skill.
 
 Time is UTC. `valid_from`/`valid_to` describe when an agent says a claim applies. `created_at`/`recorded_at` describe when the server recorded the current version. Historical `known_at` reconstruction is reported as `current_versions_only` until a server advertises that extension.
 

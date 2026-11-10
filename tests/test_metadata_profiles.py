@@ -399,6 +399,10 @@ def test_profile_contracts_match_runtime_examples():
     impact_schema = json.loads(
         (CONTRACTS / "evidence-impact-review-profile.json").read_text()
     )
+    state_schema = json.loads((CONTRACTS / "agent-state-profile.json").read_text())
+    execution_schema = json.loads(
+        (CONTRACTS / "skill-execution-profile.json").read_text()
+    )
     assert decision_schema["properties"]["state"]["enum"] == [
         "proposed", "open", "decided", "rejected", "unknown"
     ]
@@ -412,3 +416,5 @@ def test_profile_contracts_match_runtime_examples():
         "affected", "not_affected", "unknown"
     ]
     assert "permalink" in decision_schema["$defs"]["evidence"]["properties"]
+    assert state_schema["properties"]["type"]["const"] == "agent_state"
+    assert execution_schema["properties"]["type"]["const"] == "skill_execution"

@@ -76,7 +76,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.39.4"
+SERVER_VERSION = "0.40.0"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -123,6 +123,9 @@ SERVER_INSTRUCTIONS = (
     " For withdrawn or corrected evidence, use evidence_impact_candidates to find only exact "
     "record/version citations, then store each reviewer's separate evidence-impact observation; "
     "never infer that an unlisted target was unaffected or automatically invalidate a decision."
+    " Store harness-neutral task state and external Skill execution reports only as structured "
+    "data; reported completion or success is not verification. The service never schedules tasks, "
+    "downloads or runs Skills, executes stored commands, or resolves conflicting judgments."
 )
 
 

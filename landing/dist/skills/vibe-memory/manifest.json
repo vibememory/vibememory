@@ -1,20 +1,20 @@
 {
   "schema_version": 2,
-  "revision": "c8e6952b6a475a06f119be47d3ab097cb47d426d3d0f0f1b921359ff48f51262",
+  "revision": "d08920ed676bb9674591be690ed4ef2481ff023068be71de058e8e45978b3f38",
   "files": {
-    "SKILL.md": "88fa3842c7d4814922f276466996c6ab9179d55e3cc7fc3bb7940f4df999b54d",
+    "SKILL.md": "b22759a06a190af947a9fe44d8d6b6defd4b4e8c70a8011ecd56936c8b8a3db6",
     "scripts/memory.py": "6a2cccd1db63cfed8e07306571953b47ce7b022d1d371326cdb0516a88981afe",
     "references/audit-logs.md": "d357a0f658b061d99616043cf015fdfda0db59ac23f11f10aa21589e7ca9c7f5",
     "references/authorization.md": "58ba2cdfd8a72a96a819c680a6d3f114c0d5d310913055d2cc60c116223e302d",
     "references/commands.md": "e3b56edab5e424fe688fb0d26435ccf9e7b98a4038e3d0be4b69d7ec1cebb33b",
     "references/data-and-search.md": "b121521dd8182545acc999f8cbfd335e032bbf262b86374a17e05463603dc493",
-    "references/graph-and-corrections.md": "b350222dfa87a552d04dccec2f00b92026c97742660daa23a1267ab270e79594",
+    "references/graph-and-corrections.md": "0d8755afed984ccbdf72d8cfe13d90e59efb360e949fbbf9925a8ca0f1341aa7",
     "references/installation.md": "5299381beac06abd9b6435c89612dc20827c8417ad07db6a8f84e59eba5f16a5",
     "references/lifecycle.md": "2ca8a28b7ae933337922e729627c07379ec0a23f5a32675f6d94b89abf5a5e50",
     "references/messages.md": "38b875366a7ff7b1e33cbe0c84d0b8a63ef9c3ff92d93b6c1ecc8b5daa03bbab",
     "references/portability.md": "e865e62c213614ea37222aa2131417d76be0ceaff305fb37690830c56df43d83",
     "references/product-feedback.md": "7cdffa58365528144ba2a8634d52f236a7b236e86314549e0f4573a3031e985b",
-    "references/profiles.md": "1d87a7dd6679ec001cc6ca8818c0eef04f4835a600af2c98a7dc1383f502305a",
+    "references/profiles.md": "4cea6fffc6859c87b32a335ec7099c519905e2ff341774a7570f3447e259c1b7",
     "references/vault.md": "1dc036cb0b5927b27d468f4b0958bd0e98750e2f9f397a3ce0524f92615472ef",
     "references/workflows.md": "46f5a0e153a9a4b58eef21ae5daeb162215e995ae4579bfdf8a6748fc261d741"
   },
@@ -63,7 +63,7 @@
     }
   },
   "archive": "/downloads/vibe-memory-skill.zip",
-  "archive_sha256": "f2b32e60fba03a8142e6be070a76628693184326edf01b620922b76fbefa216c",
+  "archive_sha256": "7a2ae58a6e1934d4d2d6ece0dfb14ced8ffb952e3f3d33e479b2faed61d7cdfb",
   "official_archive_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip",
   "official_manifest_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/manifest-v2.json"
 }

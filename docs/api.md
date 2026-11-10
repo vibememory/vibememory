@@ -262,6 +262,31 @@ observation time, `affected`/`not_affected`/`unknown` result, rationale, and
 follow-up. Mirrors `vibe_memory_evidence_impact` and
 `vibe_memory_evidence_impact_target_kind` support exact filters. Each review is a
 separate record, so conflicting observations are preserved rather than collapsed.
+
+Optional `metadata.vibe_memory_agent_state` profile v1 is the harness-neutral task
+state contract. It carries project/task IDs, a portable logical state revision,
+`unknown`/`planned`/`in_progress`/`blocked`/`completed`/`cancelled` status, goal,
+completed work, next actions, blockers, exact Decision/Evidence references,
+versioned Skill references, a reported harness and UTC observation time. The
+enclosing record `id` and `version` remain the stable storage and optimistic
+concurrency coordinates; `expected_version` conflicts return 409. Authenticated
+creator/writer history remains distinct from the reported harness. `completed` is
+an agent claim, not a Vibe Memory completion guarantee, and next actions are never
+scheduled or executed. Exact scalar mirrors support project/task/status filters.
+
+Optional `metadata.vibe_memory_skill_execution` profile v1 records a Skill ID plus
+version or SHA-256 digest, reported harness/agent, exact task/environment/input
+references, start/end time, reported status, Evidence/Artifact references, failure
+reason and verification status. The service validates shape and UTC ordering only;
+it never downloads or executes the Skill, opens references, runs stored commands,
+checks the external harness, or automatically retries a failure. A separate
+Checkpoint or Failure Reproduction profile can preserve broader completion claims
+or sanitized reproduction detail.
+
+Minimal search and Context Bundle results add compact `agent_state` and
+`skill_execution` summaries only when those profiles exist. Consumers fetch a
+selected record for full lists, reasons and references. Standard projections
+preserve complete metadata.
 `include_content` defaults to false. `projection=minimal` omits heavy metadata,
 provenance, writer, correction-claim, relationship-reason and evidence fields while
 retaining stable coordinates, retrieval reasons, trust/security state, hashes, and
@@ -317,8 +342,11 @@ exposes `maintenance-audit`.
 
 `POST /v1/graph/audit` returns deterministic metadata-only diagnostics: orphan
 records, entity degree/relationship coverage, relation distribution, over-connected
-hubs, correction cycles/branches, repeated claim fingerprints, and missing
-endpoints. It never returns record content or decides which claim is true.
+hubs, correction cycles/branches, active task-dependency cycle relation IDs,
+repeated claim fingerprints, and missing endpoints. Task dependencies reuse
+`DEPENDS_ON` and `BLOCKED_BY`; `RELATED_TO` is non-ordering and `SUPERSEDES` keeps
+its existing correction semantics. The audit never returns record content, decides
+which claim is true, orders work, or schedules a task.
 
 `POST /v1/graph/diff` compares 1–100 agent-authored desired relationship claims to
 the active graph and performs no mutation. Each desired item has a stable

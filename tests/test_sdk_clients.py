@@ -71,6 +71,31 @@ def test_python_sdk_structured_error_cancellation_and_pages():
     )
     assert impact["vibe_memory_evidence_impact_review"]["version"] == 1
     assert impact["vibe_memory_evidence_impact"] == "affected"
+    state = module.agent_state_profile_metadata(
+        {
+            "project_id": "visionflow",
+            "task_id": "inspection-node",
+            "state_version": 3,
+            "status": "in_progress",
+            "goal": "Implement image inspection node",
+            "reported_harness": {"id": "codex"},
+            "observed_at": "2026-11-10T00:00:00Z",
+        }
+    )
+    assert state["vibe_memory_agent_state"]["type"] == "agent_state"
+    assert state["vibe_memory_agent_state_task_id"] == "inspection-node"
+    execution = module.skill_execution_profile_metadata(
+        {
+            "skill": {"id": "python-development", "version": "2.1.0"},
+            "reported_harness": {"id": "codex"},
+            "started_at": "2026-11-10T00:00:00Z",
+            "finished_at": "2026-11-10T00:01:00Z",
+            "reported_status": "succeeded",
+            "verification_status": "author_reported",
+        }
+    )
+    assert execution["vibe_memory_skill_execution"]["version"] == 1
+    assert execution["vibe_memory_skill_id"] == "python-development"
     body = json.dumps(
         {
             "error": {
@@ -143,8 +168,8 @@ def test_sdk_package_versions_and_typescript_contract():
     typescript_source = (ROOT / "sdk" / "typescript" / "src" / "index.ts").read_text(
         encoding="utf-8"
     )
-    assert python_package["project"]["version"] == "0.3.1"
-    assert typescript_package["version"] == "0.3.1"
+    assert python_package["project"]["version"] == "0.4.0"
+    assert typescript_package["version"] == "0.4.0"
     for exported in (
         "VibeMemoryError",
         "RequestOptions",
@@ -154,6 +179,8 @@ def test_sdk_package_versions_and_typescript_contract():
         "checkpointProfileMetadata",
         "failureReproductionProfileMetadata",
         "evidenceImpactReviewProfileMetadata",
+        "agentStateProfileMetadata",
+        "skillExecutionProfileMetadata",
         "evidenceImpactCandidates",
         "createWithMetadata",
         "SearchResponse",

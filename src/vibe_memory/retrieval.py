@@ -3,6 +3,7 @@ from datetime import datetime
 
 from .corrections import annotate_corrections
 from .embeddings import cosine
+from .profiles import agent_state_summary, skill_execution_summary
 from .security import record_is_retrievable
 from .temporal import recorded_instant
 
@@ -39,7 +40,14 @@ def _with_response_size(value):
 def _project_search_hit(hit, projection):
     if projection == "standard":
         return hit
-    return {key: hit.get(key) for key in MINIMAL_SEARCH_FIELDS}
+    projected = {key: hit.get(key) for key in MINIMAL_SEARCH_FIELDS}
+    state = agent_state_summary(hit.get("metadata") or {})
+    execution = skill_execution_summary(hit.get("metadata") or {})
+    if state:
+        projected["agent_state"] = state
+    if execution:
+        projected["skill_execution"] = execution
+    return projected
 
 
 def _bounded_search_response(result, request):

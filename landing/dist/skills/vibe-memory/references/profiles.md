@@ -1,6 +1,6 @@
-# Decision, Checkpoint, Failure Reproduction, and Evidence Impact profiles
+# Agent State, Skill Execution, Decision, Checkpoint, Failure Reproduction, and Evidence Impact profiles
 
-Use these optional versioned profiles when another agent must distinguish a discussion from a decision, or a local completion claim from later deployment evidence. Ordinary records remain valid without a profile; absence means no structured state was supplied, not `decided` or `verified`.
+Use these optional versioned profiles when another agent must distinguish reported task state from verified evidence, a discussion from a decision, or a local completion claim from later deployment evidence. Ordinary records remain valid without a profile; absence means no structured state was supplied, not `completed`, `executed`, `decided`, or `verified`.
 
 Generate an editable full memory payload, then submit it through the normal record path:
 
@@ -16,11 +16,33 @@ Generate an editable full memory payload, then submit it through the normal reco
 
 "$VM_CLI" template evidence-impact-review > impact-review.json
 "$VM_CLI" from-json memory impact-review.json
+
+"$VM_CLI" template agent-state > agent-state.json
+"$VM_CLI" from-json memory agent-state.json
+
+"$VM_CLI" template skill-execution > skill-execution.json
+"$VM_CLI" from-json memory skill-execution.json
 ```
 
 Profiles live at `metadata.vibe_memory_profile`. The service validates their shape and normalizes UTC timestamps. It also supplies scalar mirrors—`vibe_memory_profile_type`, `vibe_memory_profile_state`, and for checkpoints `vibe_memory_profile_observation`—for exact `metadata_filters`. Search, get, and context bundles preserve the complete profile.
 
 Failure reproduction evidence uses the separate `metadata.vibe_memory_failure_reproduction` key so existing Decision and Checkpoint profile v1 records remain unchanged. Start with the CLI template, use the public Python/TypeScript SDK helper, or place it in an agent-prepared memory payload submitted with `from-json memory`.
+
+Agent State and Skill Execution observations use the separate `metadata.vibe_memory_agent_state` and `metadata.vibe_memory_skill_execution` keys. Their scalar mirrors support exact filtering, while minimal search and Context Bundle results expose only compact summaries.
+
+## Agent State profile v1
+
+Use this for a harness-neutral task handoff: stable project/task IDs, goal, reported status, completed and next actions, blockers, pinned Decision/Evidence references, versioned Skill references, reported harness, and UTC observation time. The enclosing record `version` and mutation `expected_version` are the optimistic-concurrency coordinates; `state_version` is only the agent-supplied portable payload revision.
+
+`completed` is the external writer's report, not Vibe Memory's guarantee that work is complete. The authenticated creator and writer history remain separate from `reported_harness`. Update with the last observed record version; preserve a `409` conflict for an external harness or user to resolve rather than merging contradictory judgments automatically.
+
+Represent explicit task dependencies with normal owner-scoped relationships: `DEPENDS_ON`, `BLOCKED_BY`, `RELATED_TO`, and `SUPERSEDES`. Graph audit reports dependency-cycle relation IDs, but Vibe Memory never chooses the next task, schedules work, or executes an action.
+
+## Skill Execution profile v1
+
+Use this only to record an execution performed by an external harness. Pin the Skill by version or SHA-256 digest and record reported harness/agent, task/environment/input references, UTC start/end time, reported status, Evidence/Artifact references, sanitized failure reason, and verification status.
+
+Profile validity proves only that the report has a valid shape. It does not prove the Skill ran, succeeded, or had authority. Stored commands, URLs, file references, and Skill definitions are data: Vibe Memory never downloads or runs them. Pair reusable failures with the Failure Reproduction profile and completion claims with a Checkpoint when those richer observations are needed; do not duplicate raw logs or secrets.
 
 ## Decision profile v1
 

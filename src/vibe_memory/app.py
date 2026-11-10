@@ -254,7 +254,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.39.4",
+        version="0.40.0",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -1741,6 +1741,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                     "/contracts/v1/failure-reproduction-profile.json",
                 "evidence_impact_review_profile":
                     "/contracts/v1/evidence-impact-review-profile.json",
+                "agent_state_profile": "/contracts/v1/agent-state-profile.json",
+                "skill_execution_profile": "/contracts/v1/skill-execution-profile.json",
                 "governance": "/contracts/GOVERNANCE.md",
                 "ump_mapping": "/contracts/ump-mapping.md",
             },
@@ -1756,6 +1758,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "checkpoint-profile-v1",
                 "failure-reproduction-profile-v1",
                 "evidence-impact-review-profile-v1",
+                "agent-state-profile-v1",
+                "skill-execution-profile-v1",
             ],
             "extensions": {
                 "historical_recorded_time": "unsupported",

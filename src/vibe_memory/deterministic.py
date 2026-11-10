@@ -8,6 +8,7 @@ from datetime import datetime
 
 from .clock import utc_now_iso
 from .corrections import annotate_corrections
+from .profiles import agent_state_summary, skill_execution_summary
 from .store import NotFound
 from .temporal import recorded_instant
 
@@ -165,6 +166,13 @@ def _context_record(record, reasons, include_content, projection):
     if projection == "standard":
         projected["latest_writer"] = (record.get("writer_history") or [None])[-1]
     projected["retrieval_reason"] = sorted(reasons)
+    if projection == "minimal":
+        state = agent_state_summary(record.get("metadata") or {})
+        execution = skill_execution_summary(record.get("metadata") or {})
+        if state:
+            projected["agent_state"] = state
+        if execution:
+            projected["skill_execution"] = execution
     projected["content_included"] = bool(include_content)
     if include_content:
         projected["content"] = record.get("content", "")
@@ -439,6 +447,10 @@ def graph_audit(store, owner, data):
     corrections = [
         edge for edge in valid if edge["relation"] in {"SUPERSEDES", "CORRECTS"}
     ]
+    dependencies = [
+        edge for edge in valid if edge["relation"] in {"DEPENDS_ON", "BLOCKED_BY"}
+    ]
+    dependency_cycles = _cycle_relation_ids(dependencies)
     incoming = defaultdict(list)
     for edge in corrections:
         incoming[edge["target_id"]].append(edge["id"])
@@ -453,6 +465,7 @@ def graph_audit(store, owner, data):
             "missing_endpoints": len(missing_endpoints),
             "duplicate_claim_groups": sum(1 for ids in fingerprints.values() if len(ids) > 1),
             "correction_cycles": len(_cycle_relation_ids(corrections)),
+            "dependency_cycles": len(dependency_cycles),
         },
         "relation_distribution": dict(sorted(Counter(edge["relation"] for edge in valid).items())),
         "orphan_records": [
@@ -483,6 +496,7 @@ def graph_audit(store, owner, data):
             if value >= data.hub_threshold
         ],
         "correction_cycles": _cycle_relation_ids(corrections),
+        "dependency_cycles": dependency_cycles,
         "correction_branches": [
             {"record_id": record_id, "incoming_relation_ids": sorted(ids)}
             for record_id, ids in sorted(incoming.items())

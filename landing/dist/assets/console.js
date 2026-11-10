@@ -134,6 +134,8 @@ function recordRows(items, deletable = true) {
   const evidenceProfile = item => {
     const profile = item.metadata?.vibe_memory_profile;
     const failure = item.metadata?.vibe_memory_failure_reproduction;
+    const state = item.metadata?.vibe_memory_agent_state || item.agent_state;
+    const execution = item.metadata?.vibe_memory_skill_execution || item.skill_execution;
     let badges = '';
     if (profile && (profile.type === 'decision' || profile.type === 'checkpoint')) {
       const state = profile.type === 'decision' ? profile.state : profile.claimed_stage;
@@ -142,6 +144,12 @@ function recordRows(items, deletable = true) {
     }
     if (failure?.type === 'failure_reproduction') {
       badges += `<span class="evidence-profile-badge profile-failure"><strong>Failure</strong>${h(failure.failure?.stage || 'unknown')} · ${h(failure.outcome || 'failed')}</span>`;
+    }
+    if (state?.type === 'agent_state' || state?.profile_version === 1) {
+      badges += `<span class="evidence-profile-badge profile-checkpoint"><strong>Agent State</strong>${h(state.status || 'unknown')} · ${h(state.task_id || 'unknown task')}</span>`;
+    }
+    if (execution?.type === 'skill_execution' || execution?.profile_version === 1) {
+      badges += `<span class="evidence-profile-badge profile-failure"><strong>Skill</strong>${h(execution.reported_status || 'unknown')} · ${h(execution.skill?.id || execution.skill_id || 'unknown skill')}</span>`;
     }
     return badges;
   };
@@ -159,6 +167,8 @@ function evidenceProfileDetail(record) {
   const profile = record.metadata?.vibe_memory_profile;
   const failure = record.metadata?.vibe_memory_failure_reproduction;
   const impact = record.metadata?.vibe_memory_evidence_impact_review;
+  const state = record.metadata?.vibe_memory_agent_state;
+  const execution = record.metadata?.vibe_memory_skill_execution;
   let output = '';
   if (profile && (profile.type === 'decision' || profile.type === 'checkpoint')) {
     const isDecision = profile.type === 'decision';
@@ -176,6 +186,12 @@ function evidenceProfileDetail(record) {
   }
   if (impact?.type === 'evidence_impact_review') {
     output += `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>EVIDENCE IMPACT REVIEW · v${h(impact.version)}</span><strong>${h(impact.impact)}</strong></div><p>한 검토자의 관측입니다. 다른 검토자의 상충 관측과 함께 보존되며, 서버가 결정을 자동 무효화하지 않습니다.</p><dl><div><dt>대상</dt><dd>${h(impact.target?.kind)} · ${h(impact.target?.id)} · v${h(impact.target?.version)}</dd></div><div><dt>근거</dt><dd>${h(impact.evidence?.record_id)} · v${h(impact.evidence?.version)}</dd></div><div><dt>검토자</dt><dd>${h(impact.reviewer)}</dd></div><div><dt>관측 시각</dt><dd>${h(impact.observed_at)}</dd></div><div class="profile-wide"><dt>판단 근거</dt><dd>${h(impact.rationale)}</dd></div>${(impact.follow_up || []).length ? `<div class="profile-wide"><dt>후속 조치</dt><dd>${h(impact.follow_up.join(' · '))}</dd></div>` : ''}</dl></section>`;
+  }
+  if (state?.type === 'agent_state') {
+    output += `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>AGENT STATE · v${h(state.version)}</span><strong>${h(state.status)}</strong></div><p>외부 Harness가 보고한 작업 상태입니다. 완료 표시는 실행 또는 검증을 보증하지 않으며, 서버가 다음 작업을 예약하거나 실행하지 않습니다.</p><dl><div><dt>프로젝트 · 작업</dt><dd>${h(state.project_id)} · ${h(state.task_id)}</dd></div><div><dt>상태 버전</dt><dd>${h(state.state_version)} · 충돌 검사는 기록 버전 기준</dd></div><div><dt>보고 Harness</dt><dd>${h(state.reported_harness?.id || '미기재')} · ${h(state.reported_harness?.version || '버전 미기재')}</dd></div><div><dt>관측 시각</dt><dd>${h(state.observed_at)}</dd></div><div class="profile-wide"><dt>목표</dt><dd>${h(state.goal)}</dd></div><div class="profile-wide"><dt>다음 작업</dt><dd>${h((state.next_actions || []).join(' · ') || '없음')}</dd></div><div class="profile-wide"><dt>차단 요소</dt><dd>${h((state.blockers || []).join(' · ') || '없음')}</dd></div></dl></section>`;
+  }
+  if (execution?.type === 'skill_execution') {
+    output += `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>SKILL EXECUTION · v${h(execution.version)}</span><strong>${h(execution.reported_status)}</strong></div><p>외부 Harness가 작성한 실행 관측입니다. 서버는 Skill, 저장된 명령 또는 URL을 다운로드하거나 실행하지 않습니다.</p><dl><div><dt>Skill</dt><dd>${h(execution.skill?.id)} · ${h(execution.skill?.version || execution.skill?.digest || '좌표 미기재')}</dd></div><div><dt>보고 Harness</dt><dd>${h(execution.reported_harness?.id || '미기재')} · ${h(execution.reported_agent || '에이전트 미기재')}</dd></div><div><dt>실행 시각</dt><dd>${h(execution.started_at)} → ${h(execution.finished_at || '진행 중')}</dd></div><div><dt>검증 상태</dt><dd>${h(execution.verification_status)}</dd></div>${execution.failure_reason ? `<div class="profile-wide"><dt>보고된 실패 원인</dt><dd>${h(execution.failure_reason)}</dd></div>` : ''}</dl></section>`;
   }
   return output;
 }

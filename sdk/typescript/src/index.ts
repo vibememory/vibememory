@@ -114,6 +114,59 @@ export type EvidenceImpactReviewMetadata = Record<string, unknown> & {
   vibe_memory_evidence_impact: EvidenceImpactReviewProfile["impact"];
   vibe_memory_evidence_impact_target_kind: EvidenceImpactReviewProfile["target"]["kind"];
 };
+export type HarnessReference = {id: string; version?: string};
+export type SkillReference = {id: string; version?: string; digest?: string};
+export type AgentStateProfile = {
+  type: "agent_state";
+  version: 1;
+  project_id: string;
+  task_id: string;
+  state_version: number;
+  status: "unknown" | "planned" | "in_progress" | "blocked" | "completed" | "cancelled";
+  goal: string;
+  completed?: string[];
+  next_actions?: string[];
+  blockers?: string[];
+  decision_refs?: ProfileEvidence[];
+  evidence_refs?: ProfileEvidence[];
+  skill_refs?: SkillReference[];
+  reported_harness: HarnessReference;
+  observed_at: string;
+};
+export type AgentStateMetadata = Record<string, unknown> & {
+  vibe_memory_agent_state: AgentStateProfile;
+  vibe_memory_agent_state_profile_version: 1;
+  vibe_memory_agent_state_project_id: string;
+  vibe_memory_agent_state_task_id: string;
+  vibe_memory_agent_state_status: AgentStateProfile["status"];
+  vibe_memory_agent_state_version: number;
+  vibe_memory_agent_state_harness: string;
+};
+export type SkillExecutionProfile = {
+  type: "skill_execution";
+  version: 1;
+  skill: SkillReference;
+  reported_harness: HarnessReference;
+  reported_agent?: string;
+  task_ref?: ProfileEvidence;
+  environment_ref?: ProfileEvidence;
+  input_refs?: ProfileEvidence[];
+  started_at: string;
+  finished_at?: string;
+  reported_status: "started" | "succeeded" | "failed" | "cancelled" | "unknown";
+  evidence_refs?: ProfileEvidence[];
+  artifact_refs?: ProfileEvidence[];
+  failure_reason?: string;
+  verification_status: "unverified" | "author_reported" | "observed" | "reproduced" | "unavailable";
+};
+export type SkillExecutionMetadata = Record<string, unknown> & {
+  vibe_memory_skill_execution: SkillExecutionProfile;
+  vibe_memory_skill_execution_profile_version: 1;
+  vibe_memory_skill_id: string;
+  vibe_memory_skill_execution_status: SkillExecutionProfile["reported_status"];
+  vibe_memory_skill_verification_status: SkillExecutionProfile["verification_status"];
+  vibe_memory_skill_execution_harness: string;
+};
 export type FailureReproductionMetadata = Record<string, unknown> & {
   vibe_memory_failure_reproduction: FailureReproductionProfile;
   vibe_memory_failure_profile_version: 1;
@@ -204,6 +257,39 @@ export function evidenceImpactReviewProfileMetadata(
   };
 }
 
+/** Builds harness-neutral task state. Record version remains the conflict coordinate. */
+export function agentStateProfileMetadata(
+  profile: Omit<AgentStateProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+): AgentStateMetadata {
+  return {
+    ...metadata,
+    vibe_memory_agent_state: {...profile, type: "agent_state", version: 1},
+    vibe_memory_agent_state_profile_version: 1,
+    vibe_memory_agent_state_project_id: profile.project_id,
+    vibe_memory_agent_state_task_id: profile.task_id,
+    vibe_memory_agent_state_status: profile.status,
+    vibe_memory_agent_state_version: profile.state_version,
+    vibe_memory_agent_state_harness: profile.reported_harness.id,
+  };
+}
+
+/** Builds an external harness execution observation. Vibe Memory executes nothing. */
+export function skillExecutionProfileMetadata(
+  profile: Omit<SkillExecutionProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+): SkillExecutionMetadata {
+  return {
+    ...metadata,
+    vibe_memory_skill_execution: {...profile, type: "skill_execution", version: 1},
+    vibe_memory_skill_execution_profile_version: 1,
+    vibe_memory_skill_id: profile.skill.id,
+    vibe_memory_skill_execution_status: profile.reported_status,
+    vibe_memory_skill_verification_status: profile.verification_status,
+    vibe_memory_skill_execution_harness: profile.reported_harness.id,
+  };
+}
+
 export type Memory = {
   id: string;
   kind: "memory";
@@ -230,6 +316,22 @@ export type SearchHit = {
   correction_status?: string;
   correction_graph_complete?: boolean;
   metadata?: Record<string, unknown>;
+  agent_state?: {
+    profile_version: number;
+    project_id: string;
+    task_id: string;
+    state_version: number;
+    status: AgentStateProfile["status"];
+    reported_harness: string;
+  };
+  skill_execution?: {
+    profile_version: number;
+    skill_id: string;
+    skill_version?: string;
+    reported_status: SkillExecutionProfile["reported_status"];
+    verification_status: SkillExecutionProfile["verification_status"];
+    reported_harness: string;
+  };
 };
 export type SearchResponse = {
   mode: "keyword_vector";

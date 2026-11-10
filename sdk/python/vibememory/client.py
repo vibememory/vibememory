@@ -73,6 +73,37 @@ def evidence_impact_review_profile_metadata(profile, metadata=None):
     }
 
 
+def agent_state_profile_metadata(profile, metadata=None):
+    """Build harness-neutral task state; record version remains the OCC coordinate."""
+
+    profile = {**profile, "type": "agent_state", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_agent_state": profile,
+        "vibe_memory_agent_state_profile_version": 1,
+        "vibe_memory_agent_state_project_id": profile["project_id"],
+        "vibe_memory_agent_state_task_id": profile["task_id"],
+        "vibe_memory_agent_state_status": profile["status"],
+        "vibe_memory_agent_state_version": profile["state_version"],
+        "vibe_memory_agent_state_harness": profile["reported_harness"]["id"],
+    }
+
+
+def skill_execution_profile_metadata(profile, metadata=None):
+    """Build an external harness execution report; this helper executes nothing."""
+
+    profile = {**profile, "type": "skill_execution", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_skill_execution": profile,
+        "vibe_memory_skill_execution_profile_version": 1,
+        "vibe_memory_skill_id": profile["skill"]["id"],
+        "vibe_memory_skill_execution_status": profile["reported_status"],
+        "vibe_memory_skill_verification_status": profile["verification_status"],
+        "vibe_memory_skill_execution_harness": profile["reported_harness"]["id"],
+    }
+
+
 class VibeMemoryError(RuntimeError):
     def __init__(self, status, body, *, headers=None):
         try:

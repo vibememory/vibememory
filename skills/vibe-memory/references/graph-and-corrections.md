@@ -9,3 +9,5 @@ For consequential claims, fetch each selected evidence record and pin its `recor
 Active correction cycles remain visible. If `correction_graph_complete` or `cycle_check_complete` is false, treat the claim as unresolved and never hide the older record.
 
 For deterministic bulk repair, prepare `template graph-diff`, run `graph-diff`, review every `create`, `unchanged`, `conflicting_claim`, `unknown`, and scoped retract candidate. For `graph-apply`, copy the returned diff hash and approve only exact reviewed create client IDs/retract relation IDs. Never approve unknown/conflicting items or infer an omitted edge should be removed. Use stable client request IDs across retries.
+
+For task-state handoffs, reuse ordinary relation claims: `DEPENDS_ON`, `BLOCKED_BY`, `RELATED_TO`, and `SUPERSEDES`. `graph-audit` reports active `DEPENDS_ON`/`BLOCKED_BY` cycle relation IDs. A cycle is deterministic structural evidence, not permission for the server to schedule, reorder, merge, or execute tasks; preserve it for an external harness or user to resolve.

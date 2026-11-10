@@ -60,6 +60,19 @@ def failure_reproduction_profile_metadata(profile, metadata=None):
     }
 
 
+def evidence_impact_review_profile_metadata(profile, metadata=None):
+    """Build one review observation without collapsing conflicting reviewer claims."""
+
+    profile = {**profile, "type": "evidence_impact_review", "version": 1}
+    return {
+        **(metadata or {}),
+        "vibe_memory_evidence_impact_review": profile,
+        "vibe_memory_evidence_impact_profile_version": 1,
+        "vibe_memory_evidence_impact": profile["impact"],
+        "vibe_memory_evidence_impact_target_kind": profile["target"]["kind"],
+    }
+
+
 class VibeMemoryError(RuntimeError):
     def __init__(self, status, body, *, headers=None):
         try:
@@ -247,4 +260,24 @@ class VibeMemoryClient:
         selectors.setdefault("byte_limit", 32768)
         return self._request(
             "/v1/context-bundle", "POST", selectors, True, cancelled=cancelled
+        )
+
+    def evidence_impact_candidates(
+        self,
+        evidence_record_id,
+        evidence_version,
+        candidate_limit=100,
+        *,
+        cancelled=None,
+    ):
+        return self._request(
+            "/v1/evidence-impact/candidates",
+            "POST",
+            {
+                "evidence_record_id": evidence_record_id,
+                "evidence_version": evidence_version,
+                "candidate_limit": candidate_limit,
+            },
+            False,
+            cancelled=cancelled,
         )

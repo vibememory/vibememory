@@ -497,6 +497,78 @@ def graph_audit(store, owner, data):
     }
 
 
+def evidence_impact_candidates(store, owner, data):
+    """Find only explicit exact-version citations without judging their impact."""
+
+    records = _all_records(
+        store, owner, data.include_untrusted, data.include_quarantined
+    )
+    visible_ids = {record["id"] for record in records}
+    candidates = []
+    for record in records:
+        profile = (record.get("metadata") or {}).get("vibe_memory_profile") or {}
+        if profile.get("type") not in {"decision", "checkpoint"}:
+            continue
+        for index, citation in enumerate(profile.get("evidence") or []):
+            if (
+                citation.get("record_id") == data.evidence_record_id
+                and citation.get("version") == data.evidence_version
+            ):
+                candidates.append(
+                    {
+                        "target_kind": "record",
+                        "target_id": record["id"],
+                        "target_version": record["version"],
+                        "record_kind": record["kind"],
+                        "profile_type": profile["type"],
+                        "profile_state": profile.get("state")
+                        or profile.get("claimed_stage")
+                        or "unknown",
+                        "reference_index": index,
+                    }
+                )
+
+    for relation in _all_relations(store, owner):
+        if not {relation["source_id"], relation["target_id"]} <= visible_ids:
+            continue
+        for index, citation in enumerate(relation.get("evidence") or []):
+            if (
+                citation.get("record_id") == data.evidence_record_id
+                and citation.get("version") == data.evidence_version
+            ):
+                candidates.append(
+                    {
+                        "target_kind": "relation",
+                        "target_id": relation["id"],
+                        "target_version": relation["version"],
+                        "relation": relation["relation"],
+                        "source_id": relation["source_id"],
+                        "destination_id": relation["target_id"],
+                        "reference_index": index,
+                    }
+                )
+
+    candidates.sort(
+        key=lambda item: (item["target_kind"], item["target_id"], item["reference_index"])
+    )
+    selected = candidates[: data.candidate_limit]
+    return {
+        "evidence": {
+            "record_id": data.evidence_record_id,
+            "version": data.evidence_version,
+        },
+        "candidates": selected,
+        "returned": len(selected),
+        "truncated": len(candidates) > len(selected),
+        "dry_run": True,
+        "llm_calls": 0,
+        "content_included": False,
+        "selection_semantics": "explicit_exact_version_references_only",
+        "unrecorded_dependency_semantics": "unknown",
+        "generated_at": utc_now_iso(),
+    }
+
+
 def _manifest_claim(item):
     claim = item.model_dump(mode="json", exclude={"client_request_id"})
     claim["input_manifest_id"] = claim.get("input_manifest_id") or ""

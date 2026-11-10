@@ -244,6 +244,24 @@ collects raw logs. Mirrors `vibe_memory_failure_outcome`,
 `vibe_memory_failure_stage`, and `vibe_memory_failure_reference_status` support
 exact filters. Each observing agent should write its own record so authenticated
 creator/writer history remains distinct from the reported evidence state.
+Decision and Checkpoint evidence items may additionally preserve agent-supplied
+`source_type`, immutable `permalink`, `revision`, `commit_sha`, and UTC
+`observed_at` coordinates. The service hands these fields through unchanged after
+validation but never opens a link or verifies repository/document access.
+
+`POST /v1/evidence-impact/candidates` accepts one exact evidence `record_id` and
+`version` and performs a metadata-only dry-run over the current owner/namespace and
+security scope. It returns only Decision, Checkpoint, and relationship claims that
+explicitly cite that exact version; unversioned or absent dependencies remain
+unknown. No body, evidence hash, semantic judgment, automatic invalidation, or LLM
+call is included. MCP exposes `evidence_impact_candidates`.
+
+Optional `metadata.vibe_memory_evidence_impact_review` profile v1 records one
+reviewer's target kind/ID/version, exact evidence coordinate, reviewer, UTC
+observation time, `affected`/`not_affected`/`unknown` result, rationale, and
+follow-up. Mirrors `vibe_memory_evidence_impact` and
+`vibe_memory_evidence_impact_target_kind` support exact filters. Each review is a
+separate record, so conflicting observations are preserved rather than collapsed.
 `include_content` defaults to false. `projection=minimal` omits heavy metadata,
 provenance, writer, correction-claim, relationship-reason and evidence fields while
 retaining stable coordinates, retrieval reasons, trust/security state, hashes, and

@@ -59,6 +59,18 @@ def test_python_sdk_structured_error_cancellation_and_pages():
     )
     assert failure["vibe_memory_failure_reproduction"]["type"] == "failure_reproduction"
     assert failure["vibe_memory_failure_reference_status"] == "missing"
+    impact = module.evidence_impact_review_profile_metadata(
+        {
+            "target": {"kind": "record", "id": "decision-a", "version": 3},
+            "evidence": {"record_id": "evidence-a", "version": 2},
+            "reviewer": "reviewer",
+            "observed_at": "2026-11-09T09:00:00Z",
+            "impact": "affected",
+            "rationale": "Exact dependency was confirmed.",
+        }
+    )
+    assert impact["vibe_memory_evidence_impact_review"]["version"] == 1
+    assert impact["vibe_memory_evidence_impact"] == "affected"
     body = json.dumps(
         {
             "error": {
@@ -110,6 +122,15 @@ def test_python_sdk_structured_error_cancellation_and_pages():
     client.context_bundle(record_ids=["record-1"])
     assert captured[-1][1]["projection"] == "minimal"
     assert captured[-1][1]["byte_limit"] == 32768
+    client.evidence_impact_candidates("evidence-a", 2)
+    assert captured[-1] == (
+        "/v1/evidence-impact/candidates",
+        {
+            "evidence_record_id": "evidence-a",
+            "evidence_version": 2,
+            "candidate_limit": 100,
+        },
+    )
 
 
 def test_sdk_package_versions_and_typescript_contract():
@@ -122,8 +143,8 @@ def test_sdk_package_versions_and_typescript_contract():
     typescript_source = (ROOT / "sdk" / "typescript" / "src" / "index.ts").read_text(
         encoding="utf-8"
     )
-    assert python_package["project"]["version"] == "0.3.0"
-    assert typescript_package["version"] == "0.3.0"
+    assert python_package["project"]["version"] == "0.3.1"
+    assert typescript_package["version"] == "0.3.1"
     for exported in (
         "VibeMemoryError",
         "RequestOptions",
@@ -132,6 +153,8 @@ def test_sdk_package_versions_and_typescript_contract():
         "decisionProfileMetadata",
         "checkpointProfileMetadata",
         "failureReproductionProfileMetadata",
+        "evidenceImpactReviewProfileMetadata",
+        "evidenceImpactCandidates",
         "createWithMetadata",
         "SearchResponse",
         "SearchRetrievalOptions",

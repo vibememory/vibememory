@@ -33,6 +33,7 @@ from .corrections import annotate_corrections
 from .deterministic import (
     SnapshotConflict,
     context_bundle,
+    evidence_impact_candidates,
     graph_audit,
     graph_diff,
 )
@@ -50,6 +51,7 @@ from .models import (
     DocumentInput,
     EntityCreateMany,
     EntityInput,
+    EvidenceImpactCandidatesInput,
     FeatureRequestInput,
     GraphApplyInput,
     GraphAuditInput,
@@ -74,7 +76,7 @@ from .security import prepare_record_security
 from .store import Conflict, DuplicateRequestConflict, NotFound
 
 SERVER_NAME = "vibe-memory"
-SERVER_VERSION = "0.39.3"
+SERVER_VERSION = "0.39.4"
 LATEST_PROTOCOL = "2025-06-18"
 SUPPORTED_PROTOCOLS = {
     "2024-11-05",
@@ -118,6 +120,9 @@ SERVER_INSTRUCTIONS = (
     "apply only approved version-checked operations. For Agent Memory Repo imports, parse files and "
     "infer keywords client-side, then use agent_memory_repo_diff before agent_memory_repo_apply; "
     "the server never parses the repository and imported entries remain quarantined until reviewed."
+    " For withdrawn or corrected evidence, use evidence_impact_candidates to find only exact "
+    "record/version citations, then store each reviewer's separate evidence-impact observation; "
+    "never infer that an unlisted target was unaffected or automatically invalidate a decision."
 )
 
 
@@ -431,6 +436,16 @@ TOOLS = [
         "Report orphan records, relation distribution, correction cycles and branches, repeated "
         "claim fingerprints, and over-connected hubs using deterministic metadata only.",
         GraphAuditInput,
+        "memory:read",
+        read_only=True,
+    ),
+    _tool(
+        "evidence_impact_candidates",
+        "Find exact evidence dependencies",
+        "Dry-run a metadata-only lookup for Decision, Checkpoint, and relationship claims that "
+        "explicitly cite one evidence record/version. It makes no impact judgment, returns no "
+        "record bodies or hashes, and does not classify unrecorded dependencies as unaffected.",
+        EvidenceImpactCandidatesInput,
         "memory:read",
         read_only=True,
     ),
@@ -820,6 +835,7 @@ MODEL_MAP = {
     "graph_get": GraphInput,
     "context_bundle_get": MCPContextBundleInput,
     "graph_audit": GraphAuditInput,
+    "evidence_impact_candidates": EvidenceImpactCandidatesInput,
     "graph_diff": GraphDiffInput,
     "memory_maintenance_audit": MemoryMaintenanceAuditInput,
     "agent_memory_repo_diff": AgentMemoryRepoDiffInput,
@@ -1227,6 +1243,12 @@ class MCPHandler:
                     f"Audited {audit['stats']['records']} records and "
                     f"{audit['stats']['relations']} relationships without LLM calls.",
                     audit,
+                )
+            if name == "evidence_impact_candidates":
+                result = evidence_impact_candidates(db, owner, data)
+                return _text_result(
+                    f"Found {result['returned']} exact evidence dependency candidates.",
+                    result,
                 )
             if name == "graph_diff":
                 diff = graph_diff(db, owner, data)

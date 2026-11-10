@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vibe Memory Human Handoff Effort Experiment v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "experiment_id", "synthetic", "controls", "runs"],
+  "properties": {
+    "profile": {"const": "human-handoff-effort-v1"},
+    "experiment_id": {"type": "string", "minLength": 1},
+    "synthetic": {"type": "boolean"},
+    "controls": {
+      "type": "object",
+      "required": ["task_fixture", "task_fixture_sha256", "model", "tools", "permissions", "inputs", "completion_criteria"],
+      "properties": {
+        "task_fixture": {"type": "string"},
+        "task_fixture_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "model": {"type": "string"},
+        "tools": {"type": "array", "items": {"type": "string"}},
+        "permissions": {"type": "array", "items": {"type": "string"}},
+        "inputs": {"type": "string"},
+        "completion_criteria": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+      }
+    },
+    "runs": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["condition", "repetition", "human_interventions", "wall_time_minutes", "completed", "completion_criteria_passed", "rework_events"],
+        "properties": {
+          "condition": {"enum": ["single_agent", "multi_agent_chat", "multi_agent_vibe_memory"]},
+          "repetition": {"type": "integer", "minimum": 1},
+          "human_interventions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kind", "minutes"],
+              "properties": {
+                "kind": {"enum": ["re_explanation", "reassignment", "correction"]},
+                "minutes": {"type": "number", "minimum": 0},
+                "note": {"type": "string"}
+              }
+            }
+          },
+          "wall_time_minutes": {"type": "number", "minimum": 0},
+          "completed": {"type": "boolean"},
+          "completion_criteria_passed": {"type": "boolean"},
+          "rework_events": {"type": "integer", "minimum": 0},
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}

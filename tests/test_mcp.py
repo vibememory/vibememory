@@ -235,6 +235,7 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
             "relation_update",
             "context_bundle_get",
             "graph_audit",
+            "evidence_impact_candidates",
             "graph_diff",
             "graph_apply",
             "memory_maintenance_audit",
@@ -343,6 +344,19 @@ def test_mcp_oauth_pkce_tools_and_revocation(settings):
         )["result"]["structuredContent"]
         assert audit["llm_calls"] == 0
         assert audit["content_included"] is False
+
+        impact_candidates = mcp(
+            client,
+            credentials["access_token"],
+            321,
+            "tools/call",
+            {
+                "name": "evidence_impact_candidates",
+                "arguments": {"evidence_record_id": created["id"], "evidence_version": 1},
+            },
+        )["result"]["structuredContent"]
+        assert impact_candidates["candidates"] == []
+        assert impact_candidates["unrecorded_dependency_semantics"] == "unknown"
 
         maintenance = mcp(
             client,

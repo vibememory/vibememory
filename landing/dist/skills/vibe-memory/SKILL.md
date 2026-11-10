@@ -39,7 +39,7 @@ For every non-trivial authorized task where prior context may matter: Do not wai
 
 The service being unavailable must not block independent work. On bootstrap, status, login, browser-approval, or permission failure, report the exact stage, safe error evidence, completed and not-attempted stages, and next action; label an unproven cause `unknown`. Never claim success without successful CLI output. Read [references/installation.md](references/installation.md) for failure reporting and [references/workflows.md](references/workflows.md) for checkpoint and hygiene details.
 
-When a handoff must preserve a decision, completion claim, or reproducible failed attempt, use the optional Decision, Checkpoint, or Failure Reproduction profile. Read [references/profiles.md](references/profiles.md) first. Never infer a missing profile as decided or verified.
+For structured decisions, checkpoints, failures, or evidence-impact reviews, read [references/profiles.md](references/profiles.md). A missing profile never means decided, verified, or unaffected.
 
 ## Authorization and data rules
 
@@ -55,7 +55,7 @@ For Git-readable portability, export an Agent Memory Repo working copy. When imp
 
 - Installation, sync, update, checksums, self-hosting: [references/installation.md](references/installation.md)
 - Record authoring, checkpoints, hygiene prompt: [references/workflows.md](references/workflows.md)
-- Structured Decision, Checkpoint, and Failure Reproduction profiles: [references/profiles.md](references/profiles.md)
+- Structured Decision, Checkpoint, Failure Reproduction, and Evidence Impact Review profiles: [references/profiles.md](references/profiles.md)
 - Commands and templates: [references/commands.md](references/commands.md)
 - Auth, permissions, MCP, namespaces: [references/authorization.md](references/authorization.md)
 - Search, provenance, files, lifecycle: [references/data-and-search.md](references/data-and-search.md)

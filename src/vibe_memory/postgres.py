@@ -119,6 +119,8 @@ class PostgresDatabase:
             feature_request_operator BOOLEAN NOT NULL DEFAULT FALSE;
         ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS
             permissions TEXT NOT NULL DEFAULT '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read","audit:read","audit:write"]';
+        ALTER TABLE api_keys ALTER COLUMN permissions SET DEFAULT
+            '["memory:read","memory:write","files:read","files:write","messages:read","messages:write","feature:write","events:read","audit:read","audit:write"]';
         CREATE TABLE IF NOT EXISTS api_key_permission_events (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

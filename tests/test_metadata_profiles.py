@@ -19,7 +19,15 @@ def test_decision_profile_is_validated_normalized_and_preserved(client):
         "applies_to": {"project": "Atlas", "scope": "persistence layer"},
         "reported_decider": "user",
         "decided_at": "2026-11-07T12:30:00+09:00",
-        "evidence": [{"record_id": evidence["id"], "version": 1}],
+        "evidence": [{
+            "record_id": evidence["id"],
+            "version": 1,
+            "source_type": "git_commit",
+            "permalink": "https://github.com/example/atlas/blob/abcdef1/api.py#L10",
+            "revision": "requirements-v4",
+            "commit_sha": "ABCDEF1",
+            "observed_at": "2026-11-07T12:20:00+09:00",
+        }],
         "reason": "Restore guarantees are required",
         "reconsider_when": ["Redis persistence requirements change"],
     }
@@ -36,6 +44,10 @@ def test_decision_profile_is_validated_normalized_and_preserved(client):
     assert metadata["vibe_memory_profile"]["decided_at"] == "2026-11-07T03:30:00Z"
     assert metadata["vibe_memory_profile_type"] == "decision"
     assert metadata["vibe_memory_profile_state"] == "rejected"
+    stored_evidence = metadata["vibe_memory_profile"]["evidence"][0]
+    assert stored_evidence["commit_sha"] == "abcdef1"
+    assert stored_evidence["observed_at"] == "2026-11-07T03:20:00Z"
+    assert stored_evidence["permalink"].endswith("api.py#L10")
 
     result = client.post(
         "/v1/search",
@@ -63,6 +75,54 @@ def test_profile_absence_is_not_automatically_decided(client):
     ).json()
     assert "vibe_memory_profile" not in created["metadata"]
     assert "vibe_memory_profile_state" not in created["metadata"]
+
+
+def test_evidence_impact_review_is_a_separate_preserved_observation(client):
+    profile = {
+        "type": "evidence_impact_review",
+        "version": 1,
+        "target": {"kind": "record", "id": "decision-a", "version": 3},
+        "evidence": {"record_id": "evidence-a", "version": 2},
+        "reviewer": "agent-reviewer-1",
+        "observed_at": "2026-11-09T18:30:00+09:00",
+        "impact": "unknown",
+        "rationale": "The citation is exact but the dependency cannot be established.",
+        "follow_up": ["Compare the requirement revision with the current implementation."],
+    }
+    created = client.post(
+        "/v1/memories",
+        json={
+            "content": "Reviewer 1 could not establish whether decision A depended on evidence v2.",
+            "keywords": ["evidence impact", "decision-a", "evidence-a"],
+            "metadata": {"vibe_memory_evidence_impact_review": profile},
+        },
+    )
+    assert created.status_code == 201, created.text
+    metadata = created.json()["metadata"]
+    assert metadata["vibe_memory_evidence_impact"] == "unknown"
+    assert metadata["vibe_memory_evidence_impact_target_kind"] == "record"
+    assert metadata["vibe_memory_evidence_impact_review"]["observed_at"] == (
+        "2026-11-09T09:30:00Z"
+    )
+
+    conflicting = copy.deepcopy(profile)
+    conflicting.update(
+        {
+            "reviewer": "agent-reviewer-2",
+            "impact": "affected",
+            "rationale": "The rejected option directly cites the withdrawn requirement.",
+        }
+    )
+    second = client.post(
+        "/v1/memories",
+        json={
+            "content": "Reviewer 2 reports that decision A was affected.",
+            "keywords": ["evidence impact", "decision-a", "evidence-a"],
+            "metadata": {"vibe_memory_evidence_impact_review": conflicting},
+        },
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["id"] != created.json()["id"]
 
 
 def test_decision_profile_rejects_unsubstantiated_terminal_shape(client):
@@ -336,6 +396,9 @@ def test_profile_contracts_match_runtime_examples():
     failure_schema = json.loads(
         (CONTRACTS / "failure-reproduction-profile.json").read_text()
     )
+    impact_schema = json.loads(
+        (CONTRACTS / "evidence-impact-review-profile.json").read_text()
+    )
     assert decision_schema["properties"]["state"]["enum"] == [
         "proposed", "open", "decided", "rejected", "unknown"
     ]
@@ -345,3 +408,7 @@ def test_profile_contracts_match_runtime_examples():
         item["$ref"].split("/")[-1]
         for item in failure_schema["properties"]["evidence_references"]["items"]["oneOf"]
     }
+    assert impact_schema["properties"]["impact"]["enum"] == [
+        "affected", "not_affected", "unknown"
+    ]
+    assert "permalink" in decision_schema["$defs"]["evidence"]["properties"]

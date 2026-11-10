@@ -164,6 +164,127 @@ def test_graph_audit_reports_metadata_only_consistency_findings(client):
     assert "orphan secret body" not in str(audit)
 
 
+def test_evidence_impact_candidates_match_only_exact_explicit_versions(client):
+    evidence = add_memory(client, "withdrawn requirement v1", "evidence", ["requirement"])
+    updated = client.patch(
+        "/v1/records/" + evidence["id"],
+        json={"expected_version": 1, "content": "withdrawn requirement v2"},
+    ).json()
+    other = add_memory(client, "different evidence", "other", ["other evidence"])
+
+    def decision(name, citations):
+        response = client.post(
+            "/v1/memories",
+            json={
+                "content": name,
+                "keywords": [name, "decision"],
+                "metadata": {
+                    "vibe_memory_profile": {
+                        "type": "decision",
+                        "version": 1,
+                        "state": "open",
+                        "topic": name,
+                        "applies_to": {"scope": "test"},
+                        "evidence": citations,
+                    }
+                },
+            },
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    decision_a = decision("decision-a", [{"record_id": evidence["id"], "version": 2}])
+    decision("decision-old-version", [{"record_id": evidence["id"], "version": 1}])
+    decision("decision-b", [{"record_id": other["id"], "version": 1}])
+    decision("decision-c", [])
+
+    checkpoint = client.post(
+        "/v1/memories",
+        json={
+            "content": "checkpoint-a",
+            "keywords": ["checkpoint-a"],
+            "metadata": {
+                "vibe_memory_profile": {
+                    "type": "checkpoint",
+                    "version": 1,
+                    "claimed_stage": "implemented",
+                    "observation_kind": "author_reported",
+                    "target": {"scope": "test"},
+                    "observed_at": "2026-11-09T08:00:00Z",
+                    "evidence": [{"record_id": evidence["id"], "version": 2}],
+                }
+            },
+        },
+    ).json()
+    relation = client.post(
+        "/v1/relations",
+        json={
+            "source_id": decision_a["id"],
+            "target_id": checkpoint["id"],
+            "relation": "DEPENDS_ON",
+            "reason": "Explicit v2 dependency",
+            "evidence": [{
+                "record_id": evidence["id"],
+                "version": 2,
+                "content_hash": updated["content_hash"],
+                "observed_at": "2026-11-09T08:00:00Z",
+            }],
+            "evidence_coverage": "selected",
+        },
+    ).json()
+    hidden = client.post(
+        "/v1/memories",
+        json={
+            "content": "external unreviewed decision",
+            "keywords": ["external decision"],
+                "provenance": {
+                    "source_type": "external",
+                    "origin_agent": "browser-agent",
+                    "origin_url": "https://example.test/decision",
+                    "collected_at": "2026-11-09T08:00:00Z",
+                    "content_type": "text/plain",
+                },
+            "metadata": {
+                "vibe_memory_profile": {
+                    "type": "decision",
+                    "version": 1,
+                    "state": "open",
+                    "topic": "hidden candidate",
+                    "applies_to": {"scope": "test"},
+                    "evidence": [{"record_id": evidence["id"], "version": 2}],
+                }
+            },
+        },
+    ).json()
+
+    response = client.post(
+        "/v1/evidence-impact/candidates",
+        json={"evidence_record_id": evidence["id"], "evidence_version": 2},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["dry_run"] is True and payload["llm_calls"] == 0
+    assert payload["content_included"] is False
+    assert payload["unrecorded_dependency_semantics"] == "unknown"
+    assert {(item["target_kind"], item["target_id"]) for item in payload["candidates"]} == {
+        ("record", decision_a["id"]),
+        ("record", checkpoint["id"]),
+        ("relation", relation["id"]),
+    }
+    assert "withdrawn requirement v2" not in response.text
+
+    opted_in = client.post(
+        "/v1/evidence-impact/candidates",
+        json={
+            "evidence_record_id": evidence["id"],
+            "evidence_version": 2,
+            "include_untrusted": True,
+            "include_quarantined": True,
+        },
+    ).json()
+    assert hidden["id"] in {item["target_id"] for item in opted_in["candidates"]}
+
+
 def test_graph_diff_requires_exact_approval_before_partial_apply(client):
     a = add_memory(client, "a", "a")
     b = add_memory(client, "b", "b")

@@ -1,0 +1,49 @@
+{
+  "profile": "human-handoff-effort-v1",
+  "experiment_id": "synthetic-atlas-handoff-example",
+  "synthetic": true,
+  "controls": {
+    "task_fixture": "benchmarks/fixtures/handoff.json",
+    "task_fixture_sha256": "bedf098efa999916489a2a7fc926e89c3f0630ac17c1856a6542336be5cad4de",
+    "model": "same-model-and-version-for-all-arms",
+    "tools": ["same-workspace", "same-test-runner"],
+    "permissions": ["same-filesystem-scope", "same-network-policy"],
+    "inputs": "identical synthetic task prompt and starting repository snapshot",
+    "completion_criteria": ["all required tests pass", "requested artifact exists"]
+  },
+  "runs": [
+    {
+      "condition": "single_agent",
+      "repetition": 1,
+      "human_interventions": [{"kind": "correction", "minutes": 2.0}],
+      "wall_time_minutes": 34.0,
+      "completed": true,
+      "completion_criteria_passed": true,
+      "rework_events": 1,
+      "notes": "Synthetic example, not a product result."
+    },
+    {
+      "condition": "multi_agent_chat",
+      "repetition": 1,
+      "human_interventions": [
+        {"kind": "re_explanation", "minutes": 5.0},
+        {"kind": "reassignment", "minutes": 1.0}
+      ],
+      "wall_time_minutes": 31.0,
+      "completed": true,
+      "completion_criteria_passed": true,
+      "rework_events": 1,
+      "notes": "Synthetic example, not a product result."
+    },
+    {
+      "condition": "multi_agent_vibe_memory",
+      "repetition": 1,
+      "human_interventions": [{"kind": "correction", "minutes": 1.0}],
+      "wall_time_minutes": 27.0,
+      "completed": true,
+      "completion_criteria_passed": true,
+      "rework_events": 0,
+      "notes": "Synthetic example, not a product result."
+    }
+  ]
+}

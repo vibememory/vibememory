@@ -1,12 +1,12 @@
 {
   "schema_version": 2,
-  "revision": "faf8a0ac8634e0d2d9e4c14e0d6fa88b1ce41dced9229d7236af777b22d12c46",
+  "revision": "c8e6952b6a475a06f119be47d3ab097cb47d426d3d0f0f1b921359ff48f51262",
   "files": {
-    "SKILL.md": "1d687d8b92a874a25dbba995bd4fc1ad6f84a52e8d48bab188f505f7b51efd7f",
+    "SKILL.md": "88fa3842c7d4814922f276466996c6ab9179d55e3cc7fc3bb7940f4df999b54d",
     "scripts/memory.py": "6a2cccd1db63cfed8e07306571953b47ce7b022d1d371326cdb0516a88981afe",
     "references/audit-logs.md": "d357a0f658b061d99616043cf015fdfda0db59ac23f11f10aa21589e7ca9c7f5",
     "references/authorization.md": "58ba2cdfd8a72a96a819c680a6d3f114c0d5d310913055d2cc60c116223e302d",
-    "references/commands.md": "b4d7c217f96081fb4f9c3d5bed459781d15239d239d6f91cce438f423bcf6c33",
+    "references/commands.md": "e3b56edab5e424fe688fb0d26435ccf9e7b98a4038e3d0be4b69d7ec1cebb33b",
     "references/data-and-search.md": "b121521dd8182545acc999f8cbfd335e032bbf262b86374a17e05463603dc493",
     "references/graph-and-corrections.md": "b350222dfa87a552d04dccec2f00b92026c97742660daa23a1267ab270e79594",
     "references/installation.md": "5299381beac06abd9b6435c89612dc20827c8417ad07db6a8f84e59eba5f16a5",
@@ -14,7 +14,7 @@
     "references/messages.md": "38b875366a7ff7b1e33cbe0c84d0b8a63ef9c3ff92d93b6c1ecc8b5daa03bbab",
     "references/portability.md": "e865e62c213614ea37222aa2131417d76be0ceaff305fb37690830c56df43d83",
     "references/product-feedback.md": "7cdffa58365528144ba2a8634d52f236a7b236e86314549e0f4573a3031e985b",
-    "references/profiles.md": "4d4ab48179a0f3ff51dd739393023ebf7f9357cfd8093cc088b35c28950fc30e",
+    "references/profiles.md": "1d87a7dd6679ec001cc6ca8818c0eef04f4835a600af2c98a7dc1383f502305a",
     "references/vault.md": "1dc036cb0b5927b27d468f4b0958bd0e98750e2f9f397a3ce0524f92615472ef",
     "references/workflows.md": "46f5a0e153a9a4b58eef21ae5daeb162215e995ae4579bfdf8a6748fc261d741"
   },
@@ -41,29 +41,29 @@
     "url": "/skills/vibe-memory/cli/3b63ccadfdde76a6af0c2de4389f23af8ef181fe3f03f8d63989ed0f3482b126/vibe-memory"
   },
   "native_cli": {
-    "version": "3.17.0",
+    "version": "3.18.0",
     "repository": "https://github.com/vibememory/cli",
     "targets": {
       "linux-x86_64": {
-        "sha256": "1662ff05572465a410be4829ae4f480577c17ab857e6b76b6cefc64f7bb7fe95",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.17.0/vibe-memory-linux-x86_64"
+        "sha256": "7cbe852156cd88f7504ef7c64a372cb99daa43157700f425c346e46bf7d3290e",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.18.0/vibe-memory-linux-x86_64"
       },
       "macos-aarch64": {
-        "sha256": "5ac10450239c5ad2ee0009dc9fb15091208ba621b62acda5a3c63975961a5bc4",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.17.0/vibe-memory-macos-aarch64"
+        "sha256": "ec86521c58c4a1c074d09379cc73880175823fa34d9e11780e172dd699368339",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.18.0/vibe-memory-macos-aarch64"
       },
       "macos-x86_64": {
-        "sha256": "ef04d80bc8da7c31b83a8f840d7632bde97dfe16a05781118f6bed22dc33e065",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.17.0/vibe-memory-macos-x86_64"
+        "sha256": "5d0ac9b370e362d1c0edc22a30b15c7d01e965e4739c621c02b49066380bddfd",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.18.0/vibe-memory-macos-x86_64"
       },
       "windows-x86_64": {
-        "sha256": "accd7a826ce593438a7b936d000dd89c9e7a9dfc3300ba5326a6cb4a94533683",
-        "url": "https://github.com/vibememory/cli/releases/download/v3.17.0/vibe-memory-windows-x86_64.exe"
+        "sha256": "83a8cc6651982f8d3daf59818bbe627c073e4003bbc071c589ea4108f67f2856",
+        "url": "https://github.com/vibememory/cli/releases/download/v3.18.0/vibe-memory-windows-x86_64.exe"
       }
     }
   },
   "archive": "/downloads/vibe-memory-skill.zip",
-  "archive_sha256": "e2fd7ab61a15ce89d7deeea57c48c152cd9a60e0382878fd2a98f20577dcb024",
+  "archive_sha256": "f2b32e60fba03a8142e6be070a76628693184326edf01b620922b76fbefa216c",
   "official_archive_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/vibe-memory-skill.zip",
   "official_manifest_mirror": "https://github.com/vibememory/vibememory/releases/latest/download/manifest-v2.json"
 }

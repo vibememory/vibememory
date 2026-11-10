@@ -6,7 +6,15 @@ export type SearchRetrievalOptions = {
   limit?: number;
 };
 export type ProfileScope = {scope: string; project?: string; environment?: string};
-export type ProfileEvidence = {record_id: string; version: number};
+export type ProfileEvidence = {
+  record_id: string;
+  version: number;
+  source_type?: "git_commit" | "requirements_revision" | "document_revision" | "web" | "other";
+  permalink?: string;
+  revision?: string;
+  commit_sha?: string;
+  observed_at?: string;
+};
 export type DecisionProfile = {
   type: "decision";
   version: 1;
@@ -89,6 +97,23 @@ export type FailureReproductionProfile = {
   }>;
   evidence_references?: FailureEvidenceReference[];
 };
+export type EvidenceImpactReviewProfile = {
+  type: "evidence_impact_review";
+  version: 1;
+  target: {kind: "record" | "relation"; id: string; version: number};
+  evidence: ProfileEvidence;
+  reviewer: string;
+  observed_at: string;
+  impact: "affected" | "not_affected" | "unknown";
+  rationale: string;
+  follow_up?: string[];
+};
+export type EvidenceImpactReviewMetadata = Record<string, unknown> & {
+  vibe_memory_evidence_impact_review: EvidenceImpactReviewProfile;
+  vibe_memory_evidence_impact_profile_version: 1;
+  vibe_memory_evidence_impact: EvidenceImpactReviewProfile["impact"];
+  vibe_memory_evidence_impact_target_kind: EvidenceImpactReviewProfile["target"]["kind"];
+};
 export type FailureReproductionMetadata = Record<string, unknown> & {
   vibe_memory_failure_reproduction: FailureReproductionProfile;
   vibe_memory_failure_profile_version: 1;
@@ -158,6 +183,24 @@ export function failureReproductionProfileMetadata(
     vibe_memory_failure_outcome: profile.outcome,
     vibe_memory_failure_stage: profile.failure.stage,
     vibe_memory_failure_reference_status: referenceStatus,
+  };
+}
+
+/** Builds one evidence-impact observation; conflicting reviewers remain separate records. */
+export function evidenceImpactReviewProfileMetadata(
+  profile: Omit<EvidenceImpactReviewProfile, "type" | "version">,
+  metadata: Record<string, unknown> = {},
+): EvidenceImpactReviewMetadata {
+  return {
+    ...metadata,
+    vibe_memory_evidence_impact_review: {
+      ...profile,
+      type: "evidence_impact_review",
+      version: 1,
+    },
+    vibe_memory_evidence_impact_profile_version: 1,
+    vibe_memory_evidence_impact: profile.impact,
+    vibe_memory_evidence_impact_target_kind: profile.target.kind,
   };
 }
 
@@ -417,6 +460,23 @@ export class VibeMemoryClient {
         body: JSON.stringify({projection: "minimal", byte_limit: 32768, ...request}),
       },
       true,
+      options,
+    );
+  }
+
+  evidenceImpactCandidates(
+    evidence_record_id: string,
+    evidence_version: number,
+    candidate_limit = 100,
+    options: RequestOptions = {},
+  ) {
+    return this.request(
+      "/v1/evidence-impact/candidates",
+      {
+        method: "POST",
+        body: JSON.stringify({evidence_record_id, evidence_version, candidate_limit}),
+      },
+      false,
       options,
     );
   }

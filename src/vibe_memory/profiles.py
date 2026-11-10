@@ -34,6 +34,33 @@ class ProfileScope(ProfileInput):
 class ProfileEvidence(ProfileInput):
     record_id: str = Field(min_length=1, max_length=100)
     version: int = Field(ge=1)
+    source_type: Literal[
+        "git_commit",
+        "requirements_revision",
+        "document_revision",
+        "web",
+        "other",
+    ] | None = None
+    permalink: str | None = Field(default=None, min_length=1, max_length=2000)
+    revision: str | None = Field(default=None, min_length=1, max_length=300)
+    commit_sha: str | None = Field(
+        default=None, min_length=7, max_length=64, pattern=r"^[0-9a-fA-F]+$"
+    )
+    observed_at: datetime | None = None
+
+    @field_validator("commit_sha")
+    @classmethod
+    def normalize_commit_sha(cls, value):
+        return value.lower() if value else value
+
+    @field_validator("observed_at")
+    @classmethod
+    def normalize_observed_at(cls, value):
+        if value is None:
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("evidence observed_at must include a UTC offset")
+        return value.astimezone(UTC)
 
 
 class DecisionProfile(ProfileInput):
@@ -252,6 +279,33 @@ class FailureReproductionProfile(ProfileInput):
         return self
 
 
+class ImpactReviewTarget(ProfileInput):
+    kind: Literal["record", "relation"]
+    id: str = Field(min_length=1, max_length=100)
+    version: int = Field(ge=1)
+
+
+class EvidenceImpactReviewProfile(ProfileInput):
+    """One reviewer observation; conflicting observations remain separate records."""
+
+    type: Literal["evidence_impact_review"]
+    version: Literal[1]
+    target: ImpactReviewTarget
+    evidence: ProfileEvidence
+    reviewer: ShortText
+    observed_at: datetime
+    impact: Literal["affected", "not_affected", "unknown"]
+    rationale: LongText
+    follow_up: list[LongText] = Field(default_factory=list, max_length=30)
+
+    @field_validator("observed_at")
+    @classmethod
+    def normalize_observed_at(cls, value):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("observed_at must include a UTC offset")
+        return value.astimezone(UTC)
+
+
 def normalize_metadata_profiles(metadata: dict) -> dict:
     """Validate an opted-in profile and add deterministic scalar filter mirrors."""
 
@@ -311,6 +365,25 @@ def normalize_metadata_profiles(metadata: dict) -> dict:
         normalized["vibe_memory_failure_outcome"] = profile.outcome
         normalized["vibe_memory_failure_stage"] = profile.failure.stage
         normalized["vibe_memory_failure_reference_status"] = reference_status
+
+    impact_key = "vibe_memory_evidence_impact_review"
+    raw_impact = normalized.get(impact_key)
+    impact_mirrors = (
+        "vibe_memory_evidence_impact_profile_version",
+        "vibe_memory_evidence_impact",
+        "vibe_memory_evidence_impact_target_kind",
+    )
+    if raw_impact is None:
+        for key in impact_mirrors:
+            normalized.pop(key, None)
+    else:
+        if not isinstance(raw_impact, dict):
+            raise ValueError(f"{impact_key} must be an object")
+        impact = EvidenceImpactReviewProfile.model_validate(raw_impact)
+        normalized[impact_key] = impact.model_dump(mode="json", exclude_none=True)
+        normalized["vibe_memory_evidence_impact_profile_version"] = impact.version
+        normalized["vibe_memory_evidence_impact"] = impact.impact
+        normalized["vibe_memory_evidence_impact_target_kind"] = impact.target.kind
     if len(json.dumps(normalized, ensure_ascii=False, allow_nan=False)) > 30000:
         raise ValueError("metadata must fit within 30000 characters of JSON")
     return normalized

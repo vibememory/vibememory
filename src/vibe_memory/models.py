@@ -535,6 +535,22 @@ class GraphAuditInput(Input):
         return self
 
 
+class EvidenceImpactCandidatesInput(Input):
+    """Exact, metadata-only dependency lookup for one evidence record version."""
+
+    evidence_record_id: str = Field(min_length=1, max_length=100)
+    evidence_version: int = Field(ge=1)
+    include_untrusted: bool = False
+    include_quarantined: bool = False
+    candidate_limit: int = Field(default=100, ge=1, le=500)
+
+    @model_validator(mode="after")
+    def safe_security_filters(self):
+        if self.include_quarantined and not self.include_untrusted:
+            raise ValueError("include_quarantined requires include_untrusted")
+        return self
+
+
 class MCPMemorySearchInput(SearchInput):
     """Token-bounded first-stage retrieval defaults for agent tool calls."""
 

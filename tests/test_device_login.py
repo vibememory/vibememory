@@ -53,9 +53,11 @@ def test_web_approval_one_time_key_and_no_secret_in_browser(web):
     result = client.post('/auth/device/poll', json={'device_code': pending['device_code']}).json()
     assert result['state'] == 'connected'
     assert result['vault_access'] is True and result['upgraded'] is False
+    assert {'audit:read', 'audit:write'} <= set(result['permissions'])
     me = client.get('/v1/me', headers={'Authorization': 'Bearer '+result['key']})
     assert me.status_code == 200 and me.json()['vault_access'] is True
     assert me.json()['feature_request_operator'] is False
+    assert {'audit:read', 'audit:write'} <= set(me.json()['permissions'])
     assert client.post('/auth/device/poll', json={'device_code': pending['device_code']}).status_code == 410
     keys = client.get('/auth/api-keys').json()['items']
     assert len(keys) == 1 and keys[0]['name'] == 'Claude Code'

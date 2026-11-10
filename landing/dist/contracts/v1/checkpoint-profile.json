@@ -22,7 +22,20 @@
   },
   "$defs": {
     "scope": {"type": "object", "additionalProperties": false, "required": ["scope"], "properties": {"scope": {"type": "string", "minLength": 1, "maxLength": 300}, "project": {"type": "string", "minLength": 1, "maxLength": 300}, "environment": {"type": "string", "minLength": 1, "maxLength": 300}}},
-    "evidence": {"type": "object", "additionalProperties": false, "required": ["record_id", "version"], "properties": {"record_id": {"type": "string", "minLength": 1, "maxLength": 100}, "version": {"type": "integer", "minimum": 1}}},
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["record_id", "version"],
+      "properties": {
+        "record_id": {"type": "string", "minLength": 1, "maxLength": 100},
+        "version": {"type": "integer", "minimum": 1},
+        "source_type": {"enum": ["git_commit", "requirements_revision", "document_revision", "web", "other"]},
+        "permalink": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "revision": {"type": "string", "minLength": 1, "maxLength": 300},
+        "commit_sha": {"type": "string", "minLength": 7, "maxLength": 64, "pattern": "^[0-9a-fA-F]+$"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
     "reproduction": {"type": "object", "additionalProperties": false, "required": ["command", "reported_result"], "properties": {"command": {"type": "string", "minLength": 1, "maxLength": 4000}, "reported_result": {"type": "string", "minLength": 1, "maxLength": 4000}}}
   }
 }

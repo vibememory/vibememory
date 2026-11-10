@@ -35,6 +35,7 @@ CAPABILITY_RULES = (
     ("graph", "diff", "memory:read", "memory:read", True),
     ("graph", "apply", "memory:write", "memory:write", True),
     ("memory_maintenance", "audit", "memory:read", "memory:read", True),
+    ("evidence_impact", "candidates", "memory:read", "memory:read", True),
     ("file", "read", "files:read", None, True),
     ("file", "upload", "files:write", None, True),
     ("file", "delete", "files:write", None, True),

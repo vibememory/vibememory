@@ -158,12 +158,13 @@ function recordRows(items, deletable = true) {
 function evidenceProfileDetail(record) {
   const profile = record.metadata?.vibe_memory_profile;
   const failure = record.metadata?.vibe_memory_failure_reproduction;
+  const impact = record.metadata?.vibe_memory_evidence_impact_review;
   let output = '';
   if (profile && (profile.type === 'decision' || profile.type === 'checkpoint')) {
     const isDecision = profile.type === 'decision';
     const state = isDecision ? profile.state : profile.claimed_stage;
     const scope = isDecision ? profile.applies_to : profile.target;
-    const evidence = (profile.evidence || []).map(item => `<code>${h(item.record_id)} · v${h(item.version)}</code>`).join(' ');
+    const evidence = (profile.evidence || []).map(item => `<code>${h(item.record_id)} · v${h(item.version)}${item.source_type ? ` · ${h(item.source_type)}` : ''}${item.commit_sha || item.revision ? ` · ${h(item.commit_sha || item.revision)}` : ''}${item.permalink ? ` · ${h(item.permalink)}` : ''}</code>`).join(' ');
     output += `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>${isDecision ? 'DECISION PROFILE' : 'CHECKPOINT PROFILE'} · v${h(profile.version)}</span><strong>${h(state || 'unknown')}</strong></div><p>에이전트가 제공한 구조화 메타데이터이며, Vibe Memory가 진실·권한·승인 또는 독립 검증을 보증한다는 뜻이 아닙니다.</p><dl>${isDecision ? `<div><dt>주제</dt><dd>${h(profile.topic)}</dd></div>${profile.option ? `<div><dt>선택지</dt><dd>${h(profile.option)}</dd></div>` : ''}<div><dt>보고된 결정자</dt><dd>${h(profile.reported_decider || '미기재')} · 인증된 작성 연결과 별도</dd></div><div><dt>결정 시각</dt><dd>${h(profile.decided_at || '미기재')}</dd></div>` : `<div><dt>관측 구분</dt><dd>${h(profile.observation_kind)}</dd></div><div><dt>관측 시각</dt><dd>${h(profile.observed_at)}</dd></div><div><dt>환경</dt><dd>${h(profile.environment_identity || scope?.environment || '미기재')}</dd></div>`}<div><dt>적용 범위</dt><dd>${h([scope?.project,scope?.scope,scope?.environment].filter(Boolean).join(' · ') || '미기재')}</dd></div>${evidence ? `<div><dt>근거 좌표</dt><dd>${evidence}</dd></div>` : ''}</dl></section>`;
   }
   if (failure?.type === 'failure_reproduction') {
@@ -172,6 +173,9 @@ function evidenceProfileDetail(record) {
       : `<code>외부 · ${h(reference.verification?.status || 'unverified')} · ${h(reference.reference)}</code>`).join(' ');
     const parsing = (failure.parsing_steps || []).map(step => `<code>${h(step.order)}. ${h(step.stage)} · ${h(step.operation)} · ${h(step.input_summary)} → ${h(step.output_summary)}</code>`).join(' ');
     output += `<section class="evidence-profile-detail failure-profile-detail"><div class="evidence-profile-heading"><span>FAILURE REPRODUCTION · v${h(failure.version)}</span><strong>${h(failure.outcome)}</strong></div><p>에이전트가 제공한 정제된 재현 정보입니다. 서버는 외부 경로를 열거나 명령을 실행하지 않으며, 접근 불가를 파일 없음으로 간주하지 않습니다.</p><dl><div><dt>샘플</dt><dd>${h(failure.sample?.identifier || '미기재')} · ${h(failure.sample?.input_rows ?? '행 미기재')}행 · ${h(failure.sample?.input_bytes ?? '크기 미기재')} bytes</dd></div><div><dt>실패</dt><dd>${h(failure.failure?.stage || '미기재')}${failure.failure?.code ? ` · ${h(failure.failure.code)}` : ''}</dd></div><div><dt>관측 시각</dt><dd>${h(failure.observed_at || '미기재')}</dd></div><div><dt>최소 조건</dt><dd>${h((failure.minimal_reproduction?.conditions || []).join(' · ') || '미기재')}</dd></div>${parsing ? `<div class="profile-wide"><dt>파싱 경로</dt><dd>${parsing}</dd></div>` : ''}${references ? `<div class="profile-wide"><dt>근거 참조</dt><dd>${references}</dd></div>` : ''}</dl></section>`;
+  }
+  if (impact?.type === 'evidence_impact_review') {
+    output += `<section class="evidence-profile-detail"><div class="evidence-profile-heading"><span>EVIDENCE IMPACT REVIEW · v${h(impact.version)}</span><strong>${h(impact.impact)}</strong></div><p>한 검토자의 관측입니다. 다른 검토자의 상충 관측과 함께 보존되며, 서버가 결정을 자동 무효화하지 않습니다.</p><dl><div><dt>대상</dt><dd>${h(impact.target?.kind)} · ${h(impact.target?.id)} · v${h(impact.target?.version)}</dd></div><div><dt>근거</dt><dd>${h(impact.evidence?.record_id)} · v${h(impact.evidence?.version)}</dd></div><div><dt>검토자</dt><dd>${h(impact.reviewer)}</dd></div><div><dt>관측 시각</dt><dd>${h(impact.observed_at)}</dd></div><div class="profile-wide"><dt>판단 근거</dt><dd>${h(impact.rationale)}</dd></div>${(impact.follow_up || []).length ? `<div class="profile-wide"><dt>후속 조치</dt><dd>${h(impact.follow_up.join(' · '))}</dd></div>` : ''}</dl></section>`;
   }
   return output;
 }

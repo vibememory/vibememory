@@ -83,6 +83,7 @@ from .corrections import annotate_corrections
 from .deterministic import (
     SnapshotConflict,
     context_bundle,
+    evidence_impact_candidates,
     graph_audit,
     graph_diff,
 )
@@ -105,6 +106,7 @@ from .models import (
     DocumentInput,
     EntityCreateMany,
     EntityInput,
+    EvidenceImpactCandidatesInput,
     FeatureRequestInput,
     FeatureRequestUpdate,
     GraphApplyInput,
@@ -252,7 +254,7 @@ def create_app(settings=None, embedder=None):
 
     app = FastAPI(
         title="Vibe Memory",
-        version="0.39.3",
+        version="0.39.4",
         lifespan=lifespan,
         description="Agent-authored memory graph and keyword-only vector index. No inference or document processing.",
     )
@@ -1725,6 +1727,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "agent_memory_repo_diff": "/v1/agent-memory-repo/diff",
                 "agent_memory_repo_apply": "/v1/agent-memory-repo/apply",
                 "memory_maintenance_audit": "/v1/memory-maintenance/audit",
+                "evidence_impact_candidates": "/v1/evidence-impact/candidates",
                 "mcp": "/mcp",
             },
             "contracts": {
@@ -1736,6 +1739,8 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "checkpoint_profile": "/contracts/v1/checkpoint-profile.json",
                 "failure_reproduction_profile":
                     "/contracts/v1/failure-reproduction-profile.json",
+                "evidence_impact_review_profile":
+                    "/contracts/v1/evidence-impact-review-profile.json",
                 "governance": "/contracts/GOVERNANCE.md",
                 "ump_mapping": "/contracts/ump-mapping.md",
             },
@@ -1750,6 +1755,7 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
                 "decision-profile-v1",
                 "checkpoint-profile-v1",
                 "failure-reproduction-profile-v1",
+                "evidence-impact-review-profile-v1",
             ],
             "extensions": {
                 "historical_recorded_time": "unsupported",
@@ -3100,6 +3106,14 @@ value="approve" type="submit">연결 승인</button></div></form><small>원본 �
         db=Depends(store),
     ):
         return graph_audit(db, user, data)
+
+    @app.post("/v1/evidence-impact/candidates", tags=["retrieval"])
+    def find_evidence_impact_candidates(
+        data: EvidenceImpactCandidatesInput,
+        user=Depends(memory_reader),
+        db=Depends(store),
+    ):
+        return evidence_impact_candidates(db, user, data)
 
     @app.post("/v1/graph/diff", tags=["graph"])
     def diff_graph(

@@ -1330,8 +1330,8 @@ class AuthStore:
             key_id = str(uuid4())
             db.execute(
                 """INSERT INTO api_keys(
-                    id,user_id,hash,name,prefix,created_at,vault_access
-                ) VALUES(?,?,?,?,?,?,?)""",
+                    id,user_id,hash,name,prefix,created_at,vault_access,permissions
+                ) VALUES(?,?,?,?,?,?,?,?)""",
                 (
                     key_id,
                     row["user_id"],
@@ -1340,6 +1340,7 @@ class AuthStore:
                     token[:10] + "…",
                     now,
                     row["vault_access"],
+                    DEFAULT_AGENT_PERMISSIONS_JSON,
                 ),
             )
             db.execute("UPDATE device_logins SET state='used' WHERE device_hash=?", (digest(device),))
@@ -1349,6 +1350,7 @@ class AuthStore:
             "key_id": key_id,
             "upgraded": False,
             "vault_access": bool(row["vault_access"]),
+            "permissions": list(DEFAULT_AGENT_PERMISSIONS),
         }
 
     def revoke_key(self, user_id, id):
